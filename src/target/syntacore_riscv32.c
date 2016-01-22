@@ -1,7 +1,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <helper/jim.h>
+// #include <helper/jim.h>
 #include <helper/log.h>
 #include <helper/binarybuffer.h>
 #include <jtag/jtag.h>
@@ -82,47 +82,60 @@ struct syntacore_riscv32_register
     struct target* target;
 };
 
-int syntacore_riscv32_poll(struct target *target);
-int syntacore_riscv32_target_create(struct target *target, Jim_Interp *interp);
-int syntacore_riscv32_arch_state(struct target *target);
-int syntacore_riscv32_init_target(struct command_context *cmd_ctx, struct target *target);
+static int syntacore_riscv32_poll(struct target *target);
+static int syntacore_riscv32_target_create(struct target *target, Jim_Interp *interp);
+static int syntacore_riscv32_arch_state(struct target *target);
+static int syntacore_riscv32_init_target(struct command_context *cmd_ctx, struct target *target);
 
-int syntacore_riscv32_halt(struct target *target);
-int syntacore_riscv32_resume(struct target *target, int current, uint32_t address, int handle_breakpoints, int debug_execution);
-int syntacore_riscv32_step(struct target *target, int current, uint32_t address, int handle_breakpoints);
+static int syntacore_riscv32_halt(struct target *target);
+static int syntacore_riscv32_resume(struct target *target, int current, uint32_t address, int handle_breakpoints, int debug_execution);
+static int syntacore_riscv32_step(struct target *target, int current, uint32_t address, int handle_breakpoints);
 
-int syntacore_riscv32_assert_reset(struct target *target);
-int syntacore_riscv32_deassert_reset(struct target *target);
-int syntacore_riscv32_soft_reset_halt(struct target *target);
+static int syntacore_riscv32_assert_reset(struct target *target);
+static int syntacore_riscv32_deassert_reset(struct target *target);
+static int syntacore_riscv32_soft_reset_halt(struct target *target);
 
-int syntacore_riscv32_get_gdb_reg_list(struct target *target, struct reg **reg_list[], int *reg_list_size);
+static int syntacore_riscv32_get_gdb_reg_list(struct target *target, struct reg **reg_list[], int *reg_list_size, enum target_register_class reg_class);
 
-int syntacore_riscv32_read_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, uint8_t *buffer);
-int syntacore_riscv32_write_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, uint8_t *buffer);
+static int syntacore_riscv32_read_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, uint8_t *buffer);
+static int syntacore_riscv32_write_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, const uint8_t *buffer);
 
-int syntacore_riscv32_examine(struct target *target);
-int syntacore_riscv32_bulk_write_memory(struct target *target,
+static int syntacore_riscv32_examine(struct target *target);
+static int syntacore_riscv32_bulk_write_memory(struct target *target,
         uint32_t address, uint32_t count, uint8_t *buffer);
 
-int syntacore_riscv32_add_breakpoint(struct target *target, struct breakpoint *breakpoint);
-int syntacore_riscv32_remove_breakpoint(struct target *target, struct breakpoint *breakpoint);
+static int syntacore_riscv32_add_breakpoint(struct target *target, struct breakpoint *breakpoint);
+static int syntacore_riscv32_remove_breakpoint(struct target *target, struct breakpoint *breakpoint);
 
 
 //Low level access to debug controller
-int
+static int
 syntacore_riscv32_debug_write_register(struct target * target, uint32_t const address, uint32_t const data);
-int
+static int
 syntacore_riscv32_debug_read_register(struct target * target, uint32_t const address, uint32_t *const data);
 
-int
+static int
 syntacore_riscv32_read_mem_word(struct target * target, uint32_t const address, uint32_t* const data);
-int
+static int
 syntacore_riscv32_write_mem_word(struct target * target, uint32_t const address, uint32_t const data);
 
-int
+static int
 syntacore_riscv32_save_context(struct target * target);
-int
+static int
 syntacore_riscv32_restore_context(struct target*  target);
+
+static tap_state_t g_current_end_state;
+
+void
+jtag_set_end_state(tap_state_t new_end_state)
+{
+    g_current_end_state = new_end_state;
+}
+static tap_state_t
+jtag_get_end_state(void)
+{
+    return g_current_end_state;
+}
 
 int
 syntacore_riscv32_write_mem_chunk(
@@ -145,12 +158,14 @@ syntacore_riscv32_jtag_set_instruction(struct target* target, int new_instr)
         struct scan_field field;
         uint32_t t = new_instr;
 
+#if 0
         field.tap = tap;
+#endif
         field.num_bits = tap->ir_length;
         field.out_value = (void*)&t;
         field.in_value = NULL;
 
-        jtag_add_ir_scan(1, &field, jtag_get_end_state());
+        jtag_add_ir_scan(tap, &field, jtag_get_end_state());
     }
 
     return ERROR_OK;
@@ -177,18 +192,20 @@ struct target_type syntacore_riscv32_target =
 
     .read_memory = syntacore_riscv32_read_memory,
     .write_memory = syntacore_riscv32_write_memory,
-    //.bulk_write_memory = mips_m4k_bulk_write_memory,
-    //.checksum_memory = mips_m4k_checksum_memory,
-    //.blank_check_memory = NULL,
+#if 0
+    .bulk_write_memory = mips_m4k_bulk_write_memory,
+    .checksum_memory = mips_m4k_checksum_memory,
+    .blank_check_memory = NULL,
 
-    //.run_algorithm = mips32_run_algorithm,
-
+    .run_algorithm = mips32_run_algorithm,
+#endif
     .add_breakpoint = syntacore_riscv32_add_breakpoint,
     .remove_breakpoint = syntacore_riscv32_remove_breakpoint,
-    //.add_watchpoint = mips_m4k_add_watchpoint,
-    //.remove_watchpoint = mips_m4k_remove_watchpoint,
-    .bulk_write_memory = syntacore_riscv32_bulk_write_memory,
-
+#if 0
+     .add_watchpoint = mips_m4k_add_watchpoint,
+     .remove_watchpoint = mips_m4k_remove_watchpoint,
+     .bulk_write_memory = syntacore_riscv32_bulk_write_memory,
+#endif
     .target_create = syntacore_riscv32_target_create,
     .init_target = syntacore_riscv32_init_target,
     .examine = syntacore_riscv32_examine,
@@ -434,7 +451,7 @@ syntacore_riscv32_bulk_write_memory(struct target *target,
 
 //gdb_server expects valid reg values and will use set method for updating reg values
 int
-syntacore_riscv32_get_gdb_reg_list(struct target *target, struct reg **reg_list[], int *reg_list_size)
+syntacore_riscv32_get_gdb_reg_list(struct target *target, struct reg **reg_list[], int *reg_list_size, enum target_register_class reg_class)
 {
     int i;
     struct syntacore_riscv32_arch *arch_info = (struct syntacore_riscv32_arch *)target->arch_info;
@@ -494,7 +511,7 @@ syntacore_riscv32_read_memory(struct target *target, uint32_t address, uint32_t 
 }
 
 int
-syntacore_riscv32_write_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, uint8_t *buffer)
+syntacore_riscv32_write_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, const uint8_t *buffer)
 {
     //LOG_INFO("syntacore_riscv32_write_memory at %08X, %d bytes", address, size * count);
     unsigned i = 0; //byte count
@@ -773,11 +790,13 @@ syntacore_riscv32_write_mem_chunk(
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_ADDR);
     field.num_bits = TAP_ADDR_LEN;
+#if 0
     field.tap = target->tap;
+#endif
     field.in_value = NULL;
     out_data[0] = DEBUG_MEMORY_ACCESS_WR_DATA;
     field.out_value = (void*)&out_data[0];
-    jtag_add_dr_scan(1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
 
     syntacore_riscv32_jtag_set_instruction(target, TAP_STREAM);
     out_data[1] = TAP_START_CMD;
@@ -786,7 +805,7 @@ syntacore_riscv32_write_mem_chunk(
     {
         out_data[0] = data[i];
         field.out_value = (void*)out_data;
-        jtag_add_dr_scan(1, &field, jtag_get_end_state());
+        jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
     }
     //LOG_INFO("command buffer initialization is done");
     if (jtag_execute_queue() != ERROR_OK)
@@ -814,67 +833,69 @@ syntacore_riscv32_write_mem_word(struct target * target, uint32_t const address,
     jtag_set_end_state(TAP_IDLE);
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_CMD);
+#if 0
     field.tap = target->tap;
+#endif
     field.num_bits = TAP_CMD_LEN;
     out_data = TAP_CMD_WR;
     field.out_value = (void*)&out_data;
     field.in_value = NULL;
-    jtag_add_dr_scan(1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_ADDR);
     field.num_bits = TAP_ADDR_LEN;
     out_data = DEBUG_MEMORY_ACCESS_ADDRESS;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_WR);
     field.num_bits = TAP_WR_LEN;
     out_data = address;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_START);
     field.num_bits = TAP_START_LEN;
     out_data = TAP_START_CMD;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
     //-----------------------------------------------
     syntacore_riscv32_jtag_set_instruction(target, TAP_ADDR);
     field.num_bits = TAP_ADDR_LEN;
     out_data = DEBUG_MEMORY_ACCESS_WR_DATA;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_WR);
     field.num_bits = TAP_WR_LEN;
     out_data = data;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_START);
     field.num_bits = TAP_START_LEN;
     out_data = TAP_START_CMD;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
     //----------------------------------------------
     syntacore_riscv32_jtag_set_instruction(target, TAP_ADDR);
     field.num_bits = TAP_ADDR_LEN;
     out_data = DEBUG_MEMORY_ACCESS_CMD;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_WR);
     field.num_bits = TAP_WR_LEN;
     out_data = DEBUG_MEMORY_ACCESS_CMD_START | DEBUG_MEMORY_ACCESS_CMD_WRITE
         | DEBUG_MEMORY_ACCESS_CMD_ALL_BYTES;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_START);
     field.num_bits = TAP_START_LEN;
     out_data = TAP_START_CMD;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
 
     if (jtag_execute_queue() != ERROR_OK)
     {
@@ -977,36 +998,44 @@ syntacore_riscv32_debug_write_register(struct target * target, uint32_t const ad
     jtag_set_end_state(TAP_IDLE);
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_CMD);
+#if 0
     field_cmd.tap = target->tap;
+#endif
     field_cmd.num_bits = TAP_CMD_LEN;
     field_cmd.out_value = (void*)&cmd;
     cmd = TAP_CMD_WR;
     field_cmd.in_value = NULL;
-    jtag_add_dr_scan(1, &field_cmd, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field_cmd, jtag_get_end_state());
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_ADDR);
+#if 0
     field_addr.tap = target->tap;
+#endif
     field_addr.num_bits = TAP_ADDR_LEN;
     field_addr.out_value = (void*)&addr;
     addr = address;
     field_addr.in_value = NULL;
-    jtag_add_dr_scan(1, &field_addr, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field_addr, jtag_get_end_state());
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_WR);
+#if 0
     field_data.tap = target->tap;
+#endif
     field_data.num_bits = TAP_WR_LEN;
     data_in = data;
     field_data.out_value = (void*)&data_in;
     field_data.in_value = NULL;
-    jtag_add_dr_scan(1, &field_data, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field_data, jtag_get_end_state());
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_START);
+#if 0
     field_start.tap = target->tap;
+#endif
     field_start.num_bits = TAP_START_LEN;
     field_start.out_value = (void*)&start;
     start = TAP_START_CMD;
     field_start.in_value = NULL;
-    jtag_add_dr_scan(1, &field_start, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field_start, jtag_get_end_state());
 
     if (jtag_execute_queue() != ERROR_OK)
     {
@@ -1025,37 +1054,45 @@ syntacore_riscv32_debug_read_register(struct target * target, uint32_t const add
     jtag_set_end_state(TAP_IDLE);
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_CMD);
+#if 0
     field_cmd.tap = target->tap;
+#endif
     field_cmd.num_bits = TAP_CMD_LEN;
     field_cmd.out_value = (void*)&cmd;
     cmd = TAP_CMD_RD;
     field_cmd.in_value = (void*)&cmd;
-    jtag_add_dr_scan(1, &field_cmd, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field_cmd, jtag_get_end_state());
   
     syntacore_riscv32_jtag_set_instruction(target, TAP_ADDR);
+#if 0
     field_addr.tap = target->tap;
+#endif
     field_addr.num_bits = TAP_ADDR_LEN;
     field_addr.out_value = (void*)&addr;
     addr = address;
     field_addr.in_value = (void*)&addr;
-    jtag_add_dr_scan(1, &field_addr, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field_addr, jtag_get_end_state());
     
     syntacore_riscv32_jtag_set_instruction(target, TAP_START);
+#if 0
     field_start.tap = target->tap;
+#endif
     field_start.num_bits = TAP_START_LEN;
     field_start.out_value =(void*)&start;
     start = 0x1;
     field_start.in_value = (void*)&start;
-    jtag_add_dr_scan(1, &field_start, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field_start, jtag_get_end_state());
     
    
     syntacore_riscv32_jtag_set_instruction(target, TAP_RD);
+#if 0
     field_data.tap = target->tap;
+#endif
     field_data.num_bits = TAP_RD_LEN;
     field_data.out_value = NULL;
     data_in = 0;
     field_data.in_value = (void*)&data_in;
-    jtag_add_dr_scan(1, &field_data, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field_data, jtag_get_end_state());
     
     if (jtag_execute_queue() != ERROR_OK)
     {
