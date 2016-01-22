@@ -15,6 +15,8 @@
 
 #define CHECK_MEMORY_TRANSACTIONS 0
 #define FAST_LOAD 1
+// #define LOCAL_LOG_INFO LOG_INFO
+#define LOCAL_LOG_INFO(expr,...) do {} while(0)
 
 struct arch
 {
@@ -91,49 +93,26 @@ static uint32_t const TAP_STREAM = 0xA;
 static uint32_t const TAP_STREAM_LEN = 34;
 ///@}
 
-static hw_bps_type hw_bps[4];
-
-static tap_state_t g_current_end_state;
-
-static char* core_reg_list[] =
-{
-    "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi",
-    "eip", "eflags", "cs", "ss", "ds", "es", "fs", "gs"
-};
+static hw_bps_type hardware_breakpoints[4];
 
 static int nc_poll_requested = 0;
-
-static void
-jtag_set_end_state(tap_state_t new_end_state)
-{
-    g_current_end_state = new_end_state;
-}
-
-static tap_state_t
-jtag_get_end_state(void)
-{
-    return g_current_end_state;
-}
 
 static int
 jtag_set_instruction(struct target* target, int new_instr)
 {
-    struct jtag_tap *tap;
-
-    tap = target->tap;
-    if ( tap == NULL ) {
+    struct jtag_tap* tap = target->tap;
+    if ( !tap ) {
         return ERROR_FAIL;
     }
 
-    if ( buf_get_u32(tap->cur_instr, 0, tap->ir_length) != (uint32_t)new_instr ) {
-        struct scan_field field;
+    if ( buf_get_u32(tap->cur_instr, 0u, tap->ir_length) != (uint32_t)new_instr ) {
         uint32_t t = new_instr;
-
-        field.num_bits = tap->ir_length;
-        field.out_value = (void*)&t;
-        field.in_value = NULL;
-
-        jtag_add_ir_scan(tap, &field, jtag_get_end_state());
+        struct scan_field field = {
+            .num_bits = tap->ir_length,
+            .out_value = (void*)&t,
+            .in_value = NULL
+        };
+        jtag_add_ir_scan(tap, &field, TAP_IDLE);
     }
 
     return ERROR_OK;
@@ -143,106 +122,117 @@ jtag_set_instruction(struct target* target, int new_instr)
 static int
 debug_read_register(struct target * target, uint32_t const address, uint32_t *const data)
 {
-    struct scan_field field_cmd;
-    struct scan_field field_addr;
-    struct scan_field field_start;
-    struct scan_field field_data;
-    uint32_t cmd;
-    uint32_t addr;
-    uint32_t start;
-    uint32_t data_in;
-    jtag_set_end_state(TAP_IDLE);
-
-    jtag_set_instruction(target, TAP_CMD);
-    field_cmd.num_bits = TAP_CMD_LEN;
-    field_cmd.out_value = (void*)&cmd;
-    cmd = TAP_CMD_RD;
-    field_cmd.in_value = (void*)&cmd;
-    jtag_add_dr_scan(target->tap, 1, &field_cmd, jtag_get_end_state());
-
-    jtag_set_instruction(target, TAP_ADDR);
-    field_addr.num_bits = TAP_ADDR_LEN;
-    field_addr.out_value = (void*)&addr;
-    addr = address;
-    field_addr.in_value = (void*)&addr;
-    jtag_add_dr_scan(target->tap, 1, &field_addr, jtag_get_end_state());
-
-    jtag_set_instruction(target, TAP_START);
-    field_start.num_bits = TAP_START_LEN;
-    field_start.out_value = (void*)&start;
-    start = 0x1;
-    field_start.in_value = (void*)&start;
-    jtag_add_dr_scan(target->tap, 1, &field_start, jtag_get_end_state());
-
-
-    jtag_set_instruction(target, TAP_RD);
-    field_data.num_bits = TAP_RD_LEN;
-    field_data.out_value = NULL;
-    data_in = 0;
-    field_data.in_value = (void*)&data_in;
-    jtag_add_dr_scan(target->tap, 1, &field_data, jtag_get_end_state());
-
-    if ( jtag_execute_queue() != ERROR_OK ) {
-        LOG_ERROR("register read failed");
-        return ERROR_FAIL;
+    {
+        jtag_set_instruction(target, TAP_CMD);
+        uint32_t cmd = TAP_CMD_RD;
+        struct scan_field field_cmd = {
+            .num_bits = TAP_CMD_LEN,
+            .out_value = (void*)&cmd,
+            .in_value = (void*)&cmd
+        };
+        jtag_add_dr_scan(target->tap, 1, &field_cmd, TAP_IDLE);
     }
-    *data = data_in;
-#if 0
-    if ( address >= 0x200 && address <= 0x300 ) {
-        LOG_INFO("RR: A %08X D %08X", address, data_in);
+
+    {
+        jtag_set_instruction(target, TAP_ADDR);
+        uint32_t addr = address;
+        struct scan_field field_addr =
+        {
+            .num_bits = TAP_ADDR_LEN,
+            .out_value = (void*)&addr,
+            .in_value = (void*)&addr
+        };
+        jtag_add_dr_scan(target->tap, 1, &field_addr, TAP_IDLE);
     }
-#endif
+
+    {
+        jtag_set_instruction(target, TAP_START);
+        uint32_t start = 0x1;
+        struct scan_field field_start = {
+            .num_bits = TAP_START_LEN,
+            .out_value = (void*)&start,
+            .in_value = (void*)&start
+        };
+        jtag_add_dr_scan(target->tap, 1, &field_start, TAP_IDLE);
+    }
+
+    {
+        uint32_t data_in;
+        {
+            jtag_set_instruction(target, TAP_RD);
+            data_in = 0;
+            struct scan_field field_data = {
+                .num_bits = TAP_RD_LEN,
+                .out_value = NULL,
+                .in_value = (void*)&data_in
+            };
+            jtag_add_dr_scan(target->tap, 1, &field_data, TAP_IDLE);
+        }
+
+        if ( jtag_execute_queue() != ERROR_OK ) {
+            LOG_ERROR("register read failed");
+            return ERROR_FAIL;
+        }
+        *data = data_in;
+        if ( address >= 0x200 && address <= 0x300 ) {
+            LOCAL_LOG_INFO("RR: A %08X D %08X", address, data_in);
+        }
+    }
     return ERROR_OK;
 }
 
 static int
 debug_write_register(struct target * target, uint32_t const address, uint32_t const data)
 {
-    struct scan_field field_cmd;
-    struct scan_field field_addr;
-    struct scan_field field_start;
-    struct scan_field field_data;
-    uint32_t cmd;
-    uint32_t addr;
-    uint32_t start;
-    uint32_t data_in;
-    jtag_set_end_state(TAP_IDLE);
+    {
+        jtag_set_instruction(target, TAP_CMD);
+        uint32_t cmd = TAP_CMD_WR;
+        struct scan_field field_cmd = {
+            .num_bits = TAP_CMD_LEN,
+            .out_value = (void*)&cmd,
+            .in_value = NULL
+        };
+        jtag_add_dr_scan(target->tap, 1, &field_cmd, TAP_IDLE);
+    }
 
-    jtag_set_instruction(target, TAP_CMD);
-    field_cmd.num_bits = TAP_CMD_LEN;
-    field_cmd.out_value = (void*)&cmd;
-    cmd = TAP_CMD_WR;
-    field_cmd.in_value = NULL;
-    jtag_add_dr_scan(target->tap, 1, &field_cmd, jtag_get_end_state());
+    {
+        jtag_set_instruction(target, TAP_ADDR);
+        uint32_t addr = address;
+        struct scan_field field_addr = {
+            .num_bits = TAP_ADDR_LEN,
+            .out_value = (void*)&addr,
+            .in_value = NULL
+        };
+        jtag_add_dr_scan(target->tap, 1, &field_addr, TAP_IDLE);
+    }
 
-    jtag_set_instruction(target, TAP_ADDR);
-    field_addr.num_bits = TAP_ADDR_LEN;
-    field_addr.out_value = (void*)&addr;
-    addr = address;
-    field_addr.in_value = NULL;
-    jtag_add_dr_scan(target->tap, 1, &field_addr, jtag_get_end_state());
+    {
+        jtag_set_instruction(target, TAP_WR);
+        uint32_t data_in = data;
+        struct scan_field field_data = {
+            .num_bits = TAP_WR_LEN,
+            .out_value = (void*)&data_in,
+            .in_value = NULL
+        };
+        jtag_add_dr_scan(target->tap, 1, &field_data, TAP_IDLE);
+    }
 
-    jtag_set_instruction(target, TAP_WR);
-    field_data.num_bits = TAP_WR_LEN;
-    data_in = data;
-    field_data.out_value = (void*)&data_in;
-    field_data.in_value = NULL;
-    jtag_add_dr_scan(target->tap, 1, &field_data, jtag_get_end_state());
-
-    jtag_set_instruction(target, TAP_START);
-    field_start.num_bits = TAP_START_LEN;
-    field_start.out_value = (void*)&start;
-    start = TAP_START_CMD;
-    field_start.in_value = NULL;
-    jtag_add_dr_scan(target->tap, 1, &field_start, jtag_get_end_state());
+    {
+        jtag_set_instruction(target, TAP_START);
+        uint32_t start = TAP_START_CMD;
+        struct scan_field field_start = {
+            .num_bits = TAP_START_LEN,
+            .out_value = (void*)&start,
+            .in_value = NULL
+        };
+        jtag_add_dr_scan(target->tap, 1, &field_start, TAP_IDLE);
+    }
 
     if ( jtag_execute_queue() != ERROR_OK ) {
         LOG_ERROR("register read failed");
         return ERROR_FAIL;
     }
-#if 0
-    LOG_INFO("WR: A %08X D %08X", address, data);
-#endif
+    LOCAL_LOG_INFO("WR: A %08X D %08X", address, data);
     return ERROR_OK;
 }
 
@@ -253,108 +243,92 @@ save_context(struct target * target)
     int retval;
     uint32_t nc_state;
     // issue error if we are still running
-    if ( (retval = debug_read_register(target, DEBUG_CONTROL_STATUS, &nc_state)) != ERROR_OK ) {
-        return retval;
+    if ( (retval = debug_read_register(target, DEBUG_CONTROL_STATUS, &nc_state)) == ERROR_OK ) {
+        if ( !(nc_state & DEBUG_CONTROL_STATUS_HALTED) ) {
+            LOG_ERROR("NC is not halted save_context");
+        }
+        struct arch *arch_info = (struct arch *)target->arch_info;
+        // NC has only 10 regs
+        for ( int i = 0; i < 10; ++i ) {
+            if ( (retval = debug_read_register(target, DEBUG_REGISTERS_ACCESS_BASE + i * 4, (uint32_t*)(arch_info->core_cache->reg_list[i].value))) != ERROR_OK ) {
+                break;
+            }
+            arch_info->core_cache->reg_list[i].dirty = 0;
+            arch_info->core_cache->reg_list[i].valid = 1;
+        }
     }
 
-    if ( !(nc_state & DEBUG_CONTROL_STATUS_HALTED) ) {
-        LOG_ERROR("NC is not halted save_context");
-    }
-    struct arch *arch_info = (struct arch *)target->arch_info;
-    // NC has only 10 regs
-    for ( int i = 0; i < 10; ++i ) {
-        if ( (retval = debug_read_register(target,
-            DEBUG_REGISTERS_ACCESS_BASE + i * 4,
-            (uint32_t*)(arch_info->core_cache->reg_list[i].value))) != ERROR_OK ) {
-            return retval;
-        }
-        arch_info->core_cache->reg_list[i].dirty = 0;
-        arch_info->core_cache->reg_list[i].valid = 1;
-    }
-    return ERROR_OK;
+    return retval;
 }
 
 static int
 this_target_poll(struct target *target)
 {
-#if 0
-    LOG_INFO("poll");
-#endif
-    int retval = 0;
+    LOCAL_LOG_INFO("poll");
+    int retval;
     uint32_t nc_state = 0;
-    if ( (retval = debug_read_register(target, DEBUG_CONTROL_STATUS, &nc_state)) != ERROR_OK ) {
-        return retval;
-    }
-    if ( nc_state & DEBUG_CONTROL_STATUS_HALTED ) {
-        target->state = TARGET_HALTED;
-        if ( nc_poll_requested ) {
-            if ( nc_poll_requested == DBG_REASON_SINGLESTEP ) {
-                // enable interrupts
-                debug_write_register(target, DEBUG_CONTROL_COMMAND, 0x0);
+    if ( (retval = debug_read_register(target, DEBUG_CONTROL_STATUS, &nc_state)) == ERROR_OK ) {
+        if ( nc_state & DEBUG_CONTROL_STATUS_HALTED ) {
+            target->state = TARGET_HALTED;
+            if ( nc_poll_requested ) {
+                if ( nc_poll_requested == DBG_REASON_SINGLESTEP ) {
+                    // enable interrupts
+                    debug_write_register(target, DEBUG_CONTROL_COMMAND, 0x0);
+                }
+                target->debug_reason = nc_poll_requested;
+                target_call_event_callbacks(target, TARGET_EVENT_HALTED);
+                nc_poll_requested = 0;
+                save_context(target);  // update reg cache
+            } else {
+                target->debug_reason = DBG_REASON_DBGRQ;
             }
-            target->debug_reason = nc_poll_requested;
-            target_call_event_callbacks(target, TARGET_EVENT_HALTED);
-            nc_poll_requested = 0;
-            save_context(target);  // update reg cache
-        } else {
-            target->debug_reason = DBG_REASON_DBGRQ;
         }
     }
-    return ERROR_OK;
+    return retval;
 }
 
 static int
 this_target_arch_state(struct target *target)
 {
-#if 0
-    LOG_INFO("arch_state");
-#endif
+    LOCAL_LOG_INFO("arch_state");
     return ERROR_OK;
 }
 
 static int
 this_target_init(struct command_context *cmd_ctx, struct target *target)
 {
-#if 0
-    LOG_INFO("init_target");
-#endif
+    LOCAL_LOG_INFO("init_target");
     return ERROR_OK;
 }
 
 static int
 this_target_halt(struct target *target)
 {
-#if 0
-    LOG_INFO("halt");
-#endif
-    int retval = 0;
+    LOCAL_LOG_INFO("halt");
+    int retval;
     uint32_t nc_state = 0;
-    // check NC state
-    if ( (retval = debug_read_register(target, DEBUG_CONTROL_STATUS, &nc_state)) != ERROR_OK ) {
-        return retval;
-    }
-    if ( nc_state & DEBUG_CONTROL_STATUS_HALTED ) {
-        LOG_ERROR("Halt request when NC is already in halted state");
-    }
-    // issue Halt command
-    if ( (retval = debug_write_register(target, DEBUG_CONTROL_COMMAND, DEBUG_CONTROL_COMMAND_HALT)) != ERROR_OK ) {
-        return retval;
-    }
-    // issue error if we are still running
-    if ( (retval = debug_read_register(target, DEBUG_CONTROL_STATUS, &nc_state)) != ERROR_OK ) {
-        return retval;
-    }
-    if ( !(nc_state & DEBUG_CONTROL_STATUS_HALTED) ) {
-        LOG_ERROR("NC is not halted after Halt command");
-    }
+    if ( (retval = debug_read_register(target, DEBUG_CONTROL_STATUS, &nc_state)) == ERROR_OK ) {
+        if ( nc_state & DEBUG_CONTROL_STATUS_HALTED ) {
+            LOG_ERROR("Halt request when NC is already in halted state");
+        }
+        // issue Halt command
+        if ( (retval = debug_write_register(target, DEBUG_CONTROL_COMMAND, DEBUG_CONTROL_COMMAND_HALT)) == ERROR_OK ) {
+            // issue error if we are still running
+            if ( (retval = debug_read_register(target, DEBUG_CONTROL_STATUS, &nc_state)) == ERROR_OK ) {
+                if ( !(nc_state & DEBUG_CONTROL_STATUS_HALTED) ) {
+                    LOG_ERROR("NC is not halted after Halt command");
+                }
 #if 0
-    if ( nc_poll_requested ) {
-        nc_poll_requested = 0;
-    }
+                if ( nc_poll_requested ) {
+                    nc_poll_requested = 0;
+                }
 #endif
-    target->state = TARGET_HALTED;
-    target->debug_reason = DBG_REASON_DBGRQ;
-    return ERROR_OK;
+                target->state = TARGET_HALTED;
+                target->debug_reason = DBG_REASON_DBGRQ;
+            }
+        }
+    }
+    return retval;
 }
 
 /// update register values in HW from cache
@@ -365,22 +339,21 @@ restore_context(struct target*  target)
     int retval;
     uint32_t nc_state;
     // issue error if we are still running
-    if ( (retval = debug_read_register(target, DEBUG_CONTROL_STATUS, &nc_state)) != ERROR_OK ) {
-        return retval;
-    }
-    if ( !(nc_state & DEBUG_CONTROL_STATUS_HALTED) ) {
-        LOG_ERROR("NC is not halted restore_context");
-    }
-    // NC has only 10 regs
-    for ( int i = 0; i < 10; ++i ) {
-        uint32_t const reg_value = *(uint32_t*)(arch_info->core_cache->reg_list[i].value);
-        if ( (retval = debug_write_register(target, DEBUG_REGISTERS_ACCESS_BASE + i * 4, reg_value)) != ERROR_OK ) {
-            return retval;
+    if ( (retval = debug_read_register(target, DEBUG_CONTROL_STATUS, &nc_state)) == ERROR_OK ) {
+        if ( !(nc_state & DEBUG_CONTROL_STATUS_HALTED) ) {
+            LOG_ERROR("NC is not halted restore_context");
         }
-        arch_info->core_cache->reg_list[i].dirty = 0;
-        arch_info->core_cache->reg_list[i].valid = 1;
+        // NC has only 10 regs
+        for ( int i = 0; i < 10; ++i ) {
+            uint32_t const reg_value = *(uint32_t*)(arch_info->core_cache->reg_list[i].value);
+            if ( (retval = debug_write_register(target, DEBUG_REGISTERS_ACCESS_BASE + i * 4, reg_value)) != ERROR_OK ) {
+                break;
+            }
+            arch_info->core_cache->reg_list[i].dirty = 0;
+            arch_info->core_cache->reg_list[i].valid = 1;
+        }
     }
-    return ERROR_OK;
+    return retval;
 }
 
 static int
@@ -407,9 +380,7 @@ this_target_step(struct target *target, int current, uint32_t address, int handl
 static int
 this_target_assert_reset(struct target *target)
 {
-#if 0
-    LOG_INFO("assert_reset");
-#endif
+    LOCAL_LOG_INFO("assert_reset");
     int retval = 0;
     if ( (retval = debug_write_register(target, DEBUG_CONTROL_PWR_RST, DEBUG_CONTROL_PWR_RST_HRESET)) != ERROR_OK ) {
         return retval;
@@ -420,9 +391,7 @@ this_target_assert_reset(struct target *target)
 static int
 this_target_deassert_reset(struct target *target)
 {
-#if 0
-    LOG_INFO("deassert_reset");
-#endif
+    LOCAL_LOG_INFO("deassert_reset");
     int retval = 0;
     if ( (retval = debug_write_register(target, DEBUG_CONTROL_PWR_RST, 0)) != ERROR_OK ) {
         return retval;
@@ -433,34 +402,25 @@ this_target_deassert_reset(struct target *target)
 static int
 this_target_soft_reset_halt(struct target *target)
 {
-#if 0
-    LOG_INFO("soft_reset_halt");
-#endif
-    int retval = 0;
-    // assert
-    if ( (retval = debug_write_register(target, DEBUG_CONTROL_PWR_RST, DEBUG_CONTROL_PWR_RST_HRESET)) != ERROR_OK ) {
-        return retval;
+    LOCAL_LOG_INFO("soft_reset_halt");
+    int retval;
+    // assert reset
+    if ( (retval = debug_write_register(target, DEBUG_CONTROL_PWR_RST, DEBUG_CONTROL_PWR_RST_HRESET)) == ERROR_OK ) {
+        // ...and deassert reset
+        retval = debug_write_register(target, DEBUG_CONTROL_PWR_RST, 0);
     }
-    // ...and deassert reset
-    if ( (retval = debug_write_register(target, DEBUG_CONTROL_PWR_RST, 0)) != ERROR_OK ) {
-        return retval;
-    }
-    return ERROR_OK;
+    return retval;
 }
 
 static int
-this_target_get_gdb_reg_list(struct target *target, struct reg **reg_list[], int *reg_list_size, 
-enum target_register_class reg_class)
+this_target_get_gdb_reg_list(struct target *target, struct reg **reg_list[], int *reg_list_size, enum target_register_class reg_class)
 {
-    int i;
+    LOCAL_LOG_INFO("get_gdb_reg_list");
     struct arch *arch_info = (struct arch *)target->arch_info;
 
-#if 0
-    LOG_INFO("get_gdb_reg_list");
-#endif
     *reg_list = malloc(sizeof(struct reg*) * 16);
 
-    for ( i = 0; i < 16; ++i ) {
+    for ( int i = 0; i < 16; ++i ) {
         (*reg_list)[i] = &arch_info->core_cache->reg_list[i];
     }
     *reg_list_size = 16;
@@ -472,9 +432,6 @@ static int
 read_mem_word(struct target * target, uint32_t const address, uint32_t* const data)
 {
     int retval = 0;
-#if CHECK_MEMORY_TRANSACTIONS
-    uint32_t transaction_status = 0;
-#endif
     if ( (retval = debug_write_register(target, DEBUG_MEMORY_ACCESS_ADDRESS, address)) != ERROR_OK ) {
         return retval;
     }
@@ -482,39 +439,35 @@ read_mem_word(struct target * target, uint32_t const address, uint32_t* const da
         return retval;
     }
 #if CHECK_MEMORY_TRANSACTIONS
-    // check status register
-    if ( (retval = debug_read_register(target, DEBUG_MEMORY_ACCESS_CMD, &transaction_status)) != ERROR_OK ) {
-        return retval;
-    }
-    // poll status register until transaction is finished
-    while (transaction_status & DEBUG_MEMORY_ACCESS_CMD_START)
     {
-        if ((retval = debug_read_register(target, DEBUG_MEMORY_ACCESS_CMD, &transaction_status)) != ERROR_OK)
-        {
+        uint32_t transaction_status = 0;
+        // check status register
+        if ( (retval = debug_read_register(target, DEBUG_MEMORY_ACCESS_CMD, &transaction_status)) != ERROR_OK ) {
             return retval;
+        }
+        // poll status register until transaction is finished
+        while (transaction_status & DEBUG_MEMORY_ACCESS_CMD_START) {
+            if ((retval = debug_read_register(target, DEBUG_MEMORY_ACCESS_CMD, &transaction_status)) != ERROR_OK) {
+                return retval;
+            }
         }
     }
 #endif
     if ( (retval = debug_read_register(target, DEBUG_MEMORY_ACCESS_RD_DATA, data)) != ERROR_OK ) {
         return retval;
     }
-#if 0
-    LOG_INFO("MR A %08X D %08X", address, *data);
-#endif
+    LOCAL_LOG_INFO("MR A %08X D %08X", address, *data);
     return ERROR_OK;
 }
 
 static int
 this_target_read_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, uint8_t *buffer)
 {
-#if 0
-    LOG_INFO("read_memory at %08X, %d bytes", address, size * count);
-#endif
+    LOCAL_LOG_INFO("read_memory at %08X, %d bytes", address, size * count);
     unsigned i = 0;  // byte count
     uint32_t x = 0;  // buffer
     int retval = 0;
     unsigned const buffer_size = count * size;
-    unsigned word_start_offset = 0;
     // Address is not aligned
     if ( address & 0x3 ) {
         if ( (retval = read_mem_word(target, address & (~0x3), &x)) != ERROR_OK ) {
@@ -536,10 +489,9 @@ this_target_read_memory(struct target *target, uint32_t address, uint32_t size, 
     if ( (retval = read_mem_word(target, address + i, &x)) != ERROR_OK ) {
         return retval;
     }
-    word_start_offset = i;
-    while ( i != buffer_size ) {
+    unsigned const word_start_offset = i;
+    for ( ; i != buffer_size; ++i ) {
         *(buffer + i) = ((uint8_t*)(&x))[(i - word_start_offset) & 0x3];
-        ++i;
     }
     return ERROR_OK;
 }
@@ -550,93 +502,85 @@ write_mem_word(struct target * target, uint32_t const address, uint32_t const da
 #if FAST_LOAD
     static int first_run_flag = 1;
     if ( first_run_flag ) {
-        LOG_INFO("Optimized memory load enabled");
+        LOCAL_LOG_INFO("Optimized memory load enabled");
         first_run_flag = 0;
     }
 
     struct scan_field field;
     uint32_t out_data;
-    jtag_set_end_state(TAP_IDLE);
 
     jtag_set_instruction(target, TAP_CMD);
     field.num_bits = TAP_CMD_LEN;
     out_data = TAP_CMD_WR;
     field.out_value = (void*)&out_data;
     field.in_value = NULL;
-    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
     jtag_set_instruction(target, TAP_ADDR);
     field.num_bits = TAP_ADDR_LEN;
     out_data = DEBUG_MEMORY_ACCESS_ADDRESS;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
     jtag_set_instruction(target, TAP_WR);
     field.num_bits = TAP_WR_LEN;
     out_data = address;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
     jtag_set_instruction(target, TAP_START);
     field.num_bits = TAP_START_LEN;
     out_data = TAP_START_CMD;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
 
     jtag_set_instruction(target, TAP_ADDR);
     field.num_bits = TAP_ADDR_LEN;
     out_data = DEBUG_MEMORY_ACCESS_WR_DATA;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
     jtag_set_instruction(target, TAP_WR);
     field.num_bits = TAP_WR_LEN;
     out_data = data;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
     jtag_set_instruction(target, TAP_START);
     field.num_bits = TAP_START_LEN;
     out_data = TAP_START_CMD;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
 
     jtag_set_instruction(target, TAP_ADDR);
     field.num_bits = TAP_ADDR_LEN;
     out_data = DEBUG_MEMORY_ACCESS_CMD;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
     jtag_set_instruction(target, TAP_WR);
     field.num_bits = TAP_WR_LEN;
     out_data = DEBUG_MEMORY_ACCESS_CMD_START | DEBUG_MEMORY_ACCESS_CMD_WRITE
         | DEBUG_MEMORY_ACCESS_CMD_ALL_BYTES;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
     jtag_set_instruction(target, TAP_START);
     field.num_bits = TAP_START_LEN;
     out_data = TAP_START_CMD;
     field.out_value = (void*)&out_data;
-    jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
+    jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
     if ( jtag_execute_queue() != ERROR_OK ) {
         LOG_ERROR("register read failed");
         return ERROR_FAIL;
     }
-#if 0
-    LOG_INFO("WR: A %08X D %08X", address, data);
-#endif
+    LOCAL_LOG_INFO("WR: A %08X D %08X", address, data);
 #else
-#if 0
-    LOG_INFO("MW A %08X D %08X", address, data);
-#endif
+    LOCAL_LOG_INFO("MW A %08X D %08X", address, data);
     int retval = 0;
-#if CHECK_MEMORY_TRANSACTIONS
-    uint32_t transaction_status = 0;
-#endif
     if ( (retval = debug_write_register(target, DEBUG_MEMORY_ACCESS_ADDRESS, address)) != ERROR_OK ) {
         return retval;
     }
@@ -649,14 +593,17 @@ write_mem_word(struct target * target, uint32_t const address, uint32_t const da
         return retval;
     }
 #if CHECK_MEMORY_TRANSACTIONS
-    // check status register
-    if ( (retval = debug_read_register(target, DEBUG_MEMORY_ACCESS_CMD, &transaction_status)) != ERROR_OK ) {
-        return retval;
-    }
-    // poll status register until transaction is finished
-    while ( transaction_status & DEBUG_MEMORY_ACCESS_CMD_START ) {
+    {
+        uint32_t transaction_status = 0;
+        // check status register
         if ( (retval = debug_read_register(target, DEBUG_MEMORY_ACCESS_CMD, &transaction_status)) != ERROR_OK ) {
             return retval;
+        }
+        // poll status register until transaction is finished
+        while ( transaction_status & DEBUG_MEMORY_ACCESS_CMD_START ) {
+            if ( (retval = debug_read_register(target, DEBUG_MEMORY_ACCESS_CMD, &transaction_status)) != ERROR_OK ) {
+                return retval;
+            }
         }
     }
 #endif
@@ -676,42 +623,43 @@ this_target_examine(struct target *target)
     target->state = TARGET_HALTED;
     save_context(target);
     target_set_examined(target);
-#if 0
-    LOG_INFO("examine");
-#endif
+    LOCAL_LOG_INFO("examine");
     return ERROR_OK;
 }
 
 static int
 this_target_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 {
-    int i = 0;
     int retval = 0;
     unsigned hw_ctrl = 0;
     int bp = 0;
-#if 0
-    LOG_INFO("add_breakpoint");
-#endif
+    static size_t const total_number_of_hw_breakpoints = sizeof hardware_breakpoints / sizeof hardware_breakpoints[0];
+    LOCAL_LOG_INFO("add_breakpoint");
     if ( breakpoint->length != 1 ) {
         return ERROR_FAIL;
     } else if ( breakpoint->type == BKPT_HARD ) {
         // Find unused HW breakpoint
         /// @todo Maybe it is useful to check hardware state here(at least once)
-        for ( i = 0; i < 4; ++i ) {
-            if ( !hw_bps[i].used ) {
-                bp = i;
-                break;
+        {
+            size_t i;
+            for ( i = 0; i < total_number_of_hw_breakpoints; ++i ) {
+                if ( !hardware_breakpoints[i].used ) {
+                    bp = i;
+                    break;
+                }
+            }
+            // All HW breakpoint are occupied
+            if ( total_number_of_hw_breakpoints == i ) {
+                return ERROR_FAIL;
             }
         }
-        // All HW breakpoint are occupied
-        if ( 4 == i ) {
-            return ERROR_FAIL;
-        }
-        hw_bps[bp].used = 1;
-        hw_bps[bp].address = breakpoint->address;
-        for ( i = 0; i < 4; ++i ) {
-            if ( hw_bps[i].used ) {
-                hw_ctrl |= 1 << (i * 2 + 1);
+        hardware_breakpoints[bp].used = 1;
+        hardware_breakpoints[bp].address = breakpoint->address;
+        {
+             for ( size_t i = 0; i < total_number_of_hw_breakpoints; ++i ) {
+                if ( hardware_breakpoints[i].used ) {
+                    hw_ctrl |= 1 << (i * 2 + 1);
+                }
             }
         }
         if ( (retval = debug_write_register(target, 0x39C, hw_ctrl)) != ERROR_OK ) {
@@ -720,9 +668,7 @@ this_target_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
         if ( (retval = debug_write_register(target, 0x380 + bp * 4, breakpoint->address)) != ERROR_OK ) {
             return retval;
         }
-#if 0
-        LOG_INFO("Hardware breakpoint at address %X", breakpoint->address);
-#endif
+        LOCAL_LOG_INFO("Hardware breakpoint at address %X", breakpoint->address);
     } else {
         if ( (retval = this_target_read_memory(target, breakpoint->address, breakpoint->length, 1, breakpoint->orig_instr)) != ERROR_OK ) {
             return retval;
@@ -739,9 +685,7 @@ static int
 this_target_remove_breakpoint(struct target *target, struct breakpoint *breakpoint)
 {
     int retval = 0;
-#if 0
-    LOG_INFO("remove_breakpoint");
-#endif
+    LOCAL_LOG_INFO("remove_breakpoint");
     if ( breakpoint->length != 1 ) {
         return ERROR_FAIL;
     }
@@ -749,7 +693,7 @@ this_target_remove_breakpoint(struct target *target, struct breakpoint *breakpoi
         unsigned hw_ctrl = 0;
         int i = 0;
         for ( i = 0; i < 4; ++i ) {
-            if ( hw_bps[i].address == breakpoint->address ) {
+            if ( hardware_breakpoints[i].address == breakpoint->address ) {
                 break;
             }
         }
@@ -757,20 +701,18 @@ this_target_remove_breakpoint(struct target *target, struct breakpoint *breakpoi
         if ( 4 == i ) {
             return ERROR_FAIL;
         }
-        hw_bps[i].used = 0;
+        hardware_breakpoints[i].used = 0;
         for ( i = 0; i < 4; ++i ) {
-            if ( hw_bps[i].used ) {
+            if ( hardware_breakpoints[i].used ) {
                 hw_ctrl |= 1 << (i * 2 + 1);
             }
         }
         if ( (retval = debug_write_register(target, 0x39C, hw_ctrl)) != ERROR_OK ) {
             return retval;
         }
-#if 0
-        LOG_INFO("Hardware breakpoint removed: %X", breakpoint->address);
-#endif
+        LOCAL_LOG_INFO("Hardware breakpoint removed: %X", breakpoint->address);
         return ERROR_OK;
-    } else  {
+    } else {
         return target_write_u8(target, breakpoint->address, *breakpoint->orig_instr);
     }
 }
@@ -779,11 +721,8 @@ static int
 write_mem_chunk(struct target* target, uint32_t const address, uint32_t * const data, uint32_t const count)
 {
     int retval = 0;
-    jtag_set_end_state(TAP_IDLE);
 
-#if 0
-    LOG_INFO("chunk write A: %08X C: %d", address, count);
-#endif
+    LOCAL_LOG_INFO("chunk write A: %08X C: %d", address, count);
     if ( count > 0xFFFF ) {
         LOG_ERROR("write_mem_chunk error");
     }
@@ -810,7 +749,7 @@ write_mem_chunk(struct target* target, uint32_t const address, uint32_t * const 
         field.num_bits = TAP_ADDR_LEN;
         field.in_value = NULL;
         field.out_value = (void*)&out_data[0];
-        jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
+        jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
         jtag_set_instruction(target, TAP_STREAM);
         out_data[1] = TAP_START_CMD;
@@ -818,28 +757,22 @@ write_mem_chunk(struct target* target, uint32_t const address, uint32_t * const 
         for ( uint32_t i = 0; i < count; ++i ) {
             out_data[0] = data[i];
             field.out_value = (void*)out_data;
-            jtag_add_dr_scan(target->tap, 1, &field, jtag_get_end_state());
+            jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
         }
     }
-#if 0
-    LOG_INFO("command buffer initialization is done");
-#endif
+    LOCAL_LOG_INFO("command buffer initialization is done");
     if ( jtag_execute_queue() != ERROR_OK ) {
         LOG_ERROR("mem chunk write failed");
         return ERROR_FAIL;
     }
-#if 0
-    LOG_INFO("WR: A %08X D %08X", address, data);
-#endif
+    LOCAL_LOG_INFO("WR: A %08X D %08X", address, data);
     return ERROR_OK;
 }
 
 static int
 this_target_write_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, const uint8_t *buffer)
 {
-#if 0
-    LOG_INFO("write_memory at %08X, %d bytes", address, size * count);
-#endif
+    LOCAL_LOG_INFO("write_memory at %08X, %d bytes", address, size * count);
     unsigned i = 0;  // byte count
     uint32_t x = 0;  // buffer
     int retval = 0;
@@ -858,7 +791,7 @@ this_target_write_memory(struct target *target, uint32_t address, uint32_t size,
             return retval;
         }
     }
-    uint32_t chunk_write_size = (buffer_size - i) & ~0x3;
+    uint32_t const chunk_write_size = (buffer_size - i) & ~0x3u;
     if ( chunk_write_size < 8 ) {
         for ( ; i + 4 <= buffer_size; i += 4 ) {
             if ( (retval = write_mem_word(target, address + i, *(uint32_t*)(buffer + i))) != ERROR_OK ) {
@@ -877,29 +810,22 @@ this_target_write_memory(struct target *target, uint32_t address, uint32_t size,
         return retval;
     }
     word_start_offset = i;
-    while ( i != buffer_size ) {
-        ((uint8_t*)(&x))[(i - word_start_offset) & 0x3] = *(buffer + i);
-        ++i;
+    for ( ; i != buffer_size; ++i ) {
+        ((uint8_t*)&x)[(i - word_start_offset) & 0x3] = buffer[i];
     }
-    if ( (retval = write_mem_word(target, (address + i) & ~0x3, x)) != ERROR_OK ) {
-        return retval;
-    }
-    return ERROR_OK;
+
+    return write_mem_word(target, (address + i) & ~0x3, x);
 }
 
 static int
 set_core_reg(struct reg *reg, uint8_t *buf)
 {
     struct Register* nc_reg = (struct Register*)reg->arch_info;
-    // some i386 registers do not exits in NC
-    if ( nc_reg->id < 10 ) {
-#if 0
-        LOG_INFO("updating cache for %s register", reg->name);
-#endif
-    } else {
+    if ( nc_reg->id >= 10 ) {
         return ERROR_OK;
     }
-    uint32_t value = buf_get_u32(buf, 0, 32);
+    LOCAL_LOG_INFO("updating cache for %s register", reg->name);
+    uint32_t const value = buf_get_u32(buf, 0, 32);
 
     if ( nc_reg->target->state != TARGET_HALTED ) {
         return ERROR_TARGET_NOT_HALTED;
@@ -927,14 +853,11 @@ static struct reg_arch_type const reg_type =
 static int
 this_target_create(struct target *target, Jim_Interp *interp)
 {
-    unsigned i = 0;
-    const unsigned num_regs = 16;
+    LOCAL_LOG_INFO("target_create");
+    static unsigned const num_regs = 16;
 
-    struct arch *arch_info = calloc(1, sizeof(struct arch));
-    struct reg *reg_list = malloc(sizeof(struct reg) * num_regs);
-#if 0
-    LOG_INFO("target_create");
-#endif
+    struct arch* arch_info = calloc(1, sizeof(struct arch));
+    struct reg* reg_list = calloc(num_regs, sizeof(struct reg));
     target->arch_info = arch_info;
 
     // reg cache initialization
@@ -945,17 +868,37 @@ this_target_create(struct target *target, Jim_Interp *interp)
     arch_info->core_cache->reg_list = reg_list;
     arch_info->core_cache->num_regs = num_regs;
 
-    for ( i = 0; i < num_regs; i++ ) {
-        reg_list[i].name = core_reg_list[i];
-        reg_list[i].size = 32;
-        reg_list[i].value = calloc(1, 4);
-        *((int*)reg_list[i].value) = 0x100 + i;
-        reg_list[i].dirty = 0;
-        reg_list[i].valid = 0;
-        reg_list[i].type = &reg_type;
-        reg_list[i].arch_info = malloc(sizeof(struct Register));
-        ((struct Register*)reg_list[i].arch_info)->id = i;
-        ((struct Register*)reg_list[i].arch_info)->target = target;
+    static char const* core_reg_list[] = {
+        "eax",
+        "ecx",
+        "edx",
+        "ebx",
+        "esp",
+        "ebp",
+        "esi",
+        "edi",
+        "eip",
+        "eflags",
+        "cs",
+        "ss",
+        "ds",
+        "es",
+        "fs",
+        "gs"};
+
+    struct reg* p_reg = &reg_list[0];
+    for ( unsigned i = 0; i < num_regs; ++i, ++p_reg ) {
+        p_reg->name = core_reg_list[i];
+        p_reg->size = 32;
+        p_reg->value = calloc(1, 4);
+        *((int*)p_reg->value) = 0x100 + i;
+        p_reg->dirty = 0;
+        p_reg->valid = 0;
+        p_reg->type = &reg_type;
+        struct Register* p_item = malloc(sizeof(struct Register));
+        p_item->id = i;
+        p_item->target = target;
+        p_reg->arch_info = p_item;
     }
     return ERROR_OK;
 }
