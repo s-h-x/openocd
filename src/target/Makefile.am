@@ -41,7 +41,7 @@ libtarget_la_SOURCES = \
 	dsp563xx_once.c \
 	dsp5680xx.c \
 	hla_target.c \
-	syntacore_riscv32.c
+	syntacore_riscv32i.c
 
 TARGET_CORE_SRC = \
 	algorithm.c \

@@ -903,7 +903,7 @@ this_target_create(struct target *target, Jim_Interp *interp)
     return ERROR_OK;
 }
 
-struct target_type syntacore_riscv32_target =
+struct target_type syntacore_riscv32i_target =
 {
     .name = "syntacore_riscv32",
 
