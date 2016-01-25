@@ -128,7 +128,6 @@ debug_read_register(struct target* target, uint32_t const address, uint32_t *con
         struct scan_field field_cmd = {
             .num_bits = TAP_CMD_LEN,
             .out_value = (uint8_t const*)&cmd,
-            .in_value = (uint8_t*)&cmd
         };
         jtag_add_dr_scan(target->tap, 1, &field_cmd, TAP_IDLE);
     }
@@ -139,18 +138,16 @@ debug_read_register(struct target* target, uint32_t const address, uint32_t *con
         struct scan_field field_addr = {
             .num_bits = TAP_ADDR_LEN,
             .out_value = (uint8_t const*)&addr,
-            .in_value = (uint8_t*)&addr
         };
         jtag_add_dr_scan(target->tap, 1, &field_addr, TAP_IDLE);
     }
 
     {
         jtag_set_instruction(target, TAP_START);
-        uint32_t start = 0x1;
+        uint32_t start = TAP_START_CMD;
         struct scan_field field_start = {
             .num_bits = TAP_START_LEN,
-            .out_value = (void*)&start,
-            .in_value = (void*)&start
+            .out_value = (uint8_t const*)&start,
         };
         jtag_add_dr_scan(target->tap, 1, &field_start, TAP_IDLE);
     }
