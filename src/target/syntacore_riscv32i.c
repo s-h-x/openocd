@@ -85,27 +85,17 @@ read_HART_DBG_STATUS(struct target* p_target)
 {
 	assert(p_target);
 	assert(0 <= p_target->coreid && p_target->coreid < 2);
-	read_CORE_DBG_STS()
-	jtag_select_IR(p_target, TAP_INSTR_DBG_STATUS);
-	uint8_t tmp[4];
-	struct scan_field field =
-	{
-		.num_bits = TAP_LEN_DBG_STATUS,
-		.in_value = &tmp[0]
-	};
-	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-	return tmp[p_target->coreid];
+	return (read_CORE_DBG_STS(p_target) >> p_target->coreid) & 0xFFu;
 }
-
 
 struct arch
 {
-	struct reg_cache *core_cache;
+	struct reg_cache *m_reg_cache;
 	/// @todo reasons
 	enum target_debug_reason nc_poll_requested;
 };
 
-static char const* const general_regs_list[] = 
+static char const* const general_regs_names_list[] =
 {
 	"x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7",
 	"x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
@@ -147,7 +137,7 @@ set_core_reg(struct reg *reg, uint8_t *buf)
 	return ERROR_OK;
 }
 
-static char const* const FP_regs_list[] =
+static char const* const FP_regs_names_list[] =
 {
 	"f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7",
 	"f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
@@ -180,60 +170,108 @@ static struct reg_arch_type const FP_reg_access_type =
 	.set = set_FPU_reg,
 };
 
-static int
-this_target_create(struct target *target, struct Jim_Interp *interp)
+
+static struct reg
+general_purpose_reg_construct(char const* const p_name, uint32_t const number, struct target* p_target)
 {
+	struct register_struct const the_arch_info = {
+		.id = number,
+		.target = p_target,
+	};
+	struct register_struct* p_arch_info = calloc(1, sizeof(struct register_struct));
+	*p_arch_info = the_arch_info;
+
+	struct reg const the_reg = {
+		.name = p_name,
+		.number = number,
+		.feature = NULL,
+		.caller_save = false,
+		.value = calloc(1, sizeof(uint32_t)),
+		.dirty = false,
+		.valid = false,
+		.exist = true,
+		.size = 32,  //< XLEN?
+		.reg_data_type = NULL,
+		.group = NULL,
+		.arch_info = p_arch_info,
+		.type = &general_reg_access_type,
+	};
+	return the_reg;
+}
+
+static struct reg
+FP_reg_construct(char const* const p_name, uint32_t const number, struct target* p_target)
+{
+	struct register_struct const the_arch_info = {
+		.id = number,
+		.target = p_target,
+	};
+	struct register_struct* p_arch_info = calloc(1, sizeof(struct register_struct));
+	*p_arch_info = the_arch_info;
+
+	struct reg const the_reg = {
+		.name = p_name,
+		.number = number,
+		.feature = NULL,
+		.caller_save = false,
+		.value = calloc(1, sizeof(uint64_t)),
+		.dirty = false,
+		.valid = false,
+		.exist = true,
+		.size = 64,  //< number of bits of double?
+		.reg_data_type = NULL,
+		.group = NULL,
+		.arch_info = p_arch_info,
+		.type = &FP_reg_access_type,
+	};
+	return the_reg;
+}
+
+static struct reg_cache*
+reg_cache__construct(struct reg_cache* p_obj, struct target * p_target)
+{
+	assert(p_obj);
+	static size_t const number_of_general_regs = ARRAY_LEN(general_regs_names_list);
+	static size_t const number_of_FP_regs = ARRAY_LEN(FP_regs_names_list);
+	static size_t const num_regs = number_of_general_regs + number_of_FP_regs;
+	struct reg* const reg_list = calloc(num_regs, sizeof(struct reg));
+	struct reg* p_dest_reg = reg_list;
+	{
+		/// Create general purpose registers cache
+		char const* const* p_name = general_regs_names_list;
+		for ( unsigned i = 0; i < number_of_general_regs; ++i ) {
+			*p_dest_reg++ = general_purpose_reg_construct(*p_name++, i, p_target);
+		}
+	}
+	{
+		/// Create floating point registers cache
+		char const* const* p_name = FP_regs_names_list;
+		for ( unsigned i = 0; i < number_of_FP_regs; ++i ) {
+			*p_dest_reg++ = FP_reg_construct(*p_name++, number_of_general_regs + i, p_target);
+		}
+	}
+	struct reg_cache const the_reg_cache = {
+		.name = "syntacore_riscv32 registers",
+		.reg_list = reg_list,
+		.num_regs = num_regs,
+	};
+	*p_obj = the_reg_cache;
+}
+
+static int
+this_target_create(struct target *p_target, struct Jim_Interp *interp)
+{
+	assert(p_target);
 	LOCAL_LOG_INFO("target_create");
 
-	struct arch* arch_info = calloc(1, sizeof(struct arch));
-	arch_info->nc_poll_requested = DBG_REASON_DBGRQ;
+	struct arch the_arch = {
+		.nc_poll_requested = DBG_REASON_DBGRQ,
+		.m_reg_cache = reg_cache__construct(calloc(1, sizeof(struct reg_cache)), p_target)
+	};
+	struct arch* p_arch_info = calloc(1, sizeof(struct arch));
+	*p_arch_info = the_arch;
 
-	// reg cache initialization
-	arch_info->core_cache = malloc(sizeof(struct reg_cache));
-	arch_info->core_cache->name = "syntacore_riscv32 registers";
-	arch_info->core_cache->next = NULL;
-	arch_info->core_cache->num_regs = ARRAY_LEN(general_regs_list) + ARRAY_LEN(FP_regs_list);
-	arch_info->core_cache->reg_list = calloc(arch_info->core_cache->num_regs, sizeof(struct reg));
-
-	struct reg* p_dest_reg = arch_info->core_cache->reg_list;
-	{
-		/// Create general purpose registers
-		char const* const* p_src = general_regs_list;
-		for (unsigned i = 0; i < ARRAY_LEN(general_regs_list); ++i) {
-			p_dest_reg->name = *p_src++;
-			p_dest_reg->size = 32;  // XLEN?
-			uint32_t* value = calloc(1, sizeof(uint32_t));
-			*value = 0x100 + i;
-			p_dest_reg->value = value;
-			p_dest_reg->dirty = false;
-			p_dest_reg->valid = false;
-			p_dest_reg->type = &general_reg_access_type;
-			struct register_struct* p_item = calloc(1, sizeof(struct register_struct));
-			p_item->id = i;
-			p_item->target = target;
-			p_dest_reg->arch_info = p_item;
-			++p_dest_reg;
-		}
-	}
-	{
-		char const* const* p_src = FP_regs_list;
-		for ( unsigned i = 0; i < ARRAY_LEN(FP_regs_list); ++i, ++p_dest_reg ) {
-			p_dest_reg->name = *p_src++;
-			p_dest_reg->size = 64;  //< number of bits of double
-			uint64_t* value = calloc(1, sizeof(uint64_t));
-			*value = 0x100 + i;
-			p_dest_reg->value = value;
-			p_dest_reg->dirty = false;
-			p_dest_reg->valid = false;
-			p_dest_reg->type = &FP_reg_access_type;
-			struct register_struct* p_item = calloc(1, sizeof(struct register_struct));
-			p_item->id = i;
-			p_item->target = target;
-			p_dest_reg->arch_info = p_item;
-			++p_dest_reg;
-		}
-	}
-	target->arch_info = arch_info;
+	p_target->arch_info = p_arch_info;
 	return ERROR_OK;
 }
 
@@ -555,9 +593,9 @@ this_target_get_gdb_reg_list(struct target *target, struct reg **reg_list[], int
 	LOCAL_LOG_INFO("get_gdb_reg_list");
 	struct arch *arch_info = (struct arch *)target->arch_info;
 
-	size_t const num_regs = ARRAY_LEN(general_regs_list) + (reg_class == REG_CLASS_ALL ? ARRAY_LEN(FP_regs_list) : 0 );
+	size_t const num_regs = ARRAY_LEN(general_regs_names_list) + (reg_class == REG_CLASS_ALL ? ARRAY_LEN(FP_regs_names_list) : 0);
 	struct reg** p_reg_array = calloc(num_regs, sizeof(struct reg*));
-	struct reg *a_reg_list = arch_info->core_cache->reg_list;
+	struct reg *a_reg_list = arch_info->m_reg_cache->reg_list;
 	// memccpy(p_reg_array, arch_info->core_cache->reg_list, num_regs * sizeof(struct reg*));
 	for ( size_t i = 0; i < num_regs; ++i ) {
 		p_reg_array[i] = &a_reg_list[i];
@@ -573,8 +611,6 @@ struct target_type syntacore_riscv32i_target =
 
 	.poll = this_target_poll,
 	.arch_state = arch_state,
-
-	.target_request_data = NULL,
 
 	.halt = halt,
 	.resume = resume,
