@@ -111,7 +111,7 @@ get_core_reg(struct reg *reg)
 	return ERROR_OK;
 }
 
-struct register_struct
+struct reg_arch_info
 {
 	uint32_t id;
 	struct target* target;
@@ -120,7 +120,7 @@ struct register_struct
 static int
 set_core_reg(struct reg *reg, uint8_t *buf)
 {
-	struct register_struct* nc_reg = reg->arch_info;
+	struct reg_arch_info* nc_reg = reg->arch_info;
 	if ( nc_reg->id >= 10 ) {
 		return ERROR_OK;
 	}
@@ -145,6 +145,7 @@ static char const* const FP_regs_names_list[] =
 	"f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31",
 };
 
+/// @todo handlers for x0 and for pc
 static struct reg_arch_type const general_reg_access_type =
 {
 	.get = get_core_reg,
@@ -174,11 +175,11 @@ static struct reg_arch_type const FP_reg_access_type =
 static struct reg
 general_purpose_reg_construct(char const* const p_name, uint32_t const number, struct target* p_target)
 {
-	struct register_struct const the_arch_info = {
+	struct reg_arch_info const the_arch_info = {
 		.id = number,
 		.target = p_target,
 	};
-	struct register_struct* p_arch_info = calloc(1, sizeof(struct register_struct));
+	struct reg_arch_info* p_arch_info = calloc(1, sizeof(struct reg_arch_info));
 	*p_arch_info = the_arch_info;
 
 	struct reg const the_reg = {
@@ -202,11 +203,11 @@ general_purpose_reg_construct(char const* const p_name, uint32_t const number, s
 static struct reg
 FP_reg_construct(char const* const p_name, uint32_t const number, struct target* p_target)
 {
-	struct register_struct const the_arch_info = {
+	struct reg_arch_info const the_arch_info = {
 		.id = number,
 		.target = p_target,
 	};
-	struct register_struct* p_arch_info = calloc(1, sizeof(struct register_struct));
+	struct reg_arch_info* p_arch_info = calloc(1, sizeof(struct reg_arch_info));
 	*p_arch_info = the_arch_info;
 
 	struct reg const the_reg = {
@@ -228,8 +229,9 @@ FP_reg_construct(char const* const p_name, uint32_t const number, struct target*
 }
 
 static struct reg_cache*
-reg_cache__construct(struct reg_cache* p_obj, struct target * p_target)
+reg_cache__create(struct target * p_target)
 {
+	struct reg_cache* const p_obj = calloc(1, sizeof(struct reg_cache));
 	assert(p_obj);
 	static size_t const number_of_general_regs = ARRAY_LEN(general_regs_names_list);
 	static size_t const number_of_FP_regs = ARRAY_LEN(FP_regs_names_list);
@@ -256,6 +258,7 @@ reg_cache__construct(struct reg_cache* p_obj, struct target * p_target)
 		.num_regs = num_regs,
 	};
 	*p_obj = the_reg_cache;
+	return p_obj;
 }
 
 static int
@@ -266,7 +269,7 @@ this_target_create(struct target *p_target, struct Jim_Interp *interp)
 
 	struct arch the_arch = {
 		.nc_poll_requested = DBG_REASON_DBGRQ,
-		.m_reg_cache = reg_cache__construct(calloc(1, sizeof(struct reg_cache)), p_target)
+		.m_reg_cache = reg_cache__create(p_target)
 	};
 	struct arch* p_arch_info = calloc(1, sizeof(struct arch));
 	*p_arch_info = the_arch;
@@ -293,7 +296,7 @@ restore_context(struct target *p_target);
 static inline bool
 HART_status_is_halted(uint8_t const state)
 {
-	return (state & DBGC_CORE_CDSR_HART_DMODE_BIT) != 0;
+	return (state & (1 << DBGC_CORE_CDSR_HART_DMODE_BIT)) != 0;
 }
 
 static int
