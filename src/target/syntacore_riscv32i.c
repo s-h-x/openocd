@@ -288,10 +288,15 @@ enum DBGC_CORE_CDSR_HART_bits
 };
 
 static void
-save_context(struct target *p_target);
+save_context(struct target *p_target)
+{
+
+}
 
 static void
-restore_context(struct target *p_target);
+restore_context(struct target *p_target)
+{
+}
 
 static inline bool
 HART_status_is_halted(uint8_t const state)
