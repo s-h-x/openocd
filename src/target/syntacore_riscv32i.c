@@ -43,9 +43,31 @@ enum TAP_DR_LEN
 	TAP_LEN_DAP_CMD = 4 + 32,
 	TAP_LEN_BYPASS = 1,
 };
+static int sg_error_code = ERROR_OK;
+static inline int
+get_error_code()
+{
+	return sg_error_code;
+}
+
+static inline int
+update_error_code(int const a_error_code)
+{
+	if ( ERROR_OK == get_error_code() && ERROR_OK != a_error_code ) {
+		sg_error_code = a_error_code;
+	}
+	return get_error_code();
+}
+
+static inline int
+clear_error_code()
+{
+	int const result = get_error_code();
+	sg_error_code = ERROR_OK;
+}
 
 static void
-jtag_select_IR(struct target* restrict p_target, enum TAP_IR const new_instr)
+jtag_select_IR(struct target* const restrict p_target, enum TAP_IR const new_instr)
 {
 	assert(p_target && p_target->tap);
 
@@ -70,33 +92,38 @@ read_DBG_STATUS(struct target* p_target)
 	assert(p_target);
 	assert(p_target->tap);
 	jtag_select_IR(p_target, TAP_INSTR_DBG_STATUS);
-	uint32_t tmp;
+	uint32_t result = 0;
 	struct scan_field field =
 	{
 		.num_bits = TAP_LEN_DBG_STATUS,
-		.in_value = (uint8_t *)&tmp
+		.in_value = (uint8_t *)&result
 	};
 	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-	return tmp;
+	update_error_code(jtag_execute_queue());
+	if ( get_error_code() != ERROR_OK) {
+		LOG_ERROR("JTAG error %d in %s ()", get_error_code(), __PRETTY_FUNCTION__);
+	}
+	return result;
 }
 
 static void
-set_DAP_CTRL_REG(struct target* p_target, uint8_t dap_unit, uint8_t dap_group)
+set_DAP_CTRL_REG(struct target* const p_target, uint8_t const dap_unit, uint8_t const dap_group)
 {
+	assert(p_target);
 	assert((dap_unit == p_target->coreid && dap_group < 2u) || (dap_unit == 3 && dap_group == 0));
 	jtag_select_IR(p_target, TAP_INSTR_DAP_CTRL);
-	uint8_t const t_dap_unit = dap_unit;
-	uint8_t const t_dap_group = dap_group;
+	uint8_t const tmp_dap_unit = dap_unit;
+	uint8_t const tmp_dap_group = dap_group;
 	struct scan_field const fields[2] =
 	{
 		[0] =
 		{
 			.num_bits = 2,
-			.out_value = &t_dap_unit
+			.out_value = &tmp_dap_unit
 		},
 		[1] = {
 				.num_bits = 2,
-				.out_value = &t_dap_group
+				.out_value = &tmp_dap_group
 			},
 	};
 	jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
@@ -107,7 +134,8 @@ read_HART_DBG_STATUS(struct target* p_target)
 {
 	assert(p_target);
 	assert(0 <= p_target->coreid && p_target->coreid < 2);
-	return (read_DBG_STATUS(p_target) >> p_target->coreid) & 0xFFu;
+	uint32_t const status = read_DBG_STATUS(p_target);
+	return (status >> p_target->coreid) & 0xFFu;
 }
 
 struct arch
@@ -127,31 +155,47 @@ static char const* const general_regs_names_list[] =
 };
 
 static int
-get_core_reg(struct reg *reg)
+check_core_reg(struct reg *p_reg)
 {
-	LOG_WARNING("get_core_reg IS NOT IMPLEMENTED");
+	assert(p_reg);
+	if ( p_reg->number > 32 ) {
+		LOG_WARNING("Bad reg id =%d for register %s", p_reg->number, p_reg->name);
+		return ERROR_FAIL;
+	}
+	assert(p_reg->arch_info);
+	struct target* p_target = p_reg->arch_info;
+	if ( p_target->state != TARGET_HALTED ) {
+		LOG_ERROR("Target not halted");
+		return ERROR_TARGET_NOT_HALTED;
+	}
 	return ERROR_OK;
 }
 
-struct reg_arch_info
+static int
+get_core_reg(struct reg *p_reg)
 {
-	uint32_t id;
-	struct target* target;
-};
+	int const check_status = check_core_reg();
+	if ( check_status != ERROR_OK ) {
+		return check_status;
+	}
+	uint32_t const value = read_core_register(p_reg->number);
+	buf_set_u32(p_reg->value, 0, 32, value);
+	reg->dirty = true;
+	reg->valid = true;
+
+	return ERROR_OK;
+}
 
 static int
 set_core_reg(struct reg *reg, uint8_t *buf)
 {
-	struct reg_arch_info* nc_reg = reg->arch_info;
-	if ( nc_reg->id >= 10 ) {
-		return ERROR_OK;
+	int const check_status = check_core_reg();
+	if ( check_status != ERROR_OK ) {
+		return check_status;
 	}
-	LOCAL_LOG_INFO("updating cache for %s register", reg->name);
 	uint32_t const value = buf_get_u32(buf, 0, 32);
+	LOG_DEBUG("Updating cache for register %s <-- %08x", reg->name, value);
 
-	if ( nc_reg->target->state != TARGET_HALTED ) {
-		return ERROR_TARGET_NOT_HALTED;
-	}
 	buf_set_u32(reg->value, 0, 32, value);
 	reg->dirty = true;
 	reg->valid = true;
@@ -197,13 +241,6 @@ static struct reg_arch_type const FP_reg_access_type =
 static struct reg
 general_purpose_reg_construct(char const* const p_name, uint32_t const number, struct target* p_target)
 {
-	struct reg_arch_info const the_arch_info = {
-		.id = number,
-		.target = p_target,
-	};
-	struct reg_arch_info* p_arch_info = calloc(1, sizeof(struct reg_arch_info));
-	*p_arch_info = the_arch_info;
-
 	struct reg const the_reg = {
 		.name = p_name,
 		.number = number,
@@ -216,7 +253,7 @@ general_purpose_reg_construct(char const* const p_name, uint32_t const number, s
 		.size = 32,  //< XLEN?
 		.reg_data_type = NULL,
 		.group = NULL,
-		.arch_info = p_arch_info,
+		.arch_info = p_target,
 		.type = &general_reg_access_type,
 	};
 	return the_reg;
@@ -225,13 +262,6 @@ general_purpose_reg_construct(char const* const p_name, uint32_t const number, s
 static struct reg
 FP_reg_construct(char const* const p_name, uint32_t const number, struct target* p_target)
 {
-	struct reg_arch_info const the_arch_info = {
-		.id = number,
-		.target = p_target,
-	};
-	struct reg_arch_info* p_arch_info = calloc(1, sizeof(struct reg_arch_info));
-	*p_arch_info = the_arch_info;
-
 	struct reg const the_reg = {
 		.name = p_name,
 		.number = number,
@@ -244,7 +274,7 @@ FP_reg_construct(char const* const p_name, uint32_t const number, struct target*
 		.size = 64,  //< number of bits of double?
 		.reg_data_type = NULL,
 		.group = NULL,
-		.arch_info = p_arch_info,
+		.arch_info = p_target,
 		.type = &FP_reg_access_type,
 	};
 	return the_reg;
