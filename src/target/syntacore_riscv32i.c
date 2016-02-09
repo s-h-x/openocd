@@ -65,7 +65,7 @@ jtag_select_IR(struct target* restrict p_target, enum TAP_IR const new_instr)
 }
 
 static uint32_t
-read_CORE_DBG_STS(struct target* p_target)
+read_DBG_STATUS(struct target* p_target)
 {
 	assert(p_target);
 	assert(p_target->tap);
@@ -80,12 +80,34 @@ read_CORE_DBG_STS(struct target* p_target)
 	return tmp;
 }
 
+static void
+set_DAP_CTRL_REG(struct target* p_target, uint8_t dap_unit, uint8_t dap_group)
+{
+	assert((dap_unit == p_target->coreid && dap_group < 2u) || (dap_unit == 3 && dap_group == 0));
+	jtag_select_IR(p_target, TAP_INSTR_DAP_CTRL);
+	uint8_t const t_dap_unit = dap_unit;
+	uint8_t const t_dap_group = dap_group;
+	struct scan_field const fields[2] =
+	{
+		[0] =
+		{
+			.num_bits = 2,
+			.out_value = &t_dap_unit
+		},
+		[1] = {
+				.num_bits = 2,
+				.out_value = &t_dap_group
+			},
+	};
+	jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
+}
+
 static uint8_t
 read_HART_DBG_STATUS(struct target* p_target)
 {
 	assert(p_target);
 	assert(0 <= p_target->coreid && p_target->coreid < 2);
-	return (read_CORE_DBG_STS(p_target) >> p_target->coreid) & 0xFFu;
+	return (read_DBG_STATUS(p_target) >> p_target->coreid) & 0xFFu;
 }
 
 struct arch
@@ -295,8 +317,7 @@ save_context(struct target *p_target)
 
 static void
 restore_context(struct target *p_target)
-{
-}
+{}
 
 static inline bool
 HART_status_is_halted(uint8_t const state)
