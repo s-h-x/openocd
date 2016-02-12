@@ -44,13 +44,13 @@ enum TAP_DR_LEN
 	TAP_LEN_BYPASS = 1,
 };
 static int sg_error_code = ERROR_OK;
-static inline int
-get_error_code()
+static int
+get_error_code(void)
 {
 	return sg_error_code;
 }
 
-static inline int
+static int
 update_error_code(int const a_error_code)
 {
 	if ( ERROR_OK == get_error_code() && ERROR_OK != a_error_code ) {
@@ -59,11 +59,12 @@ update_error_code(int const a_error_code)
 	return get_error_code();
 }
 
-static inline int
-clear_error_code()
+static int
+clear_error_code(void)
 {
 	int const result = get_error_code();
 	sg_error_code = ERROR_OK;
+	return result;
 }
 
 static void
@@ -171,34 +172,36 @@ check_core_reg(struct reg *p_reg)
 	return ERROR_OK;
 }
 
+uint32_t read_core_register(unsigned reg_no);
+
 static int
 get_core_reg(struct reg *p_reg)
 {
-	int const check_status = check_core_reg();
+	int const check_status = check_core_reg(p_reg);
 	if ( check_status != ERROR_OK ) {
 		return check_status;
 	}
 	uint32_t const value = read_core_register(p_reg->number);
 	buf_set_u32(p_reg->value, 0, 32, value);
-	reg->dirty = true;
-	reg->valid = true;
+	p_reg->dirty = true;
+	p_reg->valid = true;
 
 	return ERROR_OK;
 }
 
 static int
-set_core_reg(struct reg *reg, uint8_t *buf)
+set_core_reg(struct reg *p_reg, uint8_t *buf)
 {
-	int const check_status = check_core_reg();
+	int const check_status = check_core_reg(p_reg);
 	if ( check_status != ERROR_OK ) {
 		return check_status;
 	}
 	uint32_t const value = buf_get_u32(buf, 0, 32);
-	LOG_DEBUG("Updating cache for register %s <-- %08x", reg->name, value);
+	LOG_DEBUG("Updating cache for register %s <-- %08x", p_reg->name, value);
 
-	buf_set_u32(reg->value, 0, 32, value);
-	reg->dirty = true;
-	reg->valid = true;
+	buf_set_u32(p_reg->value, 0, 32, value);
+	p_reg->dirty = true;
+	p_reg->valid = true;
 
 	return ERROR_OK;
 }
@@ -349,7 +352,7 @@ static void
 restore_context(struct target *p_target)
 {}
 
-static inline bool
+static bool
 HART_status_is_halted(uint8_t const state)
 {
 	return (state & (1 << DBGC_CORE_CDSR_HART_DMODE_BIT)) != 0;
