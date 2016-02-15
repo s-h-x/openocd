@@ -19,14 +19,15 @@
 #define LOCAL_CONCAT(x,y) x##y
 #define STATIC_ASSERT(e) typedef char[1 - 2*!(e)] LOCAL_CONCAT(static_assert,__LINE__)
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
-
+#define LOG_METHOD_ENTER() LOG_DEBUG("Enter\n")
 enum TAP_IR
 {
 	TAP_INSTR_DBG_ID = 3,
 	TAP_INSTR_BLD_ID = 4,
 	TAP_INSTR_DBG_STATUS = 5,
 	TAP_INSTR_DAP_CTRL = 6,
-	TAP_INSTR_DAP_CMD = 7,
+	TAP_INSTR_DAP_CTRL_RD = 7,
+	TAP_INSTR_DAP_CMD = 8,
 	TAP_INSTR_IDCODE = 0xE,
 	TAP_INSTR_BYPASS = 0xF,
 };
@@ -40,6 +41,19 @@ enum TAP_DR_LEN
 	TAP_LEN_DAP_CTRL = 4,
 	TAP_LEN_DAP_CMD = 4 + 32,
 	TAP_LEN_BYPASS = 1,
+};
+enum type_dbgc_unit_id_e
+{
+	DBGC_UNIT_ID_HART_0 = 0,
+	DBGC_UNIT_ID_HART_1 = 1,
+	DBGC_UNIT_ID_CORE = 3,
+};
+
+enum DBGC_FGRP
+{
+	DBGC_FGRP_HART_REGTRANS = 0,
+	DBGC_FGRP_HART_DBGCMD = 1,
+	DBGC_FGRP_CORE_REGTRANS = 0,
 };
 static int sg_error_code = ERROR_OK;
 static int
@@ -68,6 +82,7 @@ clear_error_code(void)
 static void
 jtag_select_IR(struct target* const restrict p_target, enum TAP_IR const new_instr)
 {
+	LOG_METHOD_ENTER();
 	assert(p_target && p_target->tap);
 
 	struct jtag_tap* restrict tap = p_target->tap;
@@ -85,9 +100,18 @@ jtag_select_IR(struct target* const restrict p_target, enum TAP_IR const new_ins
 	jtag_add_ir_scan(tap, &field, TAP_IDLE);
 }
 
+enum type_dbgc_core_dbg_sts_reg_bits_e
+{
+	DBGC_CORE_CDSR_HART0_DMODE_BIT = 0,
+	DBGC_CORE_CDSR_HART0_RST_BIT = 1,
+	DBGC_CORE_CDSR_HART0_ERR_BIT = 3,
+	DBGC_CORE_CDSR_LOCK_BIT = 30,
+	DBGC_CORE_CDSR_READY_BIT = 31,
+};
 static uint32_t
 read_DBG_STATUS(struct target* p_target)
 {
+	LOG_METHOD_ENTER();
 	assert(p_target);
 	assert(p_target->tap);
 	jtag_select_IR(p_target, TAP_INSTR_DBG_STATUS);
@@ -100,27 +124,40 @@ read_DBG_STATUS(struct target* p_target)
 	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
 	update_error_code(jtag_execute_queue());
 	if ( get_error_code() != ERROR_OK ) {
-		LOG_ERROR("JTAG error %d in %s ()", get_error_code(), __PRETTY_FUNCTION__);
+		LOG_ERROR("JTAG error %d\n", get_error_code());
 	}
+	if ( (result & ((1u << DBGC_CORE_CDSR_READY_BIT) | (1u << DBGC_CORE_CDSR_LOCK_BIT))) != (1u << DBGC_CORE_CDSR_READY_BIT) ) {
+		LOG_WARNING("TAP_INSTR_DBG_STATUS is %x!\n", result);
+	}
+	LOG_DEBUG("return %x\n", result);
 	return result;
 }
 
 static void
-set_DAP_CTRL_REG(struct target* const p_target, uint8_t const dap_unit, uint8_t const dap_group)
+set_DAP_CTRL_REG(struct target* const p_target, enum type_dbgc_unit_id_e const dap_unit, enum DBGC_FGRP const dap_group)
 {
+	LOG_METHOD_ENTER();
 	assert(p_target);
-	assert((dap_unit == p_target->coreid && dap_group < 2u) || (dap_unit == 3 && dap_group == 0));
+	assert(
+		(
+		(
+		(dap_unit == DBGC_UNIT_ID_HART_0 && 0 == p_target->coreid) ||
+		(dap_unit == DBGC_UNIT_ID_HART_1 && 1 == p_target->coreid)
+		) && (dap_group == DBGC_FGRP_HART_REGTRANS || dap_group == DBGC_FGRP_HART_DBGCMD)
+		) ||
+		(dap_unit == DBGC_UNIT_ID_CORE && dap_group == DBGC_FGRP_HART_REGTRANS)
+		);
 	jtag_select_IR(p_target, TAP_INSTR_DAP_CTRL);
 	uint8_t const tmp_dap_unit = dap_unit;
 	uint8_t const tmp_dap_group = dap_group;
 	struct scan_field const fields[2] =
 	{
-		[0] =
+		[1] =
 		{
 			.num_bits = 2,
 			.out_value = &tmp_dap_unit
 		},
-		[1] = {
+		[0] = {
 				.num_bits = 2,
 				.out_value = &tmp_dap_group
 			},
@@ -128,13 +165,23 @@ set_DAP_CTRL_REG(struct target* const p_target, uint8_t const dap_unit, uint8_t 
 	jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
 }
 
-static uint8_t
+static int
 read_HART_DBG_STATUS(struct target* p_target)
 {
+	LOG_METHOD_ENTER();
 	assert(p_target);
 	assert(0 <= p_target->coreid && p_target->coreid < 2);
-	uint32_t const status = read_DBG_STATUS(p_target);
-	return (status >> p_target->coreid) & 0xFFu;
+	uint8_t const result = (read_DBG_STATUS(p_target) >> p_target->coreid) & 0xFFu;
+	LOG_DEBUG("status is %x\n", (uint32_t)result);
+	if ( result & (1 << DBGC_CORE_CDSR_HART0_ERR_BIT) ) {
+		return TARGET_UNKNOWN;
+	} else if ( result & (1 << DBGC_CORE_CDSR_HART0_RST_BIT) ) {
+		return TARGET_RESET;
+	} else if ( result & (1 << DBGC_CORE_CDSR_HART0_DMODE_BIT) ) {
+		return TARGET_HALTED;
+	} else {
+		return TARGET_RUNNING;
+	}
 }
 
 struct arch
@@ -156,6 +203,7 @@ static char const* const general_regs_names_list[] =
 static int
 check_core_reg(struct reg *p_reg)
 {
+	LOG_METHOD_ENTER();
 	assert(p_reg);
 	if ( p_reg->number > 32 ) {
 		LOG_WARNING("Bad reg id =%d for register %s", p_reg->number, p_reg->name);
@@ -179,6 +227,7 @@ read_core_register(unsigned reg_no)
 static int
 get_core_reg(struct reg *p_reg)
 {
+	LOG_METHOD_ENTER();
 	int const check_status = check_core_reg(p_reg);
 	if ( check_status != ERROR_OK ) {
 		return check_status;
@@ -194,6 +243,7 @@ get_core_reg(struct reg *p_reg)
 static int
 set_core_reg(struct reg *p_reg, uint8_t *buf)
 {
+	LOG_METHOD_ENTER();
 	int const check_status = check_core_reg(p_reg);
 	if ( check_status != ERROR_OK ) {
 		return check_status;
@@ -226,12 +276,14 @@ static struct reg_arch_type const general_reg_access_type =
 static int
 set_FPU_reg(struct reg *reg, uint8_t *buf)
 {
+	LOG_METHOD_ENTER();
 	LOG_WARNING("get_core_reg IS NOT IMPLEMENTED");
 	return ERROR_OK;
 }
 static int
 get_FPU_reg(struct reg *reg)
 {
+	LOG_METHOD_ENTER();
 	LOG_WARNING("get_core_reg IS NOT IMPLEMENTED");
 	return ERROR_OK;
 }
@@ -242,10 +294,10 @@ static struct reg_arch_type const FP_reg_access_type =
 	.set = set_FPU_reg,
 };
 
-
 static struct reg
 general_purpose_reg_construct(char const* const p_name, uint32_t const number, struct target* p_target)
 {
+	LOG_METHOD_ENTER();
 	struct reg const the_reg = {
 		.name = p_name,
 		.number = number,
@@ -267,6 +319,7 @@ general_purpose_reg_construct(char const* const p_name, uint32_t const number, s
 static struct reg
 FP_reg_construct(char const* const p_name, uint32_t const number, struct target* p_target)
 {
+	LOG_METHOD_ENTER();
 	struct reg const the_reg = {
 		.name = p_name,
 		.number = number,
@@ -288,6 +341,7 @@ FP_reg_construct(char const* const p_name, uint32_t const number, struct target*
 static struct reg_cache*
 reg_cache__create(struct target * p_target)
 {
+	LOG_METHOD_ENTER();
 	struct reg_cache* const p_obj = calloc(1, sizeof(struct reg_cache));
 	assert(p_obj);
 	static size_t const number_of_general_regs = ARRAY_LEN(general_regs_names_list);
@@ -321,8 +375,8 @@ reg_cache__create(struct target * p_target)
 static int
 this_target_create(struct target *p_target, struct Jim_Interp *interp)
 {
+	LOG_METHOD_ENTER();
 	assert(p_target);
-	LOG_DEBUG("target_create");
 
 	struct arch the_arch = {
 		.nc_poll_requested = DBG_REASON_DBGRQ,
@@ -335,41 +389,28 @@ this_target_create(struct target *p_target, struct Jim_Interp *interp)
 	return ERROR_OK;
 }
 
-enum DBGC_CORE_CDSR_HART_bits
-{
-	DBGC_CORE_CDSR_HART_DMODE_BIT = 0,
-	DBGC_CORE_CDSR_HART_RST_BIT = 1,
-	DBGC_CORE_CDSR_HART_RST_STKY_BIT = 2,
-	DBGC_CORE_CDSR_HART_ERR_BIT = 3,
-	DBGC_CORE_CDSR_HART_ERR_STKY_BIT = 4,
-};
-
 static void
 save_context(struct target *p_target)
 {
-
+	LOG_METHOD_ENTER();
 }
 
 static void
 restore_context(struct target *p_target)
-{}
-
-static bool
-HART_status_is_halted(uint8_t const state)
 {
-	return (state & (1 << DBGC_CORE_CDSR_HART_DMODE_BIT)) != 0;
+	LOG_METHOD_ENTER();
 }
 
 static int
-this_target_poll(struct target *p_target)
+this_poll(struct target *p_target)
 {
-	LOG_DEBUG("poll");
-	uint8_t const state = read_HART_DBG_STATUS(p_target);
-	if ( !HART_status_is_halted(state) ) {
+	LOG_METHOD_ENTER();
+	int const state = read_HART_DBG_STATUS(p_target);
+	if ( state == TARGET_RUNNING ) {
 		return ERROR_OK;
 	}
 
-	p_target->state = TARGET_HALTED;
+	p_target->state = state;
 	struct arch* p_arch = (struct arch*)p_target->arch_info;
 	if ( p_arch->nc_poll_requested == DBG_REASON_DBGRQ ) {
 		p_target->debug_reason = DBG_REASON_DBGRQ;
@@ -390,16 +431,16 @@ this_target_poll(struct target *p_target)
 }
 
 static int
-arch_state(struct target *target)
+this_arch_state(struct target *target)
 {
-	LOG_DEBUG("arch_state");
+	LOG_METHOD_ENTER();
 	return ERROR_OK;
 }
 
 static int
-init(struct command_context *cmd_ctx, struct target *p_target)
+this_init(struct command_context *cmd_ctx, struct target *p_target)
 {
-	LOG_DEBUG("init_target");
+	LOG_METHOD_ENTER();
 #if 0
 	clear_error_code();
 	jtag_select_IR(p_target, TAP_INSTR_IDCODE);
@@ -420,33 +461,60 @@ init(struct command_context *cmd_ctx, struct target *p_target)
 	return ERROR_OK;
 }
 
-static int
-halt(struct target *p_target)
+enum DBGC_DAP_OPCODE_DBGCMD
 {
-	LOG_DEBUG("halt");
-	uint8_t state = read_HART_DBG_STATUS(p_target);
-	if ( HART_status_is_halted(state) ) {
-		LOG_ERROR("Halt request when NC is already in halted state");
+	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL = 0,
+	DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC = 1,
+	DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR = 2,
+	DBGC_DAP_OPCODE_DBGCMD_UNLOCK = 3,
+};
+static int
+this_halt(struct target *p_target)
+{
+	LOG_METHOD_ENTER();
+	clear_error_code();
+	if ( read_HART_DBG_STATUS(p_target) == TARGET_HALTED ) {
+		LOG_ERROR("Halt request when RV is already in halted state");
+		return ERROR_OK;
 	}
 	/// @todo issue Halt command
-	// issue error if we are still running
-	state = read_HART_DBG_STATUS(p_target);
-	if ( !HART_status_is_halted(state) ) {
-		LOG_ERROR("NC is not halted after Halt command");
+	assert(p_target);
+	assert(p_target->tap);
+	set_DAP_CTRL_REG(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
+	jtag_select_IR(p_target, TAP_INSTR_DAP_CMD);
+	uint32_t const set_dmode_flag = 1u;
+	uint8_t const dbg_cmd = DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL;
+	struct scan_field const fields[2] =
+	{
+		[0] = {
+			.num_bits = 32,
+			.out_value = (uint8_t const*)&set_dmode_flag
+		},
+		[1] =
+			{
+				.num_bits = 4,
+				.out_value = &dbg_cmd
+			},
+	};
+	jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
+	p_target->state = read_HART_DBG_STATUS(p_target);
+	if ( p_target->state != TARGET_HALTED ) {
+		// issue error if we are still running
+		LOG_ERROR("RV is not halted after Halt command");
 		return ERROR_FAIL;
 	}
 	struct arch* p_arch = (struct arch*)p_target->arch_info;
 	if ( p_arch->nc_poll_requested ) {
 		p_arch->nc_poll_requested = DBG_REASON_DBGRQ;
 	}
-	p_target->state = TARGET_HALTED;
 	p_target->debug_reason = DBG_REASON_DBGRQ;
 	return ERROR_OK;
 }
 
 static int
-resume(struct target *target, int current, uint32_t address, int handle_breakpoints, int debug_execution)
+this_resume(struct target *target, int current, uint32_t address, int handle_breakpoints, int debug_execution)
 {
+	LOG_METHOD_ENTER();
 	// upload reg values into HW
 	restore_context(target);
 	/// @todo issue resume command
@@ -457,8 +525,9 @@ resume(struct target *target, int current, uint32_t address, int handle_breakpoi
 }
 
 static int
-step(struct target *target, int current, uint32_t address, int handle_breakpoints)
+this_step(struct target *target, int current, uint32_t address, int handle_breakpoints)
 {
+	LOG_METHOD_ENTER();
 	// upload reg values into HW
 	restore_context(target);
 #if 0
@@ -472,9 +541,9 @@ step(struct target *target, int current, uint32_t address, int handle_breakpoint
 }
 
 static int
-assert_reset(struct target *p_target)
+this_assert_reset(struct target *p_target)
 {
-	LOG_DEBUG("assert_reset");
+	LOG_METHOD_ENTER();
 #if 0
 	int retval = 0;
 	if ( (retval = debug_write_register(target, DEBUG_CONTROL_PWR_RST, DEBUG_CONTROL_PWR_RST_HRESET)) != ERROR_OK ) {
@@ -485,9 +554,9 @@ assert_reset(struct target *p_target)
 }
 
 static int
-deassert_reset(struct target *target)
+this_deassert_reset(struct target *target)
 {
-	LOG_DEBUG("deassert_reset");
+	LOG_METHOD_ENTER();
 #if 0
 	int retval = 0;
 	if ( (retval = debug_write_register(target, DEBUG_CONTROL_PWR_RST, 0)) != ERROR_OK ) {
@@ -498,9 +567,9 @@ deassert_reset(struct target *target)
 }
 
 static int
-soft_reset_halt(struct target *target)
+this_soft_reset_halt(struct target *target)
 {
-	LOG_DEBUG("soft_reset_halt");
+	LOG_METHOD_ENTER();
 #if 0
 	int retval;
 	// assert reset
@@ -517,11 +586,12 @@ soft_reset_halt(struct target *target)
 static int
 read_mem_word(struct target * target, uint32_t const address, uint32_t* const data)
 {
+	LOG_METHOD_ENTER();
 #if 0
 	int retval = 0;
 	if ( (retval = debug_write_register(target, DEBUG_MEMORY_ACCESS_ADDRESS, address)) != ERROR_OK ) {
 		return retval;
-	}
+}
 	if ( (retval = debug_write_register(target, DEBUG_MEMORY_ACCESS_CMD, DEBUG_MEMORY_ACCESS_CMD_START)) != ERROR_OK ) {
 		return retval;
 	}
@@ -534,8 +604,9 @@ read_mem_word(struct target * target, uint32_t const address, uint32_t* const da
 }
 
 static int
-read_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, uint8_t *buffer)
+this_read_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, uint8_t *buffer)
 {
+	LOG_METHOD_ENTER();
 	LOG_DEBUG("read_memory at %08X, %d bytes", address, size * count);
 	unsigned i = 0;  // byte count
 	uint32_t x = 0;  // buffer
@@ -570,8 +641,9 @@ read_memory(struct target *target, uint32_t address, uint32_t size, uint32_t cou
 }
 
 static int
-examine(struct target *target)
+this_examine(struct target *target)
 {
+	LOG_METHOD_ENTER();
 	// initialize register values
 #if 0
 	debug_write_register(target, DEBUG_CONTROL_PWR_RST, DEBUG_CONTROL_PWR_RST_HRESET);
@@ -582,17 +654,16 @@ examine(struct target *target)
 	target->state = TARGET_HALTED;
 	save_context(target);
 	target_set_examined(target);
-	LOG_DEBUG("examine");
 	return ERROR_OK;
 }
 
 #define RV_SCALL() (0x00100073u)
 
 static int
-this_target_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
+this_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 {
+	LOG_METHOD_ENTER();
 	int retval = 0;
-	LOG_DEBUG("add_breakpoint");
 	if ( breakpoint->length != 4 || breakpoint->address & 0x3u || breakpoint->type == BKPT_HARD ) {
 		return ERROR_FAIL;
 	}
@@ -608,9 +679,9 @@ this_target_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 }
 
 static int
-this_target_remove_breakpoint(struct target *target, struct breakpoint *breakpoint)
+this_remove_breakpoint(struct target *target, struct breakpoint *breakpoint)
 {
-	LOG_DEBUG("remove_breakpoint");
+	LOG_METHOD_ENTER();
 	if ( breakpoint->length != 4 || breakpoint->type == BKPT_HARD ) {
 		return ERROR_FAIL;
 	}
@@ -618,8 +689,9 @@ this_target_remove_breakpoint(struct target *target, struct breakpoint *breakpoi
 }
 
 static int
-this_target_write_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, const uint8_t *buffer)
+this_write_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, const uint8_t *buffer)
 {
+	LOG_METHOD_ENTER();
 	LOG_DEBUG("write_memory at %08X, %d bytes", address, size * count);
 #if 0
 	unsigned i = 0;  // byte count
@@ -657,7 +729,7 @@ this_target_write_memory(struct target *target, uint32_t address, uint32_t size,
 	}
 	if ( (retval = read_mem_word(target, address + i, &x)) != ERROR_OK ) {
 		return retval;
-	}
+}
 	word_start_offset = i;
 	for ( ; i != buffer_size; ++i ) {
 		((uint8_t*)&x)[(i - word_start_offset) & 0x3] = buffer[i];
@@ -669,9 +741,9 @@ this_target_write_memory(struct target *target, uint32_t address, uint32_t size,
 }
 
 static int
-this_target_get_gdb_reg_list(struct target *target, struct reg **reg_list[], int *reg_list_size, enum target_register_class reg_class)
+this_get_gdb_reg_list(struct target *target, struct reg **reg_list[], int *reg_list_size, enum target_register_class reg_class)
 {
-	LOG_DEBUG("get_gdb_reg_list");
+	LOG_METHOD_ENTER();
 	struct arch *arch_info = (struct arch *)target->arch_info;
 
 	size_t const num_regs = ARRAY_LEN(general_regs_names_list) + (reg_class == REG_CLASS_ALL ? ARRAY_LEN(FP_regs_names_list) : 0);
@@ -690,24 +762,24 @@ struct target_type syntacore_riscv32i_target =
 {
 	.name = "syntacore_riscv32i",
 
-	.poll = this_target_poll,
-	.arch_state = arch_state,
+	.poll = this_poll,
+	.arch_state = this_arch_state,
 
-	.halt = halt,
-	.resume = resume,
-	.step = step,
+	.halt = this_halt,
+	.resume = this_resume,
+	.step = this_step,
 
-	.assert_reset = assert_reset,
-	.deassert_reset = deassert_reset,
-	.soft_reset_halt = soft_reset_halt,
+	.assert_reset = this_assert_reset,
+	.deassert_reset = this_deassert_reset,
+	.soft_reset_halt = this_soft_reset_halt,
 
-	.get_gdb_reg_list = this_target_get_gdb_reg_list,
+	.get_gdb_reg_list = this_get_gdb_reg_list,
 
-	.read_memory = read_memory,
-	.write_memory = this_target_write_memory,
-	.add_breakpoint = this_target_add_breakpoint,
-	.remove_breakpoint = this_target_remove_breakpoint,
+	.read_memory = this_read_memory,
+	.write_memory = this_write_memory,
+	.add_breakpoint = this_add_breakpoint,
+	.remove_breakpoint = this_remove_breakpoint,
 	.target_create = this_target_create,
-	.init_target = init,
-	.examine = examine,
+	.init_target = this_init,
+	.examine = this_examine,
 };
