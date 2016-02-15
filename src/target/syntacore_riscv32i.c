@@ -172,7 +172,11 @@ check_core_reg(struct reg *p_reg)
 	return ERROR_OK;
 }
 
-uint32_t read_core_register(unsigned reg_no);
+static uint32_t
+read_core_register(unsigned reg_no)
+{
+	return 0;
+}
 
 static int
 get_core_reg(struct reg *p_reg)
