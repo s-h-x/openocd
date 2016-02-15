@@ -16,20 +16,18 @@
 #include <limits.h>
 #include <memory.h>
 
-// #define LOCAL_LOG_INFO LOG_INFO
-#define LOCAL_LOG_INFO(expr,...) do {} while(0)
 #define LOCAL_CONCAT(x,y) x##y
 #define STATIC_ASSERT(e) typedef char[1 - 2*!(e)] LOCAL_CONCAT(static_assert,__LINE__)
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
 
 enum TAP_IR
 {
-	TAP_INSTR_IDCODE = 2,
 	TAP_INSTR_DBG_ID = 3,
 	TAP_INSTR_BLD_ID = 4,
 	TAP_INSTR_DBG_STATUS = 5,
 	TAP_INSTR_DAP_CTRL = 6,
 	TAP_INSTR_DAP_CMD = 7,
+	TAP_INSTR_IDCODE = 0xE,
 	TAP_INSTR_BYPASS = 0xF,
 };
 
@@ -101,7 +99,7 @@ read_DBG_STATUS(struct target* p_target)
 	};
 	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
 	update_error_code(jtag_execute_queue());
-	if ( get_error_code() != ERROR_OK) {
+	if ( get_error_code() != ERROR_OK ) {
 		LOG_ERROR("JTAG error %d in %s ()", get_error_code(), __PRETTY_FUNCTION__);
 	}
 	return result;
@@ -324,7 +322,7 @@ static int
 this_target_create(struct target *p_target, struct Jim_Interp *interp)
 {
 	assert(p_target);
-	LOCAL_LOG_INFO("target_create");
+	LOG_DEBUG("target_create");
 
 	struct arch the_arch = {
 		.nc_poll_requested = DBG_REASON_DBGRQ,
@@ -365,7 +363,7 @@ HART_status_is_halted(uint8_t const state)
 static int
 this_target_poll(struct target *p_target)
 {
-	LOCAL_LOG_INFO("poll");
+	LOG_DEBUG("poll");
 	uint8_t const state = read_HART_DBG_STATUS(p_target);
 	if ( !HART_status_is_halted(state) ) {
 		return ERROR_OK;
@@ -394,21 +392,38 @@ this_target_poll(struct target *p_target)
 static int
 arch_state(struct target *target)
 {
-	LOCAL_LOG_INFO("arch_state");
+	LOG_DEBUG("arch_state");
 	return ERROR_OK;
 }
 
 static int
-init(struct command_context *cmd_ctx, struct target *target)
+init(struct command_context *cmd_ctx, struct target *p_target)
 {
-	LOCAL_LOG_INFO("init_target");
+	LOG_DEBUG("init_target");
+#if 0
+	clear_error_code();
+	jtag_select_IR(p_target, TAP_INSTR_IDCODE);
+	uint32_t result;
+	struct scan_field field =
+	{
+		.num_bits = TAP_LEN_IDCODE,
+		.in_value = (uint8_t *)&result
+	};
+	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
+	update_error_code(jtag_execute_queue());
+	if ( get_error_code() != ERROR_OK ) {
+		LOG_ERROR("JTAG error %d in %s ()", get_error_code(), __PRETTY_FUNCTION__);
+		return ERROR_OK;
+	}
+	LOG_DEBUG("IDCODE=%#0x", result);
+#endif
 	return ERROR_OK;
 }
 
 static int
 halt(struct target *p_target)
 {
-	LOCAL_LOG_INFO("halt");
+	LOG_DEBUG("halt");
 	uint8_t state = read_HART_DBG_STATUS(p_target);
 	if ( HART_status_is_halted(state) ) {
 		LOG_ERROR("Halt request when NC is already in halted state");
@@ -457,9 +472,9 @@ step(struct target *target, int current, uint32_t address, int handle_breakpoint
 }
 
 static int
-assert_reset(struct target *target)
+assert_reset(struct target *p_target)
 {
-	LOCAL_LOG_INFO("assert_reset");
+	LOG_DEBUG("assert_reset");
 #if 0
 	int retval = 0;
 	if ( (retval = debug_write_register(target, DEBUG_CONTROL_PWR_RST, DEBUG_CONTROL_PWR_RST_HRESET)) != ERROR_OK ) {
@@ -472,7 +487,7 @@ assert_reset(struct target *target)
 static int
 deassert_reset(struct target *target)
 {
-	LOCAL_LOG_INFO("deassert_reset");
+	LOG_DEBUG("deassert_reset");
 #if 0
 	int retval = 0;
 	if ( (retval = debug_write_register(target, DEBUG_CONTROL_PWR_RST, 0)) != ERROR_OK ) {
@@ -485,7 +500,7 @@ deassert_reset(struct target *target)
 static int
 soft_reset_halt(struct target *target)
 {
-	LOCAL_LOG_INFO("soft_reset_halt");
+	LOG_DEBUG("soft_reset_halt");
 #if 0
 	int retval;
 	// assert reset
@@ -514,14 +529,14 @@ read_mem_word(struct target * target, uint32_t const address, uint32_t* const da
 		return retval;
 	}
 #endif
-	LOCAL_LOG_INFO("MR A %08X D %08X", address, *data);
+	LOG_DEBUG("MR A %08X D %08X", address, *data);
 	return ERROR_OK;
 }
 
 static int
 read_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, uint8_t *buffer)
 {
-	LOCAL_LOG_INFO("read_memory at %08X, %d bytes", address, size * count);
+	LOG_DEBUG("read_memory at %08X, %d bytes", address, size * count);
 	unsigned i = 0;  // byte count
 	uint32_t x = 0;  // buffer
 	int retval = 0;
@@ -567,7 +582,7 @@ examine(struct target *target)
 	target->state = TARGET_HALTED;
 	save_context(target);
 	target_set_examined(target);
-	LOCAL_LOG_INFO("examine");
+	LOG_DEBUG("examine");
 	return ERROR_OK;
 }
 
@@ -577,7 +592,7 @@ static int
 this_target_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 {
 	int retval = 0;
-	LOCAL_LOG_INFO("add_breakpoint");
+	LOG_DEBUG("add_breakpoint");
 	if ( breakpoint->length != 4 || breakpoint->address & 0x3u || breakpoint->type == BKPT_HARD ) {
 		return ERROR_FAIL;
 	}
@@ -595,7 +610,7 @@ this_target_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 static int
 this_target_remove_breakpoint(struct target *target, struct breakpoint *breakpoint)
 {
-	LOCAL_LOG_INFO("remove_breakpoint");
+	LOG_DEBUG("remove_breakpoint");
 	if ( breakpoint->length != 4 || breakpoint->type == BKPT_HARD ) {
 		return ERROR_FAIL;
 	}
@@ -605,7 +620,7 @@ this_target_remove_breakpoint(struct target *target, struct breakpoint *breakpoi
 static int
 this_target_write_memory(struct target *target, uint32_t address, uint32_t size, uint32_t count, const uint8_t *buffer)
 {
-	LOCAL_LOG_INFO("write_memory at %08X, %d bytes", address, size * count);
+	LOG_DEBUG("write_memory at %08X, %d bytes", address, size * count);
 #if 0
 	unsigned i = 0;  // byte count
 	uint32_t x = 0;  // buffer
@@ -656,7 +671,7 @@ this_target_write_memory(struct target *target, uint32_t address, uint32_t size,
 static int
 this_target_get_gdb_reg_list(struct target *target, struct reg **reg_list[], int *reg_list_size, enum target_register_class reg_class)
 {
-	LOCAL_LOG_INFO("get_gdb_reg_list");
+	LOG_DEBUG("get_gdb_reg_list");
 	struct arch *arch_info = (struct arch *)target->arch_info;
 
 	size_t const num_regs = ARRAY_LEN(general_regs_names_list) + (reg_class == REG_CLASS_ALL ? ARRAY_LEN(FP_regs_names_list) : 0);
