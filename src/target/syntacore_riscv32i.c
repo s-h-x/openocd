@@ -86,18 +86,17 @@ jtag_select_IR(struct target* const restrict p_target, enum TAP_IR const new_ins
 	assert(p_target && p_target->tap);
 
 	struct jtag_tap* restrict tap = p_target->tap;
-	if ( buf_get_u32(tap->cur_instr, 0u, tap->ir_length) == new_instr ) {
-		return;
+	if ( buf_get_u32(tap->cur_instr, 0u, tap->ir_length) != new_instr ) {
+		assert(tap->ir_length == 4);
+		uint8_t const tmp = new_instr;
+		struct scan_field field =
+		{
+			.num_bits = tap->ir_length,
+			.out_value = &tmp,
+		};
+		jtag_add_ir_scan(tap, &field, TAP_IDLE);
+		jtag_execute_queue_noclear();
 	}
-
-	assert(tap->ir_length == 4);
-	uint8_t const tmp = new_instr;
-	struct scan_field field =
-	{
-		.num_bits = tap->ir_length,
-		.out_value = &tmp,
-	};
-	jtag_add_ir_scan(tap, &field, TAP_IDLE);
 }
 
 enum type_dbgc_core_dbg_sts_reg_bits_e
@@ -108,8 +107,9 @@ enum type_dbgc_core_dbg_sts_reg_bits_e
 	DBGC_CORE_CDSR_LOCK_BIT = 30,
 	DBGC_CORE_CDSR_READY_BIT = 31,
 };
+
 static uint32_t
-read_DBG_STATUS(struct target* p_target)
+DBG_STATUS_get(struct target* p_target)
 {
 	LOG_METHOD_ENTER();
 	assert(p_target);
@@ -134,7 +134,7 @@ read_DBG_STATUS(struct target* p_target)
 }
 
 static void
-set_DAP_CTRL_REG(struct target* const p_target, enum type_dbgc_unit_id_e const dap_unit, enum DBGC_FGRP const dap_group)
+DAP_CTRL_REG_set(struct target* const p_target, enum type_dbgc_unit_id_e const dap_unit, enum DBGC_FGRP const dap_group)
 {
 	LOG_METHOD_ENTER();
 	assert(p_target);
@@ -163,23 +163,28 @@ set_DAP_CTRL_REG(struct target* const p_target, enum type_dbgc_unit_id_e const d
 			},
 	};
 	jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
+	jtag_execute_queue_noclear();
 }
 
 static int
-read_HART_DBG_STATUS(struct target* p_target)
+HART_DBG_STATUS_get(struct target* p_target)
 {
 	LOG_METHOD_ENTER();
 	assert(p_target);
 	assert(0 <= p_target->coreid && p_target->coreid < 2);
-	uint8_t const result = (read_DBG_STATUS(p_target) >> p_target->coreid) & 0xFFu;
-	LOG_DEBUG("status is %x\n", (uint32_t)result);
-	if ( result & (1 << DBGC_CORE_CDSR_HART0_ERR_BIT) ) {
+	uint8_t const status = (DBG_STATUS_get(p_target) >> p_target->coreid) & 0xFFu;
+	LOG_DEBUG("status is %x\n", (uint32_t)status);
+	if ( status & (1 << DBGC_CORE_CDSR_HART0_ERR_BIT) ) {
+		LOG_DEBUG("HART_DBG_STATUS = %s\n", "TARGET_UNKNOWN");
 		return TARGET_UNKNOWN;
-	} else if ( result & (1 << DBGC_CORE_CDSR_HART0_RST_BIT) ) {
+	} else if ( status & (1 << DBGC_CORE_CDSR_HART0_RST_BIT) ) {
+		LOG_DEBUG("HART_DBG_STATUS = %s\n", "TARGET_RESET");
 		return TARGET_RESET;
-	} else if ( result & (1 << DBGC_CORE_CDSR_HART0_DMODE_BIT) ) {
+	} else if ( status & (1 << DBGC_CORE_CDSR_HART0_DMODE_BIT) ) {
+		LOG_DEBUG("HART_DBG_STATUS = %s\n", "TARGET_HALTED");
 		return TARGET_HALTED;
 	} else {
+		LOG_DEBUG("HART_DBG_STATUS = %s\n", "TARGET_RUNNING");
 		return TARGET_RUNNING;
 	}
 }
@@ -405,12 +410,11 @@ static int
 this_poll(struct target *p_target)
 {
 	LOG_METHOD_ENTER();
-	int const state = read_HART_DBG_STATUS(p_target);
-	if ( state == TARGET_RUNNING ) {
+	p_target->state = HART_DBG_STATUS_get(p_target);
+	if ( p_target->state == TARGET_RUNNING ) {
 		return ERROR_OK;
 	}
 
-	p_target->state = state;
 	struct arch* p_arch = (struct arch*)p_target->arch_info;
 	if ( p_arch->nc_poll_requested == DBG_REASON_DBGRQ ) {
 		p_target->debug_reason = DBG_REASON_DBGRQ;
@@ -473,14 +477,14 @@ this_halt(struct target *p_target)
 {
 	LOG_METHOD_ENTER();
 	clear_error_code();
-	if ( read_HART_DBG_STATUS(p_target) == TARGET_HALTED ) {
+	if ( HART_DBG_STATUS_get(p_target) == TARGET_HALTED ) {
 		LOG_ERROR("Halt request when RV is already in halted state");
 		return ERROR_OK;
 	}
 	/// @todo issue Halt command
 	assert(p_target);
 	assert(p_target->tap);
-	set_DAP_CTRL_REG(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
+	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 	jtag_select_IR(p_target, TAP_INSTR_DAP_CMD);
 	uint32_t const set_dmode_flag = 1u;
 	uint8_t const dbg_cmd = DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL;
@@ -497,7 +501,8 @@ this_halt(struct target *p_target)
 			},
 	};
 	jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
-	p_target->state = read_HART_DBG_STATUS(p_target);
+
+	p_target->state = HART_DBG_STATUS_get(p_target);
 	if ( p_target->state != TARGET_HALTED ) {
 		// issue error if we are still running
 		LOG_ERROR("RV is not halted after Halt command");
