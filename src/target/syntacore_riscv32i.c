@@ -84,6 +84,17 @@ enum DAP_OPSTATUS_BITS
 	DAP_OPSTATUS_LOCK = 2,
 	DAP_OPSTATUS_READY = 3,
 };
+
+enum
+{
+	DBGC_HART_REGS_DBG_CTRL = 0,
+	DBGC_HART_REGS_DBG_STS = 1,
+	DBGC_HART_REGS_DMODE_ENBL = 2,
+	DBGC_HART_REGS_DMODE_CAUSE = 3,
+	DBGC_HART_REGS_CORE_INSTR = 4,
+	DBGC_HART_REGS_DBG_DATA = 5,
+};
+
 struct This_Arch
 {
 	struct reg_cache *m_reg_cache;
@@ -93,28 +104,10 @@ struct This_Arch
 
 typedef struct reg_arch_type reg_arch_type;
 typedef struct target_type target_type;
-
-static int this_poll(struct target *p_target);
-static int this_arch_state(struct target *p_target);
-static int this_halt(struct target *p_target);
-static int this_resume(struct target *p_target, int current, uint32_t address, int handle_breakpoints, int debug_execution);
-static int this_step(struct target *p_target, int current, uint32_t address, int handle_breakpoints);
-static int this_assert_reset(struct target *p_target);
-static int this_deassert_reset(struct target *p_target);
-static int this_soft_reset_halt(struct target *p_target);
-static int this_get_gdb_reg_list(struct target *p_target, struct reg **reg_list[], int *reg_list_size, enum target_register_class reg_class);
-static int this_read_memory(struct target *p_target, uint32_t address, uint32_t size, uint32_t count, uint8_t *buffer);
-static int this_write_memory(struct target *p_target, uint32_t address, uint32_t size, uint32_t count, const uint8_t *buffer);
-static int this_add_breakpoint(struct target *p_target, struct breakpoint *breakpoint);
-static int this_remove_breakpoint(struct target *p_target, struct breakpoint *breakpoint);
-static int this_target_create(struct target *p_target, struct Jim_Interp *interp);
-static int this_init(struct command_context *cmd_ctx, struct target *p_target);
-static int this_examine(struct target *p_target);
-
-static int get_core_reg(struct reg *p_reg);
-static int set_core_reg(struct reg *p_reg, uint8_t *buf);
-static int get_FPU_reg(struct reg *reg);
-static int set_FPU_reg(struct reg *reg, uint8_t *buf);
+typedef struct scan_field scan_field;
+typedef struct target target;
+typedef struct This_Arch This_Arch;
+typedef struct reg reg;
 
 static int sg_error_code = ERROR_OK;
 
@@ -133,48 +126,6 @@ static char const* const FP_regs_names_list[] =
 	"f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
 	"f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
 	"f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31",
-};
-
-/// @todo handlers for x0 and for pc
-static reg_arch_type const general_reg_access_type =
-{
-	.get = get_core_reg,
-	.set = set_core_reg,
-};
-
-static reg_arch_type const FP_reg_access_type =
-{
-	.get = get_FPU_reg,
-	.set = set_FPU_reg,
-};
-
-target_type syntacore_riscv32i_target =
-{
-	.name = "syntacore_riscv32i",
-
-	.poll = this_poll,
-	.arch_state = this_arch_state,
-
-	.halt = this_halt,
-	.resume = this_resume,
-	.step = this_step,
-
-	.assert_reset = this_assert_reset,
-	.deassert_reset = this_deassert_reset,
-	.soft_reset_halt = this_soft_reset_halt,
-
-	.get_gdb_reg_list = this_get_gdb_reg_list,
-
-	.read_memory = this_read_memory,
-	.write_memory = this_write_memory,
-
-	.add_breakpoint = this_add_breakpoint,
-	.remove_breakpoint = this_remove_breakpoint,
-
-	.target_create = this_target_create,
-	.examine = this_examine,
-
-	.init_target = this_init,
 };
 
 static int
@@ -202,7 +153,7 @@ clear_error_code(void)
 }
 
 static void
-jtag_select_IR(struct target* const restrict p_target, enum TAP_IR const new_instr)
+IR_select(target* const restrict p_target, enum TAP_IR const new_instr)
 {
 	LOG_DEBUG("Enter");
 	assert(p_target && p_target->tap);
@@ -213,7 +164,7 @@ jtag_select_IR(struct target* const restrict p_target, enum TAP_IR const new_ins
 #endif
 		assert(tap->ir_length == 4);
 		uint8_t const tmp = new_instr;
-		struct scan_field field =
+		scan_field field =
 		{
 			.num_bits = tap->ir_length,
 			.out_value = &tmp,
@@ -230,17 +181,16 @@ jtag_select_IR(struct target* const restrict p_target, enum TAP_IR const new_ins
 }
 
 static uint32_t
-DBG_STATUS_get(struct target* p_target)
+DBG_STATUS_get(target* p_target)
 {
 	LOG_DEBUG("Enter");
 	assert(p_target);
 	assert(p_target->tap);
-	jtag_select_IR(p_target, TAP_INSTR_DBG_STATUS);
+	IR_select(p_target, TAP_INSTR_DBG_STATUS);
 	if ( get_error_code() != ERROR_OK ) {
 		return 0u;
 	}
 	uint32_t result = 0;
-	typedef struct scan_field scan_field;
 	scan_field field =
 	{
 		.num_bits = TAP_LEN_DBG_STATUS,
@@ -262,7 +212,7 @@ DBG_STATUS_get(struct target* p_target)
 }
 
 static void
-DAP_CTRL_REG_set(struct target* const p_target, enum type_dbgc_unit_id_e const dap_unit, enum DBGC_FGRP const dap_group)
+DAP_CTRL_REG_set(target* const p_target, enum type_dbgc_unit_id_e const dap_unit, enum DBGC_FGRP const dap_group)
 {
 	LOG_DEBUG("Enter");
 	assert(p_target);
@@ -278,12 +228,11 @@ DAP_CTRL_REG_set(struct target* const p_target, enum type_dbgc_unit_id_e const d
 	uint8_t const set_dap_unit_group = ((((uint8_t)dap_unit) << 2) | (((uint8_t)dap_group) & LOW_BITS_MASK(2))) & LOW_BITS_MASK(4);
 	{
 		/// set unit/group
-		jtag_select_IR(p_target, TAP_INSTR_DAP_CTRL);
+		IR_select(p_target, TAP_INSTR_DAP_CTRL);
 		if ( get_error_code() != ERROR_OK ) {
 			return;
 		}
 		uint8_t status = 0;
-		typedef struct scan_field scan_field;
 		scan_field const field =
 		{
 			.num_bits = 4,
@@ -303,12 +252,11 @@ DAP_CTRL_REG_set(struct target* const p_target, enum type_dbgc_unit_id_e const d
 	}
 	{
 		/// verify unit/group
-		jtag_select_IR(p_target, TAP_INSTR_DAP_CTRL_RD);
+		IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
 		if ( get_error_code() != ERROR_OK ) {
 			return;
 		}
 		uint8_t get_dap_unit_group = 0;
-		typedef struct scan_field scan_field;
 		scan_field const field =
 		{
 			.num_bits = 4,
@@ -327,7 +275,7 @@ DAP_CTRL_REG_set(struct target* const p_target, enum type_dbgc_unit_id_e const d
 }
 
 static int
-HART_DBG_STATUS_get(struct target* p_target)
+HART_DBG_STATUS_get(target* p_target)
 {
 	LOG_DEBUG("Enter");
 	assert(p_target);
@@ -354,10 +302,10 @@ HART_DBG_STATUS_get(struct target* p_target)
 }
 
 static uint32_t
-TAP_INSTR_DAP_CMD_IO(struct target *p_target, uint8_t DAP_OPCODE, uint32_t DAP_OPCODE_EXT)
+DAP_CMD_scan(target* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT)
 {
 	LOG_DEBUG("Enter");
-	jtag_select_IR(p_target, TAP_INSTR_DAP_CMD);
+	IR_select(p_target, TAP_INSTR_DAP_CMD);
 	if ( get_error_code() != ERROR_OK ) {
 		return 0;
 	}
@@ -365,7 +313,6 @@ TAP_INSTR_DAP_CMD_IO(struct target *p_target, uint8_t DAP_OPCODE, uint32_t DAP_O
 	uint8_t const dap_opcode = DAP_OPCODE;
 	uint8_t DAP_OPSTATUS = 0;
 	uint32_t DBG_DATA = 0;
-	typedef struct scan_field scan_field;
 	scan_field const fields[2] =
 	{
 		[0] = {
@@ -395,7 +342,7 @@ TAP_INSTR_DAP_CMD_IO(struct target *p_target, uint8_t DAP_OPCODE, uint32_t DAP_O
 }
 
 static int
-check_core_reg(struct reg *p_reg)
+check_core_reg(reg *p_reg)
 {
 	LOG_DEBUG("Enter");
 	assert(p_reg);
@@ -404,7 +351,7 @@ check_core_reg(struct reg *p_reg)
 		return ERROR_FAIL;
 	}
 	assert(p_reg->arch_info);
-	struct target* p_target = p_reg->arch_info;
+	target* p_target = p_reg->arch_info;
 	if ( p_target->state != TARGET_HALTED ) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
@@ -421,7 +368,7 @@ read_core_register(unsigned reg_no)
 }
 
 static int
-get_core_reg(struct reg *p_reg)
+core_reg_get(reg *p_reg)
 {
 	LOG_DEBUG("Enter");
 	int const check_status = check_core_reg(p_reg);
@@ -437,7 +384,7 @@ get_core_reg(struct reg *p_reg)
 }
 
 static int
-set_core_reg(struct reg *p_reg, uint8_t *buf)
+core_reg_set(reg *p_reg, uint8_t *buf)
 {
 	LOG_DEBUG("Enter");
 	int const check_status = check_core_reg(p_reg);
@@ -453,27 +400,39 @@ set_core_reg(struct reg *p_reg, uint8_t *buf)
 
 	return ERROR_OK;
 }
+/// @todo handlers for x0 and for pc
+static reg_arch_type const general_reg_access_type =
+{
+	.get = core_reg_get,
+	.set = core_reg_set,
+};
 
 static int
-set_FPU_reg(struct reg *reg, uint8_t *buf)
+FPU_reg_set(reg *p_reg, uint8_t *buf)
 {
 	LOG_DEBUG("Enter");
 	LOG_ERROR("NOT IMPLEMENTED");
 	return ERROR_OK;
 }
 static int
-get_FPU_reg(struct reg *reg)
+FPU_reg_get(reg *p_reg)
 {
 	LOG_DEBUG("Enter");
 	LOG_WARNING("NOT IMPLEMENTED");
 	return ERROR_OK;
 }
 
-static struct reg
-general_purpose_reg_construct(char const* const p_name, uint32_t const number, struct target* p_target)
+static reg_arch_type const FP_reg_access_type =
+{
+	.get = FPU_reg_get,
+	.set = FPU_reg_set,
+};
+
+
+static reg
+general_purpose_reg_construct(char const* const p_name, uint32_t const number, target* p_target)
 {
 	LOG_DEBUG("Enter");
-	typedef struct reg reg;
 	reg const the_reg = {
 		.name = p_name,
 		.number = number,
@@ -492,11 +451,10 @@ general_purpose_reg_construct(char const* const p_name, uint32_t const number, s
 	return the_reg;
 }
 
-static struct reg
-FP_reg_construct(char const* const p_name, uint32_t const number, struct target* p_target)
+static reg
+FP_reg_construct(char const* const p_name, uint32_t const number, target* p_target)
 {
 	LOG_DEBUG("Enter");
-	typedef struct reg reg;
 	reg const the_reg = {
 		.name = p_name,
 		.number = number,
@@ -516,7 +474,7 @@ FP_reg_construct(char const* const p_name, uint32_t const number, struct target*
 }
 
 static struct reg_cache*
-reg_cache__create(struct target * p_target)
+reg_cache__create(target * p_target)
 {
 	LOG_DEBUG("Enter");
 	struct reg_cache* const p_obj = calloc(1, sizeof(struct reg_cache));
@@ -524,8 +482,8 @@ reg_cache__create(struct target * p_target)
 	static size_t const number_of_general_regs = ARRAY_LEN(general_regs_names_list);
 	static size_t const number_of_FP_regs = ARRAY_LEN(FP_regs_names_list);
 	static size_t const num_regs = number_of_general_regs + number_of_FP_regs;
-	struct reg* const reg_list = calloc(num_regs, sizeof(struct reg));
-	struct reg* p_dest_reg = reg_list;
+	reg* const reg_list = calloc(num_regs, sizeof(reg));
+	reg* p_dest_reg = reg_list;
 	{
 		/// Create general purpose registers cache
 		char const* const* p_name = general_regs_names_list;
@@ -551,17 +509,16 @@ reg_cache__create(struct target * p_target)
 }
 
 static int
-this_target_create(struct target *p_target, struct Jim_Interp *interp)
+this_target_create(target *p_target, struct Jim_Interp *interp)
 {
 	LOG_DEBUG("Enter");
 	assert(p_target);
 
-	typedef struct This_Arch This_Arch;
 	This_Arch the_arch = {
 		.nc_poll_requested = DBG_REASON_DBGRQ,
 		.m_reg_cache = reg_cache__create(p_target)
 	};
-	This_Arch* p_arch_info = calloc(1, sizeof(struct This_Arch));
+	This_Arch* p_arch_info = calloc(1, sizeof(This_Arch));
 	*p_arch_info = the_arch;
 
 	p_target->arch_info = p_arch_info;
@@ -569,21 +526,21 @@ this_target_create(struct target *p_target, struct Jim_Interp *interp)
 }
 
 static void
-save_context(struct target *p_target)
+save_context(target *p_target)
 {
 	LOG_DEBUG("Enter");
 	LOG_ERROR("Unimplemented");
 }
 
 static void
-restore_context(struct target *p_target)
+restore_context(target *p_target)
 {
 	LOG_DEBUG("Enter");
 	LOG_ERROR("Unimplemented");
 }
 
 static int
-this_poll(struct target *p_target)
+this_poll(target *p_target)
 {
 	LOG_DEBUG("Enter");
 	p_target->state = HART_DBG_STATUS_get(p_target);
@@ -591,7 +548,7 @@ this_poll(struct target *p_target)
 		return clear_error_code();
 	}
 
-	struct This_Arch* p_arch = (struct This_Arch*)p_target->arch_info;
+	This_Arch* p_arch = (This_Arch*)p_target->arch_info;
 	if ( p_arch->nc_poll_requested == DBG_REASON_DBGRQ ) {
 		p_target->debug_reason = DBG_REASON_DBGRQ;
 		return clear_error_code();
@@ -611,7 +568,7 @@ this_poll(struct target *p_target)
 }
 
 static int
-this_arch_state(struct target *p_target)
+this_arch_state(target *p_target)
 {
 	LOG_DEBUG("Enter");
 	LOG_ERROR("Unimplemented");
@@ -619,14 +576,14 @@ this_arch_state(struct target *p_target)
 }
 
 static int
-this_init(struct command_context *cmd_ctx, struct target *p_target)
+this_init(struct command_context *cmd_ctx, target *p_target)
 {
 	LOG_DEBUG("Enter");
 	return clear_error_code();
 }
 
 static int
-this_halt(struct target *p_target)
+this_halt(target *p_target)
 {
 	LOG_DEBUG("Enter");
 	assert(p_target);
@@ -641,7 +598,7 @@ this_halt(struct target *p_target)
 	if ( get_error_code() != ERROR_OK ) {
 		return clear_error_code();
 	}
-	TAP_INSTR_DAP_CMD_IO(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, 1u);
+	DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, 1u);
 	if ( get_error_code() != ERROR_OK ) {
 		return clear_error_code();
 	}
@@ -654,7 +611,6 @@ this_halt(struct target *p_target)
 		return clear_error_code();
 	}
 	LOG_DEBUG("OK, halted");
-	typedef struct This_Arch This_Arch;
 	This_Arch* p_arch = (This_Arch*)p_target->arch_info;
 	if ( p_arch->nc_poll_requested ) {
 		p_arch->nc_poll_requested = DBG_REASON_DBGRQ;
@@ -664,13 +620,12 @@ this_halt(struct target *p_target)
 }
 
 static int
-this_resume(struct target *p_target, int current, uint32_t address, int handle_breakpoints, int debug_execution)
+this_resume(target *p_target, int current, uint32_t address, int handle_breakpoints, int debug_execution)
 {
 	LOG_DEBUG("Enter");
 	// upload reg values into HW
 	restore_context(p_target);
 	/// @todo issue resume command
-	typedef struct This_Arch This_Arch;
 	This_Arch* p_arch = (This_Arch*)p_target->arch_info;
 	p_arch->nc_poll_requested = DBG_REASON_BREAKPOINT;
 	p_target->state = TARGET_RUNNING;
@@ -678,7 +633,7 @@ this_resume(struct target *p_target, int current, uint32_t address, int handle_b
 }
 
 static int
-this_step(struct target *p_target, int current, uint32_t address, int handle_breakpoints)
+this_step(target *p_target, int current, uint32_t address, int handle_breakpoints)
 {
 	LOG_DEBUG("Enter");
 	// upload reg values into HW
@@ -687,25 +642,21 @@ this_step(struct target *p_target, int current, uint32_t address, int handle_bre
 	debug_write_register(target, DEBUG_CONTROL_STATUS, DEBUG_CONTROL_STATUS_IRQ_DISABLE);
 	debug_write_register(target, DEBUG_CONTROL_COMMAND, DEBUG_CONTROL_COMMAND_STEP);
 #endif
-	struct This_Arch* p_arch = (struct This_Arch*)p_target->arch_info;
+	This_Arch* p_arch = (This_Arch*)p_target->arch_info;
 	p_arch->nc_poll_requested = DBG_REASON_SINGLESTEP;
 	p_target->state = TARGET_RUNNING;
 	return clear_error_code();
 }
 
-enum
+static inline uint8_t
+WRITE_DBGC_HART_REGS(bool write, uint8_t index) 
 {
-	DBGC_HART_REGS_DBG_CTRL = 0,
-	DBGC_HART_REGS_DBG_STS = 1,
-	DBGC_HART_REGS_DMODE_ENBL = 2,
-	DBGC_HART_REGS_DMODE_CAUSE = 3,
-	DBGC_HART_REGS_CORE_INSTR = 4,
-	DBGC_HART_REGS_DBG_DATA = 5,
-};
-#define WRITE_DBGC_HART_REGS(write, index) ((uint8_t)(((index) & LOW_BITS_MASK(3)) | (!!(write) << 3)))
+	assert((index & LOW_BITS_MASK(3)) != 0);
+	return index | (write ? 0x8 : 0);
+}
 
 static int
-set_reset_state(struct target *p_target, bool active)
+set_reset_state(target *p_target, bool active)
 {
 	LOG_DEBUG("Enter");
 	assert(p_target);
@@ -714,11 +665,11 @@ set_reset_state(struct target *p_target, bool active)
 		return clear_error_code();
 	}
 	uint32_t const set_value = active ? 1u : 0u;
-	TAP_INSTR_DAP_CMD_IO(p_target, WRITE_DBGC_HART_REGS(1, DBGC_HART_REGS_DBG_CTRL), set_value);
+	DAP_CMD_scan(p_target, WRITE_DBGC_HART_REGS(1, DBGC_HART_REGS_DBG_CTRL), set_value);
 	if ( get_error_code() != ERROR_OK ) {
 		return clear_error_code();
 	}
-	uint32_t const get_value = TAP_INSTR_DAP_CMD_IO(p_target, WRITE_DBGC_HART_REGS(0, DBGC_HART_REGS_DBG_CTRL), 0);
+	uint32_t const get_value = DAP_CMD_scan(p_target, WRITE_DBGC_HART_REGS(0, DBGC_HART_REGS_DBG_CTRL), 0);
 	if ( (get_value & 1) != (set_value & 1) ) {
 		LOG_ERROR("Fail to verify reset state: set %#0x, but get %#0x", set_value, get_value);
 		update_error_code(ERROR_TARGET_FAILURE);
@@ -737,7 +688,7 @@ set_reset_state(struct target *p_target, bool active)
 }
 
 static int
-this_assert_reset(struct target *p_target)
+this_assert_reset(target *p_target)
 {
 	LOG_DEBUG("Enter");
 	assert(p_target);
@@ -745,7 +696,7 @@ this_assert_reset(struct target *p_target)
 }
 
 static int
-this_deassert_reset(struct target *p_target)
+this_deassert_reset(target *p_target)
 {
 	LOG_DEBUG("Enter");
 	assert(p_target);
@@ -753,7 +704,7 @@ this_deassert_reset(struct target *p_target)
 }
 
 static int
-this_soft_reset_halt(struct target *p_target)
+this_soft_reset_halt(target *p_target)
 {
 	LOG_DEBUG("Enter");
 #if 0
@@ -770,7 +721,7 @@ this_soft_reset_halt(struct target *p_target)
 
 /// gdb_server expects valid reg values and will use set method for updating reg values
 static int
-read_mem_word(struct target * p_target, uint32_t const address, uint32_t* const data)
+read_mem_word(target * p_target, uint32_t const address, uint32_t* const data)
 {
 	LOG_DEBUG("Enter");
 #if 0
@@ -790,7 +741,7 @@ read_mem_word(struct target * p_target, uint32_t const address, uint32_t* const 
 }
 
 static int
-this_read_memory(struct target *p_target, uint32_t address, uint32_t size, uint32_t count, uint8_t *buffer)
+this_read_memory(target *p_target, uint32_t address, uint32_t size, uint32_t count, uint8_t *buffer)
 {
 	LOG_DEBUG("Enter");
 	LOG_DEBUG("read_memory at %08X, %d bytes", address, size * count);
@@ -827,7 +778,7 @@ this_read_memory(struct target *p_target, uint32_t address, uint32_t size, uint3
 }
 
 static int
-this_examine(struct target *p_target)
+this_examine(target *p_target)
 {
 	LOG_DEBUG("Enter");
 	// initialize register values
@@ -844,7 +795,7 @@ this_examine(struct target *p_target)
 }
 
 static int
-this_add_breakpoint(struct target *p_target, struct breakpoint *breakpoint)
+this_add_breakpoint(target *p_target, struct breakpoint *breakpoint)
 {
 	LOG_DEBUG("Enter");
 	int retval = 0;
@@ -863,7 +814,7 @@ this_add_breakpoint(struct target *p_target, struct breakpoint *breakpoint)
 }
 
 static int
-this_remove_breakpoint(struct target *p_target, struct breakpoint *breakpoint)
+this_remove_breakpoint(target *p_target, struct breakpoint *breakpoint)
 {
 	LOG_DEBUG("Enter");
 	if ( breakpoint->length != 4 || breakpoint->type == BKPT_HARD ) {
@@ -873,7 +824,7 @@ this_remove_breakpoint(struct target *p_target, struct breakpoint *breakpoint)
 }
 
 static int
-this_write_memory(struct target *p_target, uint32_t address, uint32_t size, uint32_t count, const uint8_t *buffer)
+this_write_memory(target *p_target, uint32_t address, uint32_t size, uint32_t count, const uint8_t *buffer)
 {
 	LOG_DEBUG("Enter");
 	LOG_DEBUG("write_memory at %08X, %d bytes", address, size * count);
@@ -925,15 +876,14 @@ this_write_memory(struct target *p_target, uint32_t address, uint32_t size, uint
 }
 
 static int
-this_get_gdb_reg_list(struct target *p_target, struct reg **reg_list[], int *reg_list_size, enum target_register_class reg_class)
+this_get_gdb_reg_list(target *p_target, reg **reg_list[], int *reg_list_size, enum target_register_class reg_class)
 {
 	LOG_DEBUG("Enter");
-	struct This_Arch *arch_info = (struct This_Arch *)p_target->arch_info;
+	This_Arch *arch_info = (This_Arch *)p_target->arch_info;
 
 	size_t const num_regs = ARRAY_LEN(general_regs_names_list) + (reg_class == REG_CLASS_ALL ? ARRAY_LEN(FP_regs_names_list) : 0);
-	struct reg** p_reg_array = calloc(num_regs, sizeof(struct reg*));
-	struct reg *a_reg_list = arch_info->m_reg_cache->reg_list;
-	// memccpy(p_reg_array, arch_info->core_cache->reg_list, num_regs * sizeof(struct reg*));
+	reg** p_reg_array = calloc(num_regs, sizeof(reg*));
+	reg *a_reg_list = arch_info->m_reg_cache->reg_list;
 	for ( size_t i = 0; i < num_regs; ++i ) {
 		p_reg_array[i] = &a_reg_list[i];
 	}
@@ -941,3 +891,33 @@ this_get_gdb_reg_list(struct target *p_target, struct reg **reg_list[], int *reg
 	*reg_list = p_reg_array;
 	return clear_error_code();
 }
+
+target_type syntacore_riscv32i_target =
+{
+	.name = "syntacore_riscv32i",
+
+	.poll = this_poll,
+	.arch_state = this_arch_state,
+
+	.halt = this_halt,
+	.resume = this_resume,
+	.step = this_step,
+
+	.assert_reset = this_assert_reset,
+	.deassert_reset = this_deassert_reset,
+	.soft_reset_halt = this_soft_reset_halt,
+
+	.get_gdb_reg_list = this_get_gdb_reg_list,
+
+	.read_memory = this_read_memory,
+	.write_memory = this_write_memory,
+
+	.add_breakpoint = this_add_breakpoint,
+	.remove_breakpoint = this_remove_breakpoint,
+
+	.target_create = this_target_create,
+	.examine = this_examine,
+
+	.init_target = this_init,
+};
+
