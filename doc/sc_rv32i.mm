@@ -32,7 +32,7 @@
 <node CREATED="1454347300025" ID="ID_114848432" MODIFIED="1454347301893" TEXT="32"/>
 </node>
 </node>
-<node CREATED="1453990897327" ID="ID_1353330392" MODIFIED="1454693112822" TEXT="IR">
+<node CREATED="1453990897327" FOLDED="true" ID="ID_1353330392" MODIFIED="1455727304659" TEXT="IR">
 <node CREATED="1453990936877" ID="ID_1351800159" MODIFIED="1455294766236" TEXT="TAP_INSTR_DBG_ID">
 <icon BUILTIN="help"/>
 <node CREATED="1455029354329" ID="ID_579530185" MODIFIED="1455029356348" TEXT="id">
@@ -45,7 +45,7 @@
 <node CREATED="1455294837655" ID="ID_836324951" MODIFIED="1455294857962" TEXT="0x10000001"/>
 </node>
 </node>
-<node CREATED="1453990946316" ID="ID_374925287" MODIFIED="1455294768070" TEXT="TAP_INSTR_BLD_ID">
+<node CREATED="1453990946316" ID="ID_374925287" MODIFIED="1455717735885" TEXT="TAP_INSTR_BLD_ID">
 <icon BUILTIN="help"/>
 <node CREATED="1455029380322" ID="ID_1625287171" MODIFIED="1455029381724" TEXT="id">
 <node CREATED="1453994431564" ID="ID_1530358231" MODIFIED="1454082596587" TEXT="4&apos;h4"/>
@@ -264,10 +264,10 @@
 </node>
 </node>
 <node CREATED="1453993248498" ID="ID_787701493" MODIFIED="1455030937732" TEXT="TAP_INSTR_DAP_CMD">
-<node CREATED="1455030806889" ID="ID_1134403445" MODIFIED="1455294529299" TEXT="id">
+<node CREATED="1455030806889" ID="ID_1134403445" MODIFIED="1455717771130" TEXT="id">
 <node CREATED="1453994489611" ID="ID_1983114724" MODIFIED="1455294614114" TEXT="4&apos;h8"/>
 </node>
-<node CREATED="1455030954175" FOLDED="true" ID="ID_1118718548" MODIFIED="1455559423768" TEXT="bits">
+<node CREATED="1455030954175" ID="ID_1118718548" MODIFIED="1455717772346" TEXT="bits">
 <node CREATED="1455030963648" ID="ID_1840331698" MODIFIED="1455030966955" TEXT="4+32"/>
 </node>
 <node CREATED="1455030815727" ID="ID_664078593" MODIFIED="1455559424919" TEXT="data">
@@ -635,26 +635,86 @@
 </node>
 </node>
 </node>
-<node CREATED="1455189547574" ID="ID_755679923" MODIFIED="1455297067256" TEXT="TAPC/DC verificaiton plan section">
-<node CREATED="1455189578129" ID="ID_488154725" MODIFIED="1455201434173" TEXT="&#x43f;&#x440;&#x43e;&#x432;&#x435;&#x440;&#x43a;&#x430; USB JTAG &#x43a;&#x430;&#x431;&#x435;&#x43b;&#x44f;">
-<node CREATED="1455285895181" ID="ID_789883966" MODIFIED="1455285905202" TEXT="sudo openocd -s ./tcl -c &apos;debug_level 3&apos; -f interface/ftdi/jtagkey.cfg -c &apos;noinit&apos;"/>
-<node CREATED="1455285928188" ID="ID_1135516954" MODIFIED="1455285933266" TEXT="telnet localhost 4444"/>
-<node CREATED="1455291338604" ID="ID_1507630707" MODIFIED="1455291340145" TEXT="reset_config trst_and_srst"/>
-<node CREATED="1455291354979" ID="ID_1789716505" MODIFIED="1455291367024" TEXT="adapter_khz 4000"/>
-<node CREATED="1455291378604" ID="ID_239069805" MODIFIED="1455291379984" TEXT="adapter_nsrst_delay 100"/>
-<node CREATED="1455291284764" ID="ID_1806198004" MODIFIED="1455291286344" TEXT="jtag newtap rv32i cpu -irlen 4 -ircapture 0x1 -irmask 0xf -expected-id 0xC0DEDEB1"/>
-<node CREATED="1455291208444" ID="ID_495718284" MODIFIED="1455291231704" TEXT="target create rv32i.cpu syntacore_riscv32i -chain-position rv32i.cpu"/>
+<node CREATED="1455189547574" ID="ID_755679923" MODIFIED="1455722487783" TEXT="TAPC/DC verificaiton plan section">
+<node CREATED="1455722487768" ID="ID_1336197159" MODIFIED="1455722504825" TEXT="environment setup">
+<node CREATED="1455720088192" ID="ID_250554208" MODIFIED="1455720106277" TEXT="export OOCD_ROOT=~/openocd"/>
 </node>
-<node CREATED="1455281140621" ID="ID_351502278" MODIFIED="1455281151817" TEXT="&#x43f;&#x440;&#x43e;&#x432;&#x435;&#x440;&#x43a;&#x430; IDCODE">
-<node CREATED="1455292931553" ID="ID_485517056" MODIFIED="1455297034575" TEXT="irscan rv32i.cpu 0xE; puts [drscan rv32i.cpu 32 0]"/>
-<node CREATED="1455281099965" ID="ID_1092634738" MODIFIED="1455281126690" TEXT="&#x43f;&#x440;&#x43e;&#x432;&#x435;&#x440;&#x438;&#x442;&#x44c;, &#x447;&#x442;&#x43e; &#x43f;&#x440;&#x43e;&#x447;&#x438;&#x442;&#x430;&#x43d;&#x43d;&#x43e;&#x435; &#x437;&#x43d;&#x430;&#x447;&#x435;&#x43d;&#x438;&#x435; =">
+<node CREATED="1455719966961" ID="ID_262737521" MODIFIED="1455719980565" TEXT="Build openocd">
+<node CREATED="1455719983819" ID="ID_1510002177" MODIFIED="1455720122884" TEXT="clone --recursive https://github.com/syntacore/openocd.git ${OOCD_ROOT}"/>
+<node CREATED="1455720127953" ID="ID_66258334" MODIFIED="1455720151605" TEXT="./bootstrap"/>
+<node CREATED="1455720152816" ID="ID_1326788678" MODIFIED="1455720185029" TEXT="../configure --enable-maintainer-mode --disable-werror --enable-ftdi"/>
+<node CREATED="1455720188097" ID="ID_1864826059" MODIFIED="1455720192565" TEXT="make"/>
+</node>
+<node CREATED="1455719951394" ID="ID_839104209" MODIFIED="1455720277235" TEXT="OpenOCD functional check">
+<node CREATED="1455719961442" ID="ID_1887513640" MODIFIED="1455720703583" TEXT="Check OpenOCD functionality in combination">
+<node CREATED="1455720703589" ID="ID_415207853" MODIFIED="1455720719716" TEXT="Amontec dongle JTAG cable"/>
+<node CREATED="1455720719718" ID="ID_1282957764" MODIFIED="1455720719718" TEXT="lpc2478 board."/>
+</node>
+<node CREATED="1455720277214" ID="ID_1672252429" MODIFIED="1455720733644" TEXT="terminal sessions">
+<node CREATED="1455720308958" ID="ID_1071880307" MODIFIED="1455720314869" TEXT="term1">
+<node CREATED="1455720202032" ID="ID_1058306134" MODIFIED="1455720397277" TEXT="sudo ${OOCD_ROOT}/src/openocd -s ${OOCD_ROOT}/tcl -c &apos;debug_level 3&apos; -f interface/ftdi/jtagkey.cfg -f target/lpc2478.cfg"/>
+</node>
+<node CREATED="1455720316449" ID="ID_1265472611" MODIFIED="1455720419988" TEXT="term2">
+<node CREATED="1455720253488" ID="ID_285819196" MODIFIED="1455720273685" TEXT="telnet localhost 4444"/>
+<node CREATED="1455720410416" ID="ID_715616099" MODIFIED="1455720766588" TEXT="set of command">
+<icon BUILTIN="help"/>
+</node>
+</node>
+</node>
+</node>
+<node CREATED="1455189578129" ID="ID_488154725" MODIFIED="1455727367400" TEXT="TAP-level checks">
+<node CREATED="1455720782176" ID="ID_1606863130" MODIFIED="1455721916370" TEXT="manual step by step tap init"/>
+<node CREATED="1455720494187" ID="ID_1557146179" MODIFIED="1455720747164" TEXT="terminal sessions">
+<node CREATED="1455720496922" HGAP="18" ID="ID_868636231" MODIFIED="1455721953122" TEXT="term1" VSHIFT="42">
+<node CREATED="1455285895181" ID="ID_789883966" MODIFIED="1455720480804" TEXT="sudo ${OOCD_ROOT}/src/openocd -s ${OOCD_ROOT}/tcl -c &apos;debug_level 3&apos; -f interface/ftdi/jtagkey.cfg -c &apos;noinit&apos;"/>
+</node>
+<node CREATED="1455720498706" HGAP="16" ID="ID_1931539696" MODIFIED="1455721945994" TEXT="term2" VSHIFT="38">
+<node CREATED="1455285928188" ID="ID_1135516954" MODIFIED="1455285933266" TEXT="telnet localhost 4444">
+<node CREATED="1455720553265" ID="ID_1887601889" MODIFIED="1455720575620" TEXT="jtag_rclk 2000&#xa;"/>
+<node CREATED="1455720575622" ID="ID_1722736582" MODIFIED="1455720584956" TEXT="reset_config trst_and_srst&#xa;"/>
+<node CREATED="1455720584958" ID="ID_639196696" MODIFIED="1455720590860" TEXT="jtag newtap sc_rv32i cpu -irlen 4 -expected-id 0xc0dedeb1&#xa;"/>
+<node CREATED="1455720590865" ID="ID_1874058906" MODIFIED="1455720611512" TEXT="target create sc_rv32i.cpu syntacore_riscv32i -endian little -chain-position sc_rv32i.cpu&#xa;"/>
+<node CREATED="1455281140621" ID="ID_351502278" MODIFIED="1455720870205" TEXT="IDCODE check">
+<node CREATED="1455720870200" ID="ID_1543636984" MODIFIED="1455720878172" TEXT="command">
+<node CREATED="1455292931553" ID="ID_485517056" MODIFIED="1455721466922" TEXT="irscan sc_rv32i.cpu 0xE; puts [drscan sc_rv32i.cpu 32 0]"/>
+</node>
+<node CREATED="1455281099965" ID="ID_1092634738" MODIFIED="1455720886115" TEXT="result">
 <node CREATED="1455281036616" ID="ID_908393946" MODIFIED="1455283418358" TEXT="0xC0DEDEB1"/>
 </node>
 </node>
-<node CREATED="1455281140621" ID="ID_136610395" MODIFIED="1455293104197" TEXT="&#x447;&#x442;&#x435;&#x43d;&#x438;&#x435; TAP_INSTR_DBG_STATUS"/>
+<node CREATED="1455717715878" ID="ID_1839283144" MODIFIED="1455720906411" TEXT="TAP_INSTR_DBG_ID check">
+<node CREATED="1455720870200" ID="ID_1459224650" MODIFIED="1455720878172" TEXT="command">
+<node CREATED="1455292931553" ID="ID_795255637" MODIFIED="1455721608957" TEXT="irscan sc_rv32i.cpu 0x3; puts [drscan sc_rv32i.cpu 32 0]"/>
+</node>
+<node CREATED="1455281099965" ID="ID_1732807358" MODIFIED="1455720886115" TEXT="result">
+<node CREATED="1455294837655" ID="ID_1716092243" MODIFIED="1455717810243" TEXT="0x10000001"/>
 </node>
 </node>
-<node CREATED="1454062334796" FOLDED="true" ID="ID_241075635" MODIFIED="1455297745523" POSITION="left" TEXT="RISC-V">
+<node CREATED="1455717744581" ID="ID_748600313" MODIFIED="1455720957508" TEXT="TAP_INSTR_BLD_ID check">
+<node CREATED="1455720870200" ID="ID_398528804" MODIFIED="1455720878172" TEXT="command">
+<node CREATED="1455292931553" ID="ID_1450421380" MODIFIED="1455721608958" TEXT="irscan sc_rv32i.cpu 0x4; puts [drscan sc_rv32i.cpu 32 0]"/>
+</node>
+<node CREATED="1455281099965" ID="ID_446150729" MODIFIED="1455720886115" TEXT="result">
+<node CREATED="1455294837655" ID="ID_63967145" MODIFIED="1455294921418" TEXT="0x16021200"/>
+</node>
+</node>
+<node CREATED="1455281140621" ID="ID_136610395" MODIFIED="1455720998331" TEXT="TAP_INSTR_DBG_STATUS check">
+<node CREATED="1455720870200" ID="ID_1845093799" MODIFIED="1455720878172" TEXT="command">
+<node CREATED="1455292931553" ID="ID_111325624" MODIFIED="1455721608958" TEXT="irscan sc_rv32i.cpu 0x5; puts [drscan sc_rv32i.cpu 32 0]"/>
+</node>
+<node CREATED="1455281099965" ID="ID_1116675850" MODIFIED="1455720886115" TEXT="result">
+<node CREATED="1455717842363" ID="ID_922630351" MODIFIED="1455717852680" TEXT="0x80000000"/>
+</node>
+</node>
+<node CREATED="1455727377348" ID="ID_1695019860" MODIFIED="1455727398504" TEXT="Write and read"/>
+</node>
+</node>
+</node>
+</node>
+<node CREATED="1455728489987" ID="ID_1629814402" MODIFIED="1455728532287" TEXT="syntacore_riscv32 target check"/>
+</node>
+</node>
+<node CREATED="1454062334796" FOLDED="true" ID="ID_241075635" MODIFIED="1455725682525" POSITION="left" TEXT="RISC-V">
 <node CREATED="1454062547059" ID="ID_1420602234" MODIFIED="1455037291956" TEXT="Background">
 <node CREATED="1454062371893" ID="ID_1835697746" MODIFIED="1454062540720" TEXT="There are two forms of external debugging.  The first is halt/freeze mode debugging, where an external debugger will halt some or all components of a platform and inspect them while everything is in stasis.  Then the debugger can either let the hardware perform a single step or let it run freely.  The second is run mode debugging.  In this mode there is some debug agent running on a component (eg.  triggered by a timer interrupt on a RISC-V core) which communicates with a debugger without halting the component.  This is essential if the component is controlling some real-time system (like a hard drive) where halting the component might lead to physical damage.  It requires more software support (both on the chip as well as on the debug client).  For this use case the debug interface may include simple serial ports.&#xa;"/>
 <node CREATED="1454062443679" ID="ID_64432733" MODIFIED="1454062514849" TEXT="There&apos;s a third use for the external debug interface, which is to use it as a general transport for a component to communicate with the outside world.  For instance, it could be used to implement a serial interface that  rmware could use to provide a simple CLI. This can use the same serial ports used for run-mode debugging."/>
@@ -692,6 +752,323 @@
 <node CREATED="1454063295875" ID="ID_1111257052" MODIFIED="1454063295875" TEXT="0x1a0&#xa;Serial Status 7"/>
 </node>
 </node>
+</node>
+<node CREATED="1455722865859" FOLDED="true" ID="ID_689833967" MODIFIED="1455727276172" POSITION="left" TEXT="OpenOCD memo">
+<node CREATED="1455722870716" ID="ID_1279114424" MODIFIED="1455724356814">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <h1>
+      Prerequisites
+    </h1>
+  </body>
+</html></richcontent>
+<node CREATED="1455724356816" ID="ID_1304910815" MODIFIED="1455724479223">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <h2>
+      Packages
+    </h2>
+  </body>
+</html></richcontent>
+<node CREATED="1455724479225" ID="ID_1642887776" MODIFIED="1455725232021">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <p>
+      You will need to install several packages to compile and run <i>OpenOCD</i>. Open a terminal window and type:
+    </p>
+  </body>
+</html></richcontent>
+</node>
+<node CREATED="1455725232023" ID="ID_1377114962" MODIFIED="1455725237909">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <pre>sudo apt-get install</pre>
+  </body>
+</html></richcontent>
+<node CREATED="1455725237912" ID="ID_1031089150" MODIFIED="1455725276645">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <pre>make</pre>
+  </body>
+</html></richcontent>
+</node>
+<node CREATED="1455725276648" ID="ID_1752893081" MODIFIED="1455725276650">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <pre>libtool</pre>
+  </body>
+</html></richcontent>
+</node>
+<node CREATED="1455725270658" ID="ID_1758271753" MODIFIED="1455725270663">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <pre>autoconf</pre>
+  </body>
+</html></richcontent>
+</node>
+<node CREATED="1455725261951" ID="ID_1686256384" MODIFIED="1455725261953">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <pre>texinfo</pre>
+  </body>
+</html></richcontent>
+</node>
+<node CREATED="1455725259288" ID="ID_308807352" MODIFIED="1455725259291">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <pre>libusb-dev</pre>
+  </body>
+</html></richcontent>
+</node>
+<node CREATED="1455725255417" ID="ID_285771925" MODIFIED="1455725255419">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <pre>doxygen</pre>
+  </body>
+</html></richcontent>
+</node>
+</node>
+</node>
+<node CREATED="1455724390554" ID="ID_1160294780" MODIFIED="1455724471367">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <h2>
+      Downloading and compiling libFTDI
+    </h2>
+  </body>
+</html></richcontent>
+<node CREATED="1455724471369" ID="ID_1761828245" MODIFIED="1455724471370">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <p>
+      Downloading source tarball from https://www.intra2net.com/en/developer/libftdi/download.php.<br />Extract files to source directory.
+    </p>
+    <p>
+      Create additional build directory (to keep source directory clean) and run `Cmake` in the build directory to generate build scripts/project using selected generator and tool-set:
+    </p>
+    <pre>cmake path/to/source/directory</pre>
+    Build project in the build directory
+
+    <pre>make</pre>
+    If build is successful, you can install library and headers (as root)
+
+    <pre>sudo make install</pre>
+    To deinstall library and headers
+
+    <pre>sudo make uninstall</pre>
+  </body>
+</html></richcontent>
+</node>
+</node>
+</node>
+<node CREATED="1455724377639" ID="ID_1010588910" MODIFIED="1455725193213">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <h1>
+      OpenOCD
+    </h1>
+  </body>
+</html></richcontent>
+<node CREATED="1455724400587" ID="ID_275072139" MODIFIED="1455724438568">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <h2>
+      Clone <i>OpenOCD</i>
+    </h2>
+  </body>
+</html></richcontent>
+<node CREATED="1455724438570" ID="ID_396845891" LINK="http://elinux.org/Compiling_OpenOCD" MODIFIED="1455725155231">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    See http://elinux.org/Compiling_OpenOCD.
+  </body>
+</html></richcontent>
+</node>
+<node CREATED="1455725103830" ID="ID_74361960" MODIFIED="1455725103831">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <p>
+      Clone any available repository to working directory<br />
+    </p>
+    <pre>git clone git://openocd.git.sourceforge.net/gitroot/openocd/openocd</pre>
+  </body>
+</html></richcontent>
+</node>
+</node>
+<node CREATED="1455724430314" ID="ID_204498974" MODIFIED="1455724443760">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <h2>
+      Build OpenOCD
+    </h2>
+  </body>
+</html></richcontent>
+<node CREATED="1455724443762" ID="ID_1261408175" MODIFIED="1455724967560">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    Go to working directory and generate `Makefile`
+
+    <pre>sudo ./bootstrap<br />sudo ./configure --enable-maintainer-mode --disable-werror --enable-ftdi</pre>
+    Invoke the `make`
+
+    <pre>sudo make</pre>
+  </body>
+</html></richcontent>
+</node>
+</node>
+<node CREATED="1455724674686" ID="ID_548253882" MODIFIED="1455725075429">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <h2>
+      Install <i>OpenOCD</i>
+    </h2>
+  </body>
+</html></richcontent>
+<node CREATED="1455724686507" ID="ID_197548222" MODIFIED="1455725013503">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    If build is successful, you can install `OpenOCD` and headers
+
+    <pre>sudo make install</pre>
+    To deinstall library and headers
+
+    <pre>sudo make uninstall</pre>
+  </body>
+</html></richcontent>
+</node>
+</node>
+<node CREATED="1455724426580" ID="ID_1031341394" MODIFIED="1455724453780">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <h2>
+      OpenOCD run
+    </h2>
+  </body>
+</html></richcontent>
+<node CREATED="1455724453782" ID="ID_1388918377" MODIFIED="1455724453783">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    Run `OpenOCD` as TCP server with selected configuration files.<br />For example
+
+    <pre>./tcl_ folder</pre>
+    contains set of configuration files, using _jtagkey ftdi_ interface for _lpc2478_ board:<br />
+
+    <pre>sudo openocd -s ./tcl -f interface/ftdi/jtagkey.cfg 
+    -f target/lpc2478.cfg<br /></pre>
+    After initialization _OpenOCD_ waiting for command from the network.
+  </body>
+</html></richcontent>
+</node>
+</node>
+<node CREATED="1455724422153" ID="ID_661695593" MODIFIED="1455725032063">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <h2>
+      <i>OpenOCD</i>&#160;remote session
+    </h2>
+  </body>
+</html></richcontent>
+<node CREATED="1455724460251" ID="ID_870017009" MODIFIED="1455724922744">
+<richcontent TYPE="NODE"><html>
+  <head>
+    
+  </head>
+  <body>
+    <p>
+      Run telnet application in other console:
+    </p>
+    <pre>telnet localhost 4444</pre>
+    <p>
+      Print
+    </p>
+    <pre>help</pre>
+    <p>
+      to show list of commands.
+    </p>
+    <p>
+      For example:
+    </p>
+    <pre>halt
+arm reg</pre>
+    Enter the
+
+    <pre>shutdown</pre>
+    command to close remote <i>OpenOCD</i>&#160;application.
+  </body>
+</html></richcontent>
+</node>
+</node>
+</node>
+<node CREATED="1455724531265" ID="ID_90249647" LINK="https://github.com/ar-sc/sc_riscv/wiki/OpenOCD" MODIFIED="1455724550500" TEXT="Wiki"/>
 </node>
 </node>
 </map>
