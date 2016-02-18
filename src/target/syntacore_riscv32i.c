@@ -599,25 +599,45 @@ static int
 this_halt(target *p_target)
 {
 	assert(p_target);
-	// May be already halted?
-	if ( HART_DBG_STATUS_get(p_target) == TARGET_HALTED ) {
-		LOG_WARNING("Halt request when RV is already in halted state");
-		return clear_error_code(p_target);
+	{
+		// May be already halted?
+		{
+			// Update state
+			int state = HART_DBG_STATUS_get(p_target);
+			if ( get_error_code(p_target) != ERROR_OK ) {
+				return clear_error_code(p_target);
+			}
+
+			p_target->state = HART_DBG_STATUS_get(p_target);
+		}
+
+		if ( p_target->state == TARGET_HALTED ) {
+			LOG_WARNING("Halt request when RV is already in halted state");
+			return clear_error_code(p_target);
+		}
 	}
 
-	LOG_DEBUG("Set debug mode");
-	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
-	if ( get_error_code(p_target) != ERROR_OK ) {
-		return clear_error_code(p_target);
+	{
+		// Try to halt
+		DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
+		if ( get_error_code(p_target) != ERROR_OK ) {
+			return clear_error_code(p_target);
+		}
+
+		(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, 1u);
+		if ( get_error_code(p_target) != ERROR_OK ) {
+			return clear_error_code(p_target);
+		}
 	}
 
-	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, 1u);
-	if ( get_error_code(p_target) != ERROR_OK ) {
-		return clear_error_code(p_target);
+	{
+		// update state
+		int state = HART_DBG_STATUS_get(p_target);
+		if ( get_error_code(p_target) != ERROR_OK ) {
+			return clear_error_code(p_target);
+		}
+		p_target->state = state;
 	}
-
-	// update status
-	p_target->state = HART_DBG_STATUS_get(p_target);
 
 	// Verify that in debug mode
 	if ( p_target->state != TARGET_HALTED ) {
