@@ -17,7 +17,7 @@
 #include <memory.h>
 
 #define LOCAL_CONCAT(x,y) x##y
-#define STATIC_ASSERT(e) typedef char[1 - 2*!(e)] LOCAL_CONCAT(static_assert,__LINE__)
+#define STATIC_ASSERT(e) typedef char LOCAL_CONCAT(___my_static_assert,__LINE__)[1 - 2 * !(e)]
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
 #define BIT_NUM_TO_MASK(bit_num) (1 << (bit_num))
 #define LOW_BITS_MASK(n) (~(~0 << (n)))
@@ -157,7 +157,9 @@ IR_select(target* const restrict p_target, enum TAP_IR const new_instr)
 #endif
 		assert(p_target->tap);
 		assert(p_target->tap->ir_length == 4);
-		uint8_t out_buffer[BITS_TO_SIZE(4)];
+		uint8_t out_buffer[BITS_TO_SIZE(4)] = {};
+		STATIC_ASSERT(BITS_TO_SIZE(4) == 1u);
+		STATIC_ASSERT(sizeof out_buffer == 1u);
 		buf_set_u32(out_buffer, 0, 4, new_instr);
 		scan_field field =
 		{
@@ -685,7 +687,7 @@ set_reset_state(target *p_target, bool active)
 		return clear_error_code(p_target);
 	}
 
-	uint32_t const get_old_value1 = DAP_CMD_scan(p_target, REGTRANS_scan_type(false, DBGC_HART_REGS_DBG_CTRL), 0);
+	uint32_t const get_old_value1 = DAP_CMD_scan(p_target, REGTRANS_scan_type(false, DBGC_CORE_REGS_DBG_CTRL), 0);
 	if ( get_error_code(p_target) != ERROR_OK ) {
 		return clear_error_code(p_target);
 	}
