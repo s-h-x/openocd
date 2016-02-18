@@ -21,6 +21,7 @@
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
 #define BIT_NUM_TO_MASK(bit_num) (1 << (bit_num))
 #define LOW_BITS_MASK(n) (~(~0 << (n)))
+#define BITS_TO_SIZE(num_bits) ( ( (size_t)(num_bits) + (CHAR_BIT - 1) ) / CHAR_BIT )
 #define RV_SCALL() (0x00100073u)
 
 enum TAP_IR
@@ -100,6 +101,7 @@ struct This_Arch
 	struct reg_cache *m_reg_cache;
 	/// @todo reasons
 	enum target_debug_reason nc_poll_requested;
+	int error_code;
 };
 
 typedef struct reg_arch_type reg_arch_type;
@@ -109,70 +111,65 @@ typedef struct target target;
 typedef struct This_Arch This_Arch;
 typedef struct reg reg;
 
-static int sg_error_code = ERROR_OK;
-
-static char const* const general_regs_names_list[] =
-{
-	"x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7",
-	"x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
-	"x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23",
-	"x24", "x25", "x26", "x27", "x28", "x29", "x30", "x31",
-	"pc",
-};
-
-static char const* const FP_regs_names_list[] =
-{
-	"f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7",
-	"f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
-	"f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
-	"f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31",
-};
-
+/// Error code handling
+///@{
 static int
-get_error_code(void)
+get_error_code(target* const restrict p_target)
 {
-	return sg_error_code;
+	assert(p_target);
+	This_Arch const* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	return p_arch->error_code;
 }
 
 static int
-update_error_code(int const a_error_code)
+update_error_code(target* const restrict p_target, int const a_error_code)
 {
-	if ( ERROR_OK == get_error_code() && ERROR_OK != a_error_code ) {
-		sg_error_code = a_error_code;
+	assert(p_target);
+	This_Arch* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	if ( ERROR_OK == get_error_code(p_target) && ERROR_OK != a_error_code ) {
+		p_arch->error_code = a_error_code;
 	}
-	return get_error_code();
+	return get_error_code(p_target);
 }
 
 static int
-clear_error_code(void)
+clear_error_code(target* const restrict p_target)
 {
-	int const result = get_error_code();
-	sg_error_code = ERROR_OK;
+	assert(p_target);
+	This_Arch* const const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	int const result = get_error_code(p_target);
+	p_arch->error_code = ERROR_OK;
 	return result;
 }
+///@}
 
+/// TAPs methods
+///@{
 static void
 IR_select(target* const restrict p_target, enum TAP_IR const new_instr)
 {
-	assert(p_target && p_target->tap);
-
-	struct jtag_tap* restrict tap = p_target->tap;
+	assert(p_target);
 #if 0
 	if ( buf_get_u32(tap->cur_instr, 0u, tap->ir_length) != new_instr ) {
 #endif
-		assert(tap->ir_length == 4);
-		uint8_t const tmp = new_instr;
+		assert(p_target->tap);
+		assert(p_target->tap->ir_length == 4);
+		uint8_t out_buffer[BITS_TO_SIZE(4)];
+		buf_set_u32(out_buffer, 0, 4, new_instr);
 		scan_field field =
 		{
-			.num_bits = tap->ir_length,
-			.out_value = &tmp,
+			.num_bits = p_target->tap->ir_length,
+			.out_value = out_buffer,
 		};
-		jtag_add_ir_scan(tap, &field, TAP_IDLE);
-		update_error_code(jtag_execute_queue());
-		if ( get_error_code() != ERROR_OK ) {
-			LOG_ERROR("IR scan error %d", get_error_code());
+		jtag_add_ir_scan(p_target->tap, &field, TAP_IDLE);
+		LOG_DEBUG("irscan %s %d", p_target->cmd_name, new_instr);
+		// force jtag_execute_queue() because field referenced local variable out_buffer
+		if ( update_error_code(p_target, jtag_execute_queue()) != ERROR_OK ) {
+			LOG_ERROR("Error %d", get_error_code(p_target));
 		}
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, tmp);
 #if 0
 	}
 #endif
@@ -184,27 +181,31 @@ DBG_STATUS_get(target* p_target)
 	assert(p_target);
 	assert(p_target->tap);
 	IR_select(p_target, TAP_INSTR_DBG_STATUS);
-	if ( get_error_code() != ERROR_OK ) {
+	if ( get_error_code(p_target) != ERROR_OK ) {
 		return 0u;
 	}
-	uint32_t result = 0;
+
+	uint8_t result_buffer[BITS_TO_SIZE(32)];
 	scan_field field =
 	{
 		.num_bits = TAP_LEN_DBG_STATUS,
-		.in_value = (uint8_t *)&result
+		.in_value = result_buffer,
 	};
 	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
 
-	update_error_code(jtag_execute_queue());
-	if ( get_error_code() != ERROR_OK ) {
-		LOG_ERROR("JTAG error %d", get_error_code());
+	// enforce jtag_execute_queue() to obtain result
+	if ( update_error_code(p_target, jtag_execute_queue()) != ERROR_OK ) {
+		LOG_ERROR("JTAG error %d", get_error_code(p_target));
+		return 0;
 	}
+
+	uint32_t const result = buf_get_u32(result_buffer, 0, 32);
 	LOG_DEBUG("drscan %s %d 0 --> %#0x", p_target->cmd_name, field.num_bits, result);
+
 	if ( (result & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) != (uint32_t)BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT) ) {
 		LOG_WARNING("TAP_INSTR_DBG_STATUS is %x!", result);
-		update_error_code(ERROR_TARGET_FAILURE);
+		update_error_code(p_target, ERROR_TARGET_FAILURE);
 	}
-	LOG_DEBUG("return %x", result);
 	return result;
 }
 
@@ -221,13 +222,15 @@ DAP_CTRL_REG_set(target* const p_target, enum type_dbgc_unit_id_e const dap_unit
 		) ||
 		(dap_unit == DBGC_UNIT_ID_CORE && dap_group == DBGC_FGRP_HART_REGTRANS)
 		);
+
 	uint8_t const set_dap_unit_group = ((((uint8_t)dap_unit) << 2) | (((uint8_t)dap_group) & LOW_BITS_MASK(2))) & LOW_BITS_MASK(4);
 	{
 		/// set unit/group
 		IR_select(p_target, TAP_INSTR_DAP_CTRL);
-		if ( get_error_code() != ERROR_OK ) {
+		if ( get_error_code(p_target) != ERROR_OK ) {
 			return;
 		}
+		// clear status bits
 		uint8_t status = 0;
 		scan_field const field =
 		{
@@ -236,20 +239,23 @@ DAP_CTRL_REG_set(target* const p_target, enum type_dbgc_unit_id_e const dap_unit
 			.in_value = &status,
 		};
 		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-		update_error_code(jtag_execute_queue());
-		if ( get_error_code() != ERROR_OK ) {
-			LOG_ERROR("JTAG error %d", get_error_code());
+		// enforce jtag_execute_queue() to get status
+		if ( update_error_code(p_target, jtag_execute_queue()) != ERROR_OK ) {
+			LOG_ERROR("JTAG error %d", get_error_code(p_target));
+			return;
 		}
 		LOG_DEBUG("drscan %s %d %#0x --> %#0x", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
 		if ( (status & BIT_NUM_TO_MASK(DAP_OPSTATUS_READY)) != BIT_NUM_TO_MASK(DAP_OPSTATUS_READY) ) {
-			LOG_ERROR("Status %0x", (uint32_t)status);
-			update_error_code(ERROR_TARGET_FAILURE);
+			LOG_ERROR("TAP status %0x", (uint32_t)status);
+			update_error_code(p_target, ERROR_TARGET_FAILURE);
+			return;
 		}
 	}
+
 	{
 		/// verify unit/group
 		IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
-		if ( get_error_code() != ERROR_OK ) {
+		if ( get_error_code(p_target) != ERROR_OK ) {
 			return;
 		}
 		uint8_t get_dap_unit_group = 0;
@@ -258,14 +264,17 @@ DAP_CTRL_REG_set(target* const p_target, enum type_dbgc_unit_id_e const dap_unit
 			.num_bits = 4,
 			.in_value = &get_dap_unit_group,
 		};
+		// enforce jtag_execute_queue() to get get_dap_unit_group
 		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-		update_error_code(jtag_execute_queue());
-		if ( get_error_code() != ERROR_OK ) {
-			LOG_ERROR("JTAG error %d", get_error_code());
+		if ( update_error_code(p_target, jtag_execute_queue()) != ERROR_OK ) {
+			LOG_ERROR("JTAG error %d", get_error_code(p_target));
+			return;
 		}
 		LOG_DEBUG("drscan %s %d %#0x --> %#0x", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
 		if ( get_dap_unit_group != set_dap_unit_group ) {
 			LOG_ERROR("Unit/Group verification error: set %#0x, but get %#0x!", set_dap_unit_group, get_dap_unit_group);
+			update_error_code(p_target, ERROR_TARGET_FAILURE);
+			return;
 		}
 	}
 }
@@ -277,7 +286,7 @@ HART_DBG_STATUS_get(target* p_target)
 	/// Only 1 HART available
 	assert(p_target->coreid == 0);
 	uint8_t const status = (DBG_STATUS_get(p_target) >> p_target->coreid) & 0xFFu;
-	if ( get_error_code() != ERROR_OK ) {
+	if ( get_error_code(p_target) != ERROR_OK ) {
 		return TARGET_UNKNOWN;
 	}
 	LOG_DEBUG("status is %x", (uint32_t)status);
@@ -300,7 +309,7 @@ static uint32_t
 DAP_CMD_scan(target* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT)
 {
 	IR_select(p_target, TAP_INSTR_DAP_CMD);
-	if ( get_error_code() != ERROR_OK ) {
+	if ( get_error_code(p_target) != ERROR_OK ) {
 		return 0;
 	}
 	uint32_t const dap_opcode_ext = DAP_OPCODE_EXT;
@@ -322,18 +331,24 @@ DAP_CMD_scan(target* const p_target, uint8_t const DAP_OPCODE, uint32_t const DA
 			},
 	};
 	assert(p_target->tap);
+
 	jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
-	update_error_code(jtag_execute_queue());
-	if ( get_error_code() != ERROR_OK ) {
-		LOG_ERROR("JTAG error %d", get_error_code());
+	// enforse jtag_execute_queue() to get values
+	if ( update_error_code(p_target, jtag_execute_queue()) != ERROR_OK ) {
+		LOG_ERROR("JTAG error %d", get_error_code(p_target));
+		return DBG_DATA;
 	}
+
 	LOG_DEBUG("drscan %s %d %#0x %d %#0x --> %#0x %#0x", p_target->cmd_name, fields[0].num_bits, dap_opcode_ext, fields[1].num_bits, dap_opcode, DBG_DATA, DAP_OPSTATUS);
+
 	if ( (DAP_OPSTATUS & BIT_NUM_TO_MASK(DAP_OPSTATUS_READY)) != BIT_NUM_TO_MASK(DAP_OPSTATUS_READY) ) {
 		LOG_ERROR("DAP_OPSTATUS == %#0x", (uint32_t)DAP_OPSTATUS);
-		update_error_code(ERROR_TARGET_FAILURE);
+		update_error_code(p_target, ERROR_TARGET_FAILURE);
 	}
 	return DBG_DATA;
 }
+
+///@}
 
 static int
 check_core_reg(reg *p_reg)
@@ -459,6 +474,23 @@ FP_reg_construct(char const* const p_name, uint32_t const number, target* p_targ
 	return the_reg;
 }
 
+static char const* const general_regs_names_list[] =
+{
+	"x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7",
+	"x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
+	"x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23",
+	"x24", "x25", "x26", "x27", "x28", "x29", "x30", "x31",
+	"pc",
+};
+
+static char const* const FP_regs_names_list[] =
+{
+	"f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7",
+	"f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
+	"f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
+	"f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31",
+};
+
 static struct reg_cache*
 reg_cache__create(target * p_target)
 {
@@ -526,13 +558,13 @@ this_poll(target *p_target)
 {
 	p_target->state = HART_DBG_STATUS_get(p_target);
 	if ( p_target->state == TARGET_RUNNING ) {
-		return clear_error_code();
+		return clear_error_code(p_target);
 	}
 
-	This_Arch* p_arch = (This_Arch*)p_target->arch_info;
+	This_Arch* p_arch = p_target->arch_info;
 	if ( p_arch->nc_poll_requested == DBG_REASON_DBGRQ ) {
 		p_target->debug_reason = DBG_REASON_DBGRQ;
-		return clear_error_code();
+		return clear_error_code(p_target);
 	}
 
 	if ( p_arch->nc_poll_requested == DBG_REASON_SINGLESTEP ) {
@@ -545,56 +577,61 @@ this_poll(target *p_target)
 	target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
 	p_arch->nc_poll_requested = DBG_REASON_DBGRQ;
 	save_context(p_target);  // update reg cache
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 static int
 this_arch_state(target *p_target)
 {
 	LOG_ERROR("Unimplemented");
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 static int
 this_init(struct command_context *cmd_ctx, target *p_target)
 {
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 static int
 this_halt(target *p_target)
 {
 	assert(p_target);
-	LOG_DEBUG("May be already halted?");
+	// May be already halted?
 	if ( HART_DBG_STATUS_get(p_target) == TARGET_HALTED ) {
-		LOG_ERROR("Halt request when RV is already in halted state");
-		return clear_error_code();
+		LOG_WARNING("Halt request when RV is already in halted state");
+		return clear_error_code(p_target);
 	}
 
 	LOG_DEBUG("Set debug mode");
 	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
-	if ( get_error_code() != ERROR_OK ) {
-		return clear_error_code();
+	if ( get_error_code(p_target) != ERROR_OK ) {
+		return clear_error_code(p_target);
 	}
-	DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, 1u);
-	if ( get_error_code() != ERROR_OK ) {
-		return clear_error_code();
+
+	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, 1u);
+	if ( get_error_code(p_target) != ERROR_OK ) {
+		return clear_error_code(p_target);
 	}
-	LOG_DEBUG("Verify that in debug mode");
+
+	// update status
 	p_target->state = HART_DBG_STATUS_get(p_target);
+
+	// Verify that in debug mode
 	if ( p_target->state != TARGET_HALTED ) {
 		// issue error if we are still running
 		LOG_ERROR("RV is not halted after Halt command");
-		update_error_code(ERROR_TARGET_NOT_HALTED);
-		return clear_error_code();
+		update_error_code(p_target, ERROR_TARGET_NOT_HALTED);
+		return clear_error_code(p_target);
 	}
-	LOG_DEBUG("OK, halted");
-	This_Arch* p_arch = (This_Arch*)p_target->arch_info;
+
+	// OK, halted
+	This_Arch* p_arch = p_target->arch_info;
 	if ( p_arch->nc_poll_requested ) {
 		p_arch->nc_poll_requested = DBG_REASON_DBGRQ;
 	}
 	p_target->debug_reason = DBG_REASON_DBGRQ;
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 static int
@@ -603,10 +640,10 @@ this_resume(target *p_target, int current, uint32_t address, int handle_breakpoi
 	// upload reg values into HW
 	restore_context(p_target);
 	/// @todo issue resume command
-	This_Arch* p_arch = (This_Arch*)p_target->arch_info;
+	This_Arch* p_arch = p_target->arch_info;
 	p_arch->nc_poll_requested = DBG_REASON_BREAKPOINT;
 	p_target->state = TARGET_RUNNING;
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 static int
@@ -621,7 +658,7 @@ this_step(target *p_target, int current, uint32_t address, int handle_breakpoint
 	This_Arch* p_arch = (This_Arch*)p_target->arch_info;
 	p_arch->nc_poll_requested = DBG_REASON_SINGLESTEP;
 	p_target->state = TARGET_RUNNING;
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 static inline uint8_t
@@ -644,42 +681,50 @@ set_reset_state(target *p_target, bool active)
 {
 	assert(p_target);
 	DAP_CTRL_REG_set(p_target, DBGC_UNIT_ID_CORE, DBGC_FGRP_CORE_REGTRANS);
-	if ( get_error_code() != ERROR_OK ) {
-		return clear_error_code();
+	if ( get_error_code(p_target) != ERROR_OK ) {
+		return clear_error_code(p_target);
 	}
-	uint32_t const get_old_value = DAP_CMD_scan(p_target, REGTRANS_scan_type(false, DBGC_HART_REGS_DBG_CTRL), 0);
+
+	uint32_t const get_old_value1 = DAP_CMD_scan(p_target, REGTRANS_scan_type(false, DBGC_HART_REGS_DBG_CTRL), 0);
+	if ( get_error_code(p_target) != ERROR_OK ) {
+		return clear_error_code(p_target);
+	}
 
 	static uint32_t const bit_mask = BIT_NUM_TO_MASK(0);
-	uint32_t const set_value = (get_old_value & ~bit_mask) | (active ? bit_mask : 0u);
-	DAP_CMD_scan(p_target, REGTRANS_scan_type(true, DBGC_CORE_REGS_DBG_CTRL), set_value);
-	if ( get_error_code() != ERROR_OK ) {
-		return clear_error_code();
-	}
 
-	DAP_CMD_scan(p_target, REGTRANS_scan_type(0, DBGC_CORE_REGS_DBG_CTRL), 0);
-	if ( get_error_code() != ERROR_OK ) {
-		return clear_error_code();
+	uint32_t const set_value = (get_old_value1 & ~bit_mask) | (active ? bit_mask : 0u);
+	uint32_t const get_old_value2 = DAP_CMD_scan(p_target, REGTRANS_scan_type(true, DBGC_CORE_REGS_DBG_CTRL), set_value);
+	if ( get_error_code(p_target) != ERROR_OK ) {
+		return clear_error_code(p_target);
 	}
-	// double check
-	uint32_t const get_new_value = DAP_CMD_scan(p_target, REGTRANS_scan_type(0, DBGC_CORE_REGS_DBG_CTRL), 0);
-	if ( get_error_code() != ERROR_OK ) {
-		return clear_error_code();
-	}
-	if ( (get_new_value & bit_mask) != (set_value & bit_mask) ) {
-		LOG_ERROR("Fail to verify reset state: set %#0x, but get %#0x", set_value, get_new_value);
-		update_error_code(ERROR_TARGET_FAILURE);
-		return clear_error_code();
+	assert(get_old_value2 == get_old_value1);
+
+	{
+		// double check
+		DAP_CMD_scan(p_target, REGTRANS_scan_type(0, DBGC_CORE_REGS_DBG_CTRL), 0);
+		if ( get_error_code(p_target) != ERROR_OK ) {
+			return clear_error_code(p_target);
+		}
+		uint32_t const get_new_value2 = DAP_CMD_scan(p_target, REGTRANS_scan_type(0, DBGC_CORE_REGS_DBG_CTRL), 0);
+		if ( get_error_code(p_target) != ERROR_OK ) {
+			return clear_error_code(p_target);
+		}
+		if ( (get_new_value2 & bit_mask) != (set_value & bit_mask) ) {
+			LOG_ERROR("Fail to verify reset state: set %#0x, but get %#0x", set_value, get_new_value2);
+			update_error_code(p_target, ERROR_TARGET_FAILURE);
+			return clear_error_code(p_target);
+		}
 	}
 	p_target->state = HART_DBG_STATUS_get(p_target);
 	if ( active && p_target->state != TARGET_RESET ) {
 		/// issue error if we are still running
 		LOG_ERROR("RV is not resetting after reset assert");
-		update_error_code(ERROR_TARGET_FAILURE);
+		update_error_code(p_target, ERROR_TARGET_FAILURE);
 	} else if ( !active && p_target->state == TARGET_RESET ) {
 		LOG_ERROR("RV is stiil in reset after reset deassert");
-		update_error_code(ERROR_TARGET_FAILURE);
+		update_error_code(p_target, ERROR_TARGET_FAILURE);
 	}
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 static int
@@ -708,7 +753,7 @@ this_soft_reset_halt(target *p_target)
 	// ...and deassert reset
 	return debug_write_register(target, DEBUG_CONTROL_PWR_RST, 0);
 #endif
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 /// gdb_server expects valid reg values and will use set method for updating reg values
@@ -728,7 +773,7 @@ read_mem_word(target * p_target, uint32_t const address, uint32_t* const data)
 	}
 #endif
 	LOG_DEBUG("MR A %08X D %08X", address, *data);
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 static int
@@ -742,7 +787,7 @@ this_read_memory(target *p_target, uint32_t address, uint32_t size, uint32_t cou
 	// Address is not aligned
 	if ( address & 0x3 ) {
 		if ( (retval = read_mem_word(p_target, address & (~0x3), &x)) != ERROR_OK ) {
-			return clear_error_code();
+			return clear_error_code(p_target);
 		}
 		while ( (address + i) & 0x3 && i != buffer_size ) {
 			*(buffer + i) = ((uint8_t*)(&x))[(address + i) & 0x3];
@@ -751,20 +796,20 @@ this_read_memory(target *p_target, uint32_t address, uint32_t size, uint32_t cou
 	}
 	for ( ; i + 4 <= buffer_size; i += 4 ) {
 		if ( (retval = read_mem_word(p_target, address + i, (uint32_t*)(buffer + i))) != ERROR_OK ) {
-			return clear_error_code();
+			return clear_error_code(p_target);
 		}
 	}
 	if ( buffer_size == i ) {
-		return clear_error_code();
+		return clear_error_code(p_target);
 	}
 	if ( (retval = read_mem_word(p_target, address + i, &x)) != ERROR_OK ) {
-		return clear_error_code();
+		return clear_error_code(p_target);
 	}
 	unsigned const word_start_offset = i;
 	for ( ; i != buffer_size; ++i ) {
 		*(buffer + i) = ((uint8_t*)(&x))[(i - word_start_offset) & 0x3];
 	}
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 static int
@@ -780,7 +825,7 @@ this_examine(target *p_target)
 	p_target->state = TARGET_HALTED;
 	save_context(p_target);
 	target_set_examined(p_target);
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 static int
@@ -788,24 +833,24 @@ this_add_breakpoint(target *p_target, struct breakpoint *breakpoint)
 {
 	int retval = 0;
 	if ( breakpoint->length != 4 || breakpoint->address & 0x3u || breakpoint->type == BKPT_HARD ) {
-		return clear_error_code();
+		return clear_error_code(p_target);
 	}
 	if ( (retval = target_read_buffer(p_target, breakpoint->address, breakpoint->length, breakpoint->orig_instr)) != ERROR_OK ) {
-		return clear_error_code();
+		return clear_error_code(p_target);
 	}
 	if ( (retval = target_write_u32(p_target, breakpoint->address, RV_SCALL())) != ERROR_OK ) {
-		return clear_error_code();
+		return clear_error_code(p_target);
 	}
 	breakpoint->set = 1;
 
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 static int
 this_remove_breakpoint(target *p_target, struct breakpoint *breakpoint)
 {
 	if ( breakpoint->length != 4 || breakpoint->type == BKPT_HARD ) {
-		return clear_error_code();
+		return clear_error_code(p_target);
 	}
 	return target_write_buffer(p_target, breakpoint->address, breakpoint->length, breakpoint->orig_instr);
 }
@@ -874,7 +919,7 @@ this_get_gdb_reg_list(target *p_target, reg **reg_list[], int *reg_list_size, en
 	}
 	*reg_list_size = num_regs;
 	*reg_list = p_reg_array;
-	return clear_error_code();
+	return clear_error_code(p_target);
 }
 
 target_type syntacore_riscv32i_target =
