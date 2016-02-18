@@ -603,12 +603,12 @@ this_halt(target *p_target)
 		// May be already halted?
 		{
 			// Update state
-			int state = HART_DBG_STATUS_get(p_target);
+			int const state = HART_DBG_STATUS_get(p_target);
 			if ( get_error_code(p_target) != ERROR_OK ) {
 				return clear_error_code(p_target);
 			}
 
-			p_target->state = HART_DBG_STATUS_get(p_target);
+			p_target->state = state;
 		}
 
 		if ( p_target->state == TARGET_HALTED ) {
