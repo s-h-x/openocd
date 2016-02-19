@@ -16,6 +16,8 @@
 #include <limits.h>
 #include <memory.h>
 
+#define XLEN 32
+#define FLEN 32
 #define LOCAL_CONCAT(x,y) x##y
 // #define STATIC_ASSERT(e) typedef char LOCAL_CONCAT(___my_static_assert,__LINE__)[1 - 2 * !(e)]
 #define STATIC_ASSERT(e) {enum {___my_static_assert = 1 / (!!(e)) };}
@@ -444,97 +446,135 @@ reg_f_set(reg *p_reg, uint8_t *buf)
 	return ERROR_OK;
 }
 
-static reg_arch_type const FP_reg_access_type =
+static reg_arch_type const reg_f_accessors =
 {
 	.get = reg_f_get,
 	.set = reg_f_set,
 };
 
 
-static reg
-general_purpose_reg_construct(char const* const p_name, uint32_t const number, target* p_target)
-{
-	reg const the_reg = {
-		.name = p_name,
-		.number = number,
-		.feature = NULL,
-		.caller_save = false,
-		.value = calloc(1, sizeof(uint32_t)),
-		.dirty = false,
-		.valid = false,
-		.exist = true,
-		.size = 32,  //< XLEN?
-		.reg_data_type = NULL,
-		.group = NULL,
-		.arch_info = p_target,
-		.type = &reg_x_accessors,
-	};
-	return the_reg;
-}
+static reg const reg_def_array[] = {
+	// Hard-wired zero
+	{.name = "x0",  .number = 0, .caller_save = false, .dirty = false, .valid = true,  .exist = true, .size = XLEN, .type = NULL},
 
-static reg
-FP_reg_construct(char const* const p_name, uint32_t const number, target* p_target)
-{
-	reg const the_reg = {
-		.name = p_name,
-		.number = number,
-		.feature = NULL,
-		.caller_save = false,
-		.value = calloc(1, sizeof(uint64_t)),
-		.dirty = false,
-		.valid = false,
-		.exist = true,
-		.size = 64,  //< number of bits of double?
-		.reg_data_type = NULL,
-		.group = NULL,
-		.arch_info = p_target,
-		.type = &FP_reg_access_type,
-	};
-	return the_reg;
-}
+	// Return address
+	{.name = "x1", .number = 1, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
 
-static char const* const general_regs_names_list[] =
-{
-	"x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7",
-	"x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
-	"x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23",
-	"x24", "x25", "x26", "x27", "x28", "x29", "x30", "x31",
-	"pc",
-};
+	// Stack pointer
+	{.name = "x2", .number = 2, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
 
-static char const* const FP_regs_names_list[] =
-{
-	"f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7",
-	"f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
-	"f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
-	"f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31",
+	// Global pointer
+	{.name = "x3", .number = 3, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+
+	// Thread pointer
+	{.name = "x4", .number = 4, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+
+	// Temporaries
+	{.name = "x5", .number = 5, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x6", .number = 6, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x7", .number = 7, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+
+	// Saved register/frame pointer
+	{.name = "x8", .number = 8, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+
+	// Saved register
+	{.name = "x9", .number = 9, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+
+	// Function arguments/return values
+	{.name = "x10", .number = 10, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x11", .number = 11, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+
+	// Function arguments
+	{.name = "x12", .number = 12, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x13", .number = 13, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x14", .number = 14, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x15", .number = 15, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x16", .number = 16, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x17", .number = 17, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+
+	// Saved registers
+	{.name = "x18", .number = 18, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x19", .number = 19, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x20", .number = 20, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x21", .number = 21, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x22", .number = 22, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x23", .number = 23, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x24", .number = 24, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x25", .number = 25, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x26", .number = 26, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x27", .number = 27, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+
+	// Temporaries
+	{.name = "x28", .number = 28, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x29", .number = 29, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x30", .number = 30, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x31", .number = 31, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+
+	{.name = "pc",  .number = 50, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = NULL},
+
+	// FP temporaries
+	{.name = "f0",  .number = 100, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f1",  .number = 101, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f2",  .number = 102, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f3",  .number = 103, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f4",  .number = 104, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f5",  .number = 105, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f6",  .number = 106, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f7",  .number = 107, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+
+	// FP saved registers
+	{.name = "f8",  .number = 108, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f9",  .number = 109, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+
+	// FP arguments/return values
+	{.name = "f10", .number = 110, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f11", .number = 111, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+
+	// FP arguments
+	{.name = "f12", .number = 112, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f13", .number = 113, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f14", .number = 114, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f15", .number = 115, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f16", .number = 116, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f17", .number = 117, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+
+	// FP saved registers
+	{.name = "f18", .number = 118, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f19", .number = 119, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f20", .number = 120, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f21", .number = 121, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f22", .number = 122, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f23", .number = 123, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f24", .number = 124, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f25", .number = 125, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f26", .number = 126, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f27", .number = 127, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+
+	// FP temporaries
+	{.name = "f28", .number = 128, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f29", .number = 129, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f30", .number = 130, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f31", .number = 131, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
 };
 
 static struct reg_cache*
 reg_cache__create(target * p_target)
 {
-	struct reg_cache* const p_obj = calloc(1, sizeof(struct reg_cache));
+	typedef struct reg_cache reg_cache;
+	reg_cache* const p_obj = calloc(1, sizeof(struct reg_cache));
 	assert(p_obj);
-	static size_t const number_of_general_regs = ARRAY_LEN(general_regs_names_list);
-	static size_t const number_of_FP_regs = ARRAY_LEN(FP_regs_names_list);
-	static size_t const num_regs = number_of_general_regs + number_of_FP_regs;
+
+	static size_t const num_regs = ARRAY_LEN(reg_def_array);
 	reg* const reg_list = calloc(num_regs, sizeof(reg));
 	reg* p_dest_reg = reg_list;
-	{
-		/// Create general purpose registers cache
-		char const* const* p_name = general_regs_names_list;
-		for ( unsigned i = 0; i < number_of_general_regs; ++i ) {
-			*p_dest_reg++ = general_purpose_reg_construct(*p_name++, i, p_target);
-		}
+	reg const* p_src_reg = reg_def_array;
+	for ( size_t i = 0; i < num_regs; ++i ) {
+		*p_dest_reg = *p_src_reg;
+		p_dest_reg->value = malloc(NUM_BITS_TO_SIZE(p_src_reg->size));
+		p_dest_reg->arch_info = p_target;
+		++p_src_reg;
+		++p_dest_reg;
 	}
-	{
-		/// Create floating point registers cache
-		char const* const* p_name = FP_regs_names_list;
-		for ( unsigned i = 0; i < number_of_FP_regs; ++i ) {
-			*p_dest_reg++ = FP_reg_construct(*p_name++, number_of_general_regs + i, p_target);
-		}
-	}
-	typedef struct reg_cache reg_cache;
 	reg_cache const the_reg_cache = {
 		.name = "syntacore_riscv32 registers",
 		.reg_list = reg_list,
@@ -950,7 +990,7 @@ this_get_gdb_reg_list(target *p_target, reg **reg_list[], int *reg_list_size, en
 {
 	This_Arch *arch_info = (This_Arch *)p_target->arch_info;
 
-	size_t const num_regs = ARRAY_LEN(general_regs_names_list) + (reg_class == REG_CLASS_ALL ? ARRAY_LEN(FP_regs_names_list) : 0);
+	size_t const num_regs = 33 + (reg_class == REG_CLASS_ALL ? 32 : 0);
 	reg** p_reg_array = calloc(num_regs, sizeof(reg*));
 	reg *a_reg_list = arch_info->m_reg_cache->reg_list;
 	for ( size_t i = 0; i < num_regs; ++i ) {
