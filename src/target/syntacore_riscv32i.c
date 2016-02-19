@@ -17,11 +17,12 @@
 #include <memory.h>
 
 #define LOCAL_CONCAT(x,y) x##y
-#define STATIC_ASSERT(e) typedef char LOCAL_CONCAT(___my_static_assert,__LINE__)[1 - 2 * !(e)]
+// #define STATIC_ASSERT(e) typedef char LOCAL_CONCAT(___my_static_assert,__LINE__)[1 - 2 * !(e)]
+#define STATIC_ASSERT(e) {enum {___my_static_assert = 1 / (!!(e)) };}
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
 #define BIT_NUM_TO_MASK(bit_num) (1 << (bit_num))
 #define LOW_BITS_MASK(n) (~(~0 << (n)))
-#define BITS_TO_SIZE(num_bits) ( ( (size_t)(num_bits) + (CHAR_BIT - 1) ) / CHAR_BIT )
+#define NUM_BITS_TO_SIZE(num_bits) ( ( (size_t)(num_bits) + (CHAR_BIT - 1) ) / CHAR_BIT )
 #define RV_SCALL() (0x00100073u)
 
 enum TAP_IR
@@ -32,19 +33,23 @@ enum TAP_IR
 	TAP_INSTR_DAP_CTRL = 6,
 	TAP_INSTR_DAP_CTRL_RD = 7,
 	TAP_INSTR_DAP_CMD = 8,
-	TAP_INSTR_IDCODE = 0xE,
-	TAP_INSTR_BYPASS = 0xF,
+	TAP_INSTR_IDCODE = 0xE,  ///< recommended
+	TAP_INSTR_BYPASS = 0xF,  ///< mandatory
 };
 
 enum TAP_DR_LEN
 {
-	TAP_LEN_IDCODE = 32,
+	TAP_LEN_IDCODE = 32,  ///< mandatory
 	TAP_LEN_DBG_ID = 32,
 	TAP_LEN_BLD_ID = 32,
 	TAP_LEN_DBG_STATUS = 32,
-	TAP_LEN_DAP_CTRL = 4,
-	TAP_LEN_DAP_CMD = 4 + 32,
-	TAP_LEN_BYPASS = 1,
+	TAP_LEN_DAP_CTRL_UNIT = 2,
+	TAP_LEN_DAP_CTRL_FGROUP = 2,
+	TAP_LEN_DAP_CTRL = TAP_LEN_DAP_CTRL_UNIT + TAP_LEN_DAP_CTRL_FGROUP,
+	TAP_LEN_DAP_CMD_OPCODE = 4,
+	TAP_LEN_DAP_CMD_OPCODE_EXT = 32,
+	TAP_LEN_DAP_CMD = TAP_LEN_DAP_CMD_OPCODE + TAP_LEN_DAP_CMD_OPCODE_EXT,
+	TAP_LEN_BYPASS = 1,  ///< mandatory
 };
 
 enum type_dbgc_unit_id_e
@@ -114,7 +119,7 @@ typedef struct reg reg;
 /// Error code handling
 ///@{
 static int
-get_error_code(target* const restrict p_target)
+get_error_code(target const* const restrict restrict p_target)
 {
 	assert(p_target);
 	This_Arch const* const restrict p_arch = p_target->arch_info;
@@ -123,7 +128,7 @@ get_error_code(target* const restrict p_target)
 }
 
 static int
-update_error_code(target* const restrict p_target, int const a_error_code)
+update_error_code(target const* const restrict p_target, int const a_error_code)
 {
 	assert(p_target);
 	This_Arch* const restrict p_arch = p_target->arch_info;
@@ -135,7 +140,7 @@ update_error_code(target* const restrict p_target, int const a_error_code)
 }
 
 static int
-clear_error_code(target* const restrict p_target)
+clear_error_code(target const* const restrict p_target)
 {
 	assert(p_target);
 	This_Arch* const const restrict p_arch = p_target->arch_info;
@@ -147,9 +152,9 @@ clear_error_code(target* const restrict p_target)
 ///@}
 
 /// TAPs methods
-///@{
+/// @{
 static void
-IR_select(target* const restrict p_target, enum TAP_IR const new_instr)
+IR_select(target const* const restrict p_target, enum TAP_IR const new_instr)
 {
 	assert(p_target);
 #if 0
@@ -157,8 +162,8 @@ IR_select(target* const restrict p_target, enum TAP_IR const new_instr)
 #endif
 		assert(p_target->tap);
 		assert(p_target->tap->ir_length == 4);
-		uint8_t out_buffer[BITS_TO_SIZE(4)] = {};
-		STATIC_ASSERT(BITS_TO_SIZE(4) == 1u);
+		uint8_t out_buffer[NUM_BITS_TO_SIZE(4)] = {};
+		STATIC_ASSERT(NUM_BITS_TO_SIZE(4) == 1u);
 		STATIC_ASSERT(sizeof out_buffer == 1u);
 		buf_set_u32(out_buffer, 0, 4, new_instr);
 		scan_field field =
@@ -178,7 +183,7 @@ IR_select(target* const restrict p_target, enum TAP_IR const new_instr)
 }
 
 static uint32_t
-DBG_STATUS_get(target* p_target)
+DBG_STATUS_get(target const* const restrict p_target)
 {
 	assert(p_target);
 	assert(p_target->tap);
@@ -187,7 +192,7 @@ DBG_STATUS_get(target* p_target)
 		return 0u;
 	}
 
-	uint8_t result_buffer[BITS_TO_SIZE(32)];
+	uint8_t result_buffer[NUM_BITS_TO_SIZE(TAP_LEN_DBG_STATUS)] = {};
 	scan_field field =
 	{
 		.num_bits = TAP_LEN_DBG_STATUS,
@@ -201,6 +206,7 @@ DBG_STATUS_get(target* p_target)
 		return 0;
 	}
 
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DBG_STATUS) <= sizeof(uint32_t));
 	uint32_t const result = buf_get_u32(result_buffer, 0, 32);
 	LOG_DEBUG("drscan %s %d 0 --> %#0x", p_target->cmd_name, field.num_bits, result);
 
@@ -212,7 +218,7 @@ DBG_STATUS_get(target* p_target)
 }
 
 static void
-DAP_CTRL_REG_set(target* const p_target, enum type_dbgc_unit_id_e const dap_unit, enum DBGC_FGRP const dap_group)
+DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e const dap_unit, enum DBGC_FGRP const dap_group)
 {
 	assert(p_target);
 	assert(
@@ -225,7 +231,8 @@ DAP_CTRL_REG_set(target* const p_target, enum type_dbgc_unit_id_e const dap_unit
 		(dap_unit == DBGC_UNIT_ID_CORE && dap_group == DBGC_FGRP_HART_REGTRANS)
 		);
 
-	uint8_t const set_dap_unit_group = ((((uint8_t)dap_unit) << 2) | (((uint8_t)dap_group) & LOW_BITS_MASK(2))) & LOW_BITS_MASK(4);
+	uint8_t const set_dap_unit_group = ((((uint8_t)dap_unit & LOW_BITS_MASK(TAP_LEN_DAP_CTRL_UNIT)) << TAP_LEN_DAP_CTRL_FGROUP) | (((uint8_t)dap_group) & LOW_BITS_MASK(TAP_LEN_DAP_CTRL_FGROUP))) & LOW_BITS_MASK(TAP_LEN_DAP_CTRL);
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof set_dap_unit_group);
 	{
 		/// set unit/group
 		IR_select(p_target, TAP_INSTR_DAP_CTRL);
@@ -234,9 +241,10 @@ DAP_CTRL_REG_set(target* const p_target, enum type_dbgc_unit_id_e const dap_unit
 		}
 		// clear status bits
 		uint8_t status = 0;
+		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof status);
 		scan_field const field =
 		{
-			.num_bits = 4,
+			.num_bits = TAP_LEN_DAP_CTRL,
 			.out_value = &set_dap_unit_group,
 			.in_value = &status,
 		};
@@ -261,9 +269,10 @@ DAP_CTRL_REG_set(target* const p_target, enum type_dbgc_unit_id_e const dap_unit
 			return;
 		}
 		uint8_t get_dap_unit_group = 0;
+		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof get_dap_unit_group);
 		scan_field const field =
 		{
-			.num_bits = 4,
+			.num_bits = TAP_LEN_DAP_CTRL,
 			.in_value = &get_dap_unit_group,
 		};
 		// enforce jtag_execute_queue() to get get_dap_unit_group
@@ -282,7 +291,7 @@ DAP_CTRL_REG_set(target* const p_target, enum type_dbgc_unit_id_e const dap_unit
 }
 
 static int
-HART_DBG_STATUS_get(target* p_target)
+HART_DBG_STATUS_get(target const* const restrict p_target)
 {
 	assert(p_target);
 	/// Only 1 HART available
@@ -308,7 +317,7 @@ HART_DBG_STATUS_get(target* p_target)
 }
 
 static uint32_t
-DAP_CMD_scan(target* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT)
+DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT)
 {
 	IR_select(p_target, TAP_INSTR_DAP_CMD);
 	if ( get_error_code(p_target) != ERROR_OK ) {
@@ -321,19 +330,23 @@ DAP_CMD_scan(target* const p_target, uint8_t const DAP_OPCODE, uint32_t const DA
 	scan_field const fields[2] =
 	{
 		[0] = {
-			.num_bits = 32,
+			.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,
 			.out_value = (uint8_t const*)&dap_opcode_ext,
 			.in_value = (uint8_t*)&DBG_DATA,
 		},
 		[1] =
 			{
-				.num_bits = 4,
+				.num_bits = TAP_LEN_DAP_CMD_OPCODE,
 				.out_value = &dap_opcode,
 				.in_value = &DAP_OPSTATUS,
 			},
 	};
-	assert(p_target->tap);
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE_EXT) == sizeof dap_opcode_ext);
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE_EXT) == sizeof DBG_DATA);
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE) == sizeof dap_opcode);
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE) == sizeof DAP_OPSTATUS);
 
+	assert(p_target->tap);
 	jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
 	// enforse jtag_execute_queue() to get values
 	if ( update_error_code(p_target, jtag_execute_queue()) != ERROR_OK ) {
@@ -350,87 +363,91 @@ DAP_CMD_scan(target* const p_target, uint8_t const DAP_OPCODE, uint32_t const DA
 	return DBG_DATA;
 }
 
-///@}
+/// @}
 
-static int
-check_core_reg(reg *p_reg)
+static void
+reg_x_operation_conditions_check(reg *p_reg)
 {
 	assert(p_reg);
+	target* p_target = p_reg->arch_info;
+	assert(p_target);
 	if ( p_reg->number > 32 ) {
 		LOG_WARNING("Bad reg id =%d for register %s", p_reg->number, p_reg->name);
-		return ERROR_FAIL;
+		update_error_code(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+		return ;
 	}
-	assert(p_reg->arch_info);
-	target* p_target = p_reg->arch_info;
+	assert(p_target);
 	if ( p_target->state != TARGET_HALTED ) {
 		LOG_ERROR("Target not halted");
-		return ERROR_TARGET_NOT_HALTED;
+		update_error_code(p_target, ERROR_TARGET_NOT_HALTED);
 	}
-	return ERROR_OK;
-}
-
-static uint32_t
-read_core_register(unsigned reg_no)
-{
-	LOG_ERROR("Unimplemented");
-	return 0;
 }
 
 static int
-core_reg_get(reg *p_reg)
+reg_x_get(reg *p_reg)
 {
-	int const check_status = check_core_reg(p_reg);
-	if ( check_status != ERROR_OK ) {
-		return check_status;
+	reg_x_operation_conditions_check(p_reg);
+	target* p_target = p_reg->arch_info;
+	assert(p_target);
+	if ( get_error_code(p_target) ) {
+		return clear_error_code(p_target);
 	}
+
+	/// @todo implement HW register read
+#if 0
 	uint32_t const value = read_core_register(p_reg->number);
 	buf_set_u32(p_reg->value, 0, 32, value);
-	p_reg->dirty = true;
 	p_reg->valid = true;
+#endif
+	p_reg->dirty = true;
 
 	return ERROR_OK;
 }
 
 static int
-core_reg_set(reg *p_reg, uint8_t *buf)
+reg_x_set(reg *p_reg, uint8_t *buf)
 {
-	int const check_status = check_core_reg(p_reg);
-	if ( check_status != ERROR_OK ) {
-		return check_status;
+	reg_x_operation_conditions_check(p_reg);
+	target* p_target = p_reg->arch_info;
+	assert(p_target);
+	if ( get_error_code(p_target) ) {
+		return clear_error_code(p_target);
 	}
+
 	uint32_t const value = buf_get_u32(buf, 0, 32);
 	LOG_DEBUG("Updating cache for register %s <-- %08x", p_reg->name, value);
 
 	buf_set_u32(p_reg->value, 0, 32, value);
-	p_reg->dirty = true;
 	p_reg->valid = true;
+	p_reg->dirty = true;
 
 	return ERROR_OK;
 }
-/// @todo handlers for x0 and for pc
-static reg_arch_type const general_reg_access_type =
+
+static reg_arch_type const reg_x_accessors =
 {
-	.get = core_reg_get,
-	.set = core_reg_set,
+	.get = reg_x_get,
+	.set = reg_x_set,
 };
 
 static int
-FPU_reg_set(reg *p_reg, uint8_t *buf)
-{
-	LOG_ERROR("NOT IMPLEMENTED");
-	return ERROR_OK;
-}
-static int
-FPU_reg_get(reg *p_reg)
+reg_f_get(reg *p_reg)
 {
 	LOG_WARNING("NOT IMPLEMENTED");
 	return ERROR_OK;
 }
 
+static int
+reg_f_set(reg *p_reg, uint8_t *buf)
+{
+	LOG_ERROR("NOT IMPLEMENTED");
+	return ERROR_OK;
+}
+
 static reg_arch_type const FP_reg_access_type =
 {
-	.get = FPU_reg_get,
-	.set = FPU_reg_set,
+	.get = reg_f_get,
+	.set = reg_f_set,
 };
 
 
@@ -450,7 +467,7 @@ general_purpose_reg_construct(char const* const p_name, uint32_t const number, t
 		.reg_data_type = NULL,
 		.group = NULL,
 		.arch_info = p_target,
-		.type = &general_reg_access_type,
+		.type = &reg_x_accessors,
 	};
 	return the_reg;
 }
