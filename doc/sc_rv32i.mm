@@ -32,8 +32,8 @@
 <node CREATED="1454347300025" ID="ID_114848432" MODIFIED="1454347301893" TEXT="32"/>
 </node>
 </node>
-<node CREATED="1453990897327" FOLDED="true" ID="ID_1353330392" MODIFIED="1455791163229" TEXT="IR">
-<node CREATED="1453990936877" ID="ID_1351800159" MODIFIED="1455294766236" TEXT="TAP_INSTR_DBG_ID">
+<node CREATED="1453990897327" ID="ID_1353330392" MODIFIED="1455898609533" TEXT="IR">
+<node CREATED="1453990936877" FOLDED="true" ID="ID_1351800159" MODIFIED="1455898615908" TEXT="TAP_INSTR_DBG_ID">
 <icon BUILTIN="help"/>
 <node CREATED="1455029354329" ID="ID_579530185" MODIFIED="1455029356348" TEXT="id">
 <node CREATED="1453994418740" ID="ID_1878969326" MODIFIED="1454082586131" TEXT="4&apos;h3"/>
@@ -45,7 +45,7 @@
 <node CREATED="1455294837655" ID="ID_836324951" MODIFIED="1455294857962" TEXT="0x10000001"/>
 </node>
 </node>
-<node CREATED="1453990946316" ID="ID_374925287" MODIFIED="1455717735885" TEXT="TAP_INSTR_BLD_ID">
+<node CREATED="1453990946316" FOLDED="true" ID="ID_374925287" MODIFIED="1455898617396" TEXT="TAP_INSTR_BLD_ID">
 <icon BUILTIN="help"/>
 <node CREATED="1455029380322" ID="ID_1625287171" MODIFIED="1455029381724" TEXT="id">
 <node CREATED="1453994431564" ID="ID_1530358231" MODIFIED="1454082596587" TEXT="4&apos;h4"/>
@@ -57,7 +57,7 @@
 <node CREATED="1455294837655" ID="ID_249587386" MODIFIED="1455294921418" TEXT="0x16021200"/>
 </node>
 </node>
-<node CREATED="1453990955197" ID="ID_833610719" MODIFIED="1455557366755" TEXT="TAP_INSTR_DBG_STATUS">
+<node CREATED="1453990955197" FOLDED="true" ID="ID_833610719" MODIFIED="1455898621852" TEXT="TAP_INSTR_DBG_STATUS">
 <icon BUILTIN="help"/>
 <node CREATED="1455029405656" ID="ID_1124228071" MODIFIED="1455029408411" TEXT="id">
 <node CREATED="1453994444259" ID="ID_1355933067" MODIFIED="1455029401387" TEXT="4&apos;h5"/>
@@ -137,7 +137,7 @@
 </node>
 </node>
 </node>
-<node CREATED="1453990963324" ID="ID_395511345" MODIFIED="1455294236397" TEXT="TAP_INSTR_DAP_CTRL">
+<node CREATED="1453990963324" ID="ID_395511345" MODIFIED="1455898628553" TEXT="TAP_INSTR_DAP_CTRL">
 <node CREATED="1453994469196" ID="ID_1022391779" MODIFIED="1453994596926" TEXT="4&apos;h6">
 <node CREATED="1453994518844" ID="ID_1784918980" MODIFIED="1455294458440" TEXT="data">
 <node CREATED="1455294401512" ID="ID_1008219917" MODIFIED="1455294408692" TEXT="OUT">
@@ -271,7 +271,7 @@
 <node CREATED="1455030963648" ID="ID_1840331698" MODIFIED="1455030966955" TEXT="4+32"/>
 </node>
 <node CREATED="1455030815727" ID="ID_664078593" MODIFIED="1455559424919" TEXT="data">
-<node CREATED="1455030824800" FOLDED="true" ID="ID_630863690" MODIFIED="1455646992239" STYLE="fork" TEXT="guard[fgrp==DBGC_FGRP_HART_REGTRANS]">
+<node CREATED="1455030824800" ID="ID_630863690" MODIFIED="1455899059858" STYLE="fork" TEXT="guard[fgrp==DBGC_FGRP_HART_REGTRANS]">
 <cloud/>
 <node CREATED="1455034892437" ID="ID_1961116868" MODIFIED="1455058353406" TEXT="">
 <node CREATED="1453991273804" ID="ID_1302162387" MODIFIED="1455100840157" STYLE="fork" TEXT="IN">
@@ -316,7 +316,7 @@
 <linktarget COLOR="#b0b0b0" DESTINATION="ID_1416367125" ENDARROW="Default" ENDINCLINATION="222;24;" ID="Arrow_ID_1744401577" SOURCE="ID_911883192" STARTARROW="None" STARTINCLINATION="46;-46;"/>
 <node CREATED="1455033685466" ID="ID_1066148619" MODIFIED="1455058353413" TEXT="4"/>
 </node>
-<node CREATED="1453992491661" ID="ID_62694625" MODIFIED="1455058353413" TEXT="DBGC_HART_REGS_DBG_DATA">
+<node CREATED="1453992491661" ID="ID_62694625" MODIFIED="1455899072723" TEXT="DBGC_HART_REGS_DBG_DATA">
 <linktarget COLOR="#b0b0b0" DESTINATION="ID_62694625" ENDARROW="Default" ENDINCLINATION="192;74;" ID="Arrow_ID_431825006" SOURCE="ID_50521212" STARTARROW="None" STARTINCLINATION="428;0;"/>
 <linktarget COLOR="#b0b0b0" DESTINATION="ID_62694625" ENDARROW="Default" ENDINCLINATION="443;0;" ID="Arrow_ID_79273284" SOURCE="ID_1490271228" STARTARROW="None" STARTINCLINATION="229;-65;"/>
 <node CREATED="1455033688930" ID="ID_1098004486" MODIFIED="1455058353414" TEXT="5"/>
@@ -354,10 +354,10 @@
 </node>
 <node CREATED="1455033563260" ID="ID_596494749" MODIFIED="1455646846432" TEXT="guard[index==DBGC_HART_REGS_DBG_STS]">
 <node CREATED="1455028699907" ID="ID_1408703743" MODIFIED="1455058353415" TEXT="// Hart Debug Status Register (HART_DBG_STS, HDSR)&#xa;"/>
-<node CREATED="1455029013552" FOLDED="true" ID="ID_1509798120" MODIFIED="1455058353416" TEXT="typedef enum int { } type_dbgc_hart_dbg_sts_reg_bits_e;&#xa;">
+<node CREATED="1455029013552" ID="ID_1509798120" MODIFIED="1456328046822" TEXT="typedef enum int { } type_dbgc_hart_dbg_sts_reg_bits_e;&#xa;">
 <node CREATED="1455031297411" ID="ID_533627002" MODIFIED="1455031303482" TEXT="    DBGC_HART_HDSR_DMODE_BIT            = 0,&#xa;    DBGC_HART_HDSR_RST_BIT              = 1,&#xa;    DBGC_HART_HDSR_RST_STKY_BIT         = 2,&#xa;    DBGC_HART_HDSR_EXCEPT_BIT           = 3,&#xa;    DBGC_HART_HDSR_RSRV0_BIT_R          = 4,&#xa;    DBGC_HART_HDSR_RSRV0_BIT_L          = 15,&#xa;    DBGC_HART_HDSR_ERR_BIT              = 16,&#xa;    DBGC_HART_HDSR_ERR_HWTHREAD_BIT     = 17,&#xa;    DBGC_HART_HDSR_ERR_DAP_OPCODE_BIT   = 18,&#xa;    DBGC_HART_HDSR_ERR_DBGCMD_NACK_BIT  = 19,&#xa;    DBGC_HART_HDSR_RSRV1_BIT_R          = 20,&#xa;    DBGC_HART_HDSR_RSRV1_BIT_L          = DBGC_DAP_DATA_REG_WIDTH-2,// Bit 30&#xa;    DBGC_HART_HDSR_LOCK_STKY_BIT        = DBGC_DAP_DATA_REG_WIDTH-1&#xa;"/>
 </node>
-<node CREATED="1455028775299" ID="ID_960413791" MODIFIED="1455058353416" TEXT="typedef struct packed { } type_dbgc_hart_dbg_sts_reg_s;&#xa;">
+<node CREATED="1455028775299" ID="ID_960413791" MODIFIED="1456328054980" TEXT="typedef struct packed { } type_dbgc_hart_dbg_sts_reg_s;&#xa;">
 <node CREATED="1455031337228" ID="ID_450199081" MODIFIED="1455058353416" TEXT="    logic       lock_sticky; ">
 <node CREATED="1455034078080" ID="ID_1587504383" MODIFIED="1455058353417" TEXT="bit">
 <node CREATED="1455034083463" ID="ID_874325899" MODIFIED="1455058353417" TEXT="31"/>
@@ -500,7 +500,7 @@
 </node>
 <node CREATED="1454432995599" ID="ID_628210395" MODIFIED="1455057316461" TEXT="DAP_OPCODE_EXT set/clear dmode(halt), clear all sticky bits."/>
 </node>
-<node CREATED="1453992394957" ID="ID_518519869" MODIFIED="1455559666637" TEXT="DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC">
+<node CREATED="1453992394957" ID="ID_518519869" MODIFIED="1455898914237" TEXT="DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC">
 <node CREATED="1455032661038" ID="ID_1745147361" MODIFIED="1455057351555" TEXT="id">
 <node CREATED="1455032665807" ID="ID_1374328950" MODIFIED="1455032670930" TEXT="1"/>
 </node>
@@ -557,7 +557,7 @@
 </node>
 <node CREATED="1455030884567" ID="ID_1746551166" MODIFIED="1455647116892" TEXT="guard[fgrp==DBGC_FGRP_CORE_REGTRANS]">
 <icon BUILTIN="help"/>
-<node CREATED="1453991273804" ID="ID_1258976732" MODIFIED="1455036795242" TEXT="IN">
+<node CREATED="1453991273804" FOLDED="true" ID="ID_1258976732" MODIFIED="1455899056475" TEXT="IN">
 <cloud/>
 <node CREATED="1453991283764" ID="ID_733452593" MODIFIED="1455036799503" TEXT="DAP_OPSTATUS">
 <node CREATED="1453991294675" ID="ID_180080945" MODIFIED="1453993514151" TEXT="4-bits">
@@ -635,16 +635,16 @@
 </node>
 </node>
 <node CREATED="1455189547574" ID="ID_755679923" MODIFIED="1455722487783" TEXT="TAPC/DC verificaiton plan section">
-<node CREATED="1455722487768" ID="ID_1336197159" MODIFIED="1455722504825" TEXT="environment setup">
+<node CREATED="1455722487768" ID="ID_1336197159" MODIFIED="1456318225669" TEXT="environment setup">
 <node CREATED="1455720088192" ID="ID_250554208" MODIFIED="1455720106277" TEXT="export OOCD_ROOT=~/openocd"/>
 </node>
-<node CREATED="1455719966961" ID="ID_262737521" MODIFIED="1455719980565" TEXT="Build openocd">
+<node CREATED="1455719966961" ID="ID_262737521" MODIFIED="1456318226949" TEXT="Build openocd">
 <node CREATED="1455719983819" ID="ID_1510002177" MODIFIED="1455720122884" TEXT="clone --recursive https://github.com/syntacore/openocd.git ${OOCD_ROOT}"/>
 <node CREATED="1455720127953" ID="ID_66258334" MODIFIED="1455720151605" TEXT="./bootstrap"/>
 <node CREATED="1455720152816" ID="ID_1326788678" MODIFIED="1455720185029" TEXT="../configure --enable-maintainer-mode --disable-werror --enable-ftdi"/>
 <node CREATED="1455720188097" ID="ID_1864826059" MODIFIED="1455720192565" TEXT="make"/>
 </node>
-<node CREATED="1455719951394" ID="ID_839104209" MODIFIED="1455720277235" TEXT="OpenOCD functional check">
+<node CREATED="1455719951394" ID="ID_839104209" MODIFIED="1456318637420" TEXT="OpenOCD functional check">
 <node CREATED="1455719961442" ID="ID_1887513640" MODIFIED="1455720703583" TEXT="Check OpenOCD functionality in combination">
 <node CREATED="1455720703589" ID="ID_415207853" MODIFIED="1455720719716" TEXT="Amontec dongle JTAG cable"/>
 <node CREATED="1455720719718" ID="ID_1282957764" MODIFIED="1455720719718" TEXT="lpc2478 board."/>
@@ -661,7 +661,7 @@
 </node>
 </node>
 </node>
-<node CREATED="1455189578129" ID="ID_488154725" MODIFIED="1455727367400" TEXT="TAP-level checks">
+<node CREATED="1455189578129" ID="ID_488154725" MODIFIED="1456319020029" TEXT="TAP-level checks">
 <node CREATED="1455720782176" ID="ID_1606863130" MODIFIED="1455721916370" TEXT="manual step by step tap init"/>
 <node CREATED="1455720494187" ID="ID_1557146179" MODIFIED="1455720747164" TEXT="terminal sessions">
 <node CREATED="1455720496922" HGAP="18" ID="ID_868636231" MODIFIED="1455721953122" TEXT="term1" VSHIFT="42">
@@ -715,7 +715,7 @@
 <node CREATED="1455791319582" ID="ID_551510246" MODIFIED="1455791321642" TEXT="sudo ${OOCD_ROOT}/src/openocd -s ${OOCD_ROOT}/tcl -c &apos;debug_level 3&apos; -f interface/ftdi/jtagkey.cfg -f target/syntacore_riscv32i.cfg |&amp; tee openocd.log"/>
 </node>
 <node CREATED="1455791332972" ID="ID_1558612081" MODIFIED="1455791854729" TEXT="term2">
-<node CREATED="1455285928188" ID="ID_802996980" MODIFIED="1455285933266" TEXT="telnet localhost 4444">
+<node CREATED="1455285928188" ID="ID_802996980" MODIFIED="1455892544804" TEXT="telnet localhost 4444">
 <node CREATED="1455791365508" ID="ID_1216874801" MODIFIED="1455791368617" TEXT="poll off"/>
 <node CREATED="1455281140621" ID="ID_329133424" MODIFIED="1455720870205" TEXT="IDCODE check">
 <node CREATED="1455720870200" ID="ID_1568576833" MODIFIED="1455720878172" TEXT="command">
@@ -749,8 +749,397 @@
 <node CREATED="1455717842363" ID="ID_1008416259" MODIFIED="1455717852680" TEXT="0x80000000"/>
 </node>
 </node>
+<node CREATED="1455892484096" ID="ID_80281707" MODIFIED="1455892519365" TEXT="sc_rv32i.cpu&#xa;      target command group (command valid any time)&#xa;">
+<node CREATED="1455892519371" ID="ID_1362546070" MODIFIED="1455897919116" TEXT="sc_rv32i.cpu arp_examine">
+<node CREATED="1455892574936" ID="ID_996426496" MODIFIED="1455892574937" TEXT="used internally for reset processing&#xa;"/>
+</node>
+<node CREATED="1455892537827" ID="ID_131937557" MODIFIED="1455892599542" TEXT="sc_rv32i.cpu arp_halt ">
+<node CREATED="1455892591768" ID="ID_1537222595" MODIFIED="1455892591768" TEXT="used internally for reset processing&#xa;"/>
+</node>
+<node CREATED="1455892533203" ID="ID_1260930339" MODIFIED="1455892691620" TEXT="sc_rv32i.cpu arp_halt_gdb   ">
+<node CREATED="1455892662360" ID="ID_742245645" MODIFIED="1455892731749" TEXT="used internally for reset processing to halt GDB "/>
+</node>
+<node CREATED="1455892529467" ID="ID_1760534282" MODIFIED="1455892697949" TEXT="sc_rv32i.cpu arp_poll">
+<node CREATED="1455892669176" ID="ID_1752117260" MODIFIED="1455892669177" TEXT=" used internally for reset processing&#xa;"/>
+</node>
+<node CREATED="1455892525789" ID="ID_1769329784" MODIFIED="1455892718901" STYLE="fork" TEXT="sc_rv32i.cpu arp_reset">
+<node CREATED="1455892712719" ID="ID_123233038" MODIFIED="1455892726661" TEXT="used internally for reset processing"/>
+</node>
+<node CREATED="1455892512466" ID="ID_1066334954" MODIFIED="1455892739764" TEXT="sc_rv32i.cpu arp_waitstate">
+<node CREATED="1455892739766" ID="ID_206411266" MODIFIED="1455892739768" TEXT="used internally for reset processing&#xa;"/>
+</node>
+<node CREATED="1455892653489" ID="ID_1314839767" MODIFIED="1455892755477" TEXT="sc_rv32i.cpu array2mem arrayname bitwidth address count">
+<node CREATED="1455892755479" ID="ID_1651895772" MODIFIED="1455892755480" TEXT="Writes Tcl array of 8/16/32 bit numbers to target memory&#xa;"/>
+</node>
+<node CREATED="1455892648218" ID="ID_1401759684" MODIFIED="1455892766364" TEXT="sc_rv32i.cpu cget target_attribute">
+<node CREATED="1455892766366" ID="ID_940607030" MODIFIED="1455892766367" TEXT="returns the specified target attribute (command valid any time)&#xa;"/>
+</node>
+<node CREATED="1455892644681" ID="ID_1641643854" MODIFIED="1455892774532" TEXT="sc_rv32i.cpu configure [target_attribute ...]">
+<node CREATED="1455892774534" ID="ID_1307578618" MODIFIED="1455892774535" TEXT="configure a new target for use (configuration command)&#xa;"/>
+</node>
+<node CREATED="1455892640536" ID="ID_691779305" MODIFIED="1455892787557" TEXT="sc_rv32i.cpu curstate">
+<node CREATED="1455892782583" ID="ID_1336842183" MODIFIED="1455892782583" TEXT="displays the current state of this target&#xa;"/>
+</node>
+<node CREATED="1455892637309" ID="ID_509329601" MODIFIED="1455897361093" TEXT="  sc_rv32i.cpu eventlist">
+<node CREATED="1455897361096" ID="ID_76939679" MODIFIED="1455897361096" TEXT="displays a table of events defined for this target"/>
+</node>
+<node CREATED="1455892633282" ID="ID_739118555" MODIFIED="1455897371757" TEXT="  sc_rv32i.cpu invoke-event event_name">
+<node CREATED="1455897371759" ID="ID_1013455519" MODIFIED="1455897371760" TEXT="invoke handler for specified event"/>
+</node>
+<node CREATED="1455892630282" ID="ID_1692184097" MODIFIED="1455897825934" TEXT="  sc_rv32i.cpu mdb address [count]">
+<node CREATED="1455897825936" ID="ID_965616006" MODIFIED="1455897825936" TEXT="Display target memory as 8-bit bytes&#xa;"/>
+</node>
+<node CREATED="1455892626610" ID="ID_1412272385" MODIFIED="1455897834605" TEXT="  sc_rv32i.cpu mdh address [count]">
+<node CREATED="1455897834607" ID="ID_167785765" MODIFIED="1455897834607" TEXT="Display target memory as 16-bit half-words&#xa;"/>
+</node>
+<node CREATED="1455892622899" ID="ID_1005584852" MODIFIED="1455897843652" TEXT="  sc_rv32i.cpu mdw address [count]">
+<node CREATED="1455897843654" ID="ID_1060824709" MODIFIED="1455897843655" TEXT="Display target memory as 32-bit words&#xa;"/>
+</node>
+<node CREATED="1455892618972" ID="ID_661621286" MODIFIED="1455897855397" TEXT="  sc_rv32i.cpu mem2array arrayname bitwidth address count">
+<node CREATED="1455897855399" ID="ID_1315107151" MODIFIED="1455897855400" TEXT="Loads Tcl array of 8/16/32 bit numbers from target memory"/>
+</node>
+<node CREATED="1455892615707" ID="ID_1346967697" MODIFIED="1455897863533" TEXT="  sc_rv32i.cpu mwb address data [count]">
+<node CREATED="1455897863535" ID="ID_1760229156" MODIFIED="1455897863535" TEXT="Write byte(s) to target memory&#xa;"/>
+</node>
+<node CREATED="1455892612500" ID="ID_736208279" MODIFIED="1455897871029" TEXT="  sc_rv32i.cpu mwh address data [count]">
+<node CREATED="1455897871031" ID="ID_5000878" MODIFIED="1455897871031" TEXT="Write 16-bit half-word(s) to target memory&#xa;"/>
+</node>
+<node CREATED="1455892609054" ID="ID_209582408" MODIFIED="1455897878868" TEXT="  sc_rv32i.cpu mww address data [count]">
+<node CREATED="1455897878870" ID="ID_1891492409" MODIFIED="1455897878871" TEXT="Write 32-bit word(s) to target memory&#xa;"/>
 </node>
 </node>
+</node>
+</node>
+</node>
+</node>
+<node CREATED="1456318411074" FOLDED="true" ID="ID_737665173" MODIFIED="1456322597533" TEXT="">
+<node CREATED="1455720410416" ID="ID_1371151150" MODIFIED="1456320861779">
+<richcontent TYPE="NODE">&lt;html&gt;
+  &lt;body&gt;
+    &lt;h1&gt;
+      Environment setup
+    &lt;/h1&gt;
+    &lt;p&gt;
+      export OOCD_ROOT=~/openocd
+    &lt;/p&gt;
+    &lt;h1&gt;
+      Build openocd
+    &lt;/h1&gt;
+    &lt;p&gt;
+      clone --recursive https://github.com/syntacore/openocd.git&lt;br&gt;${OOCD_ROOT} 
+      ./bootstrap&lt;br&gt;../configure --enable-maintainer-mode --disable-werror 
+      --enable-ftdi&lt;br&gt;make
+    &lt;/p&gt;
+    &lt;h1&gt;
+      OpenOCD functional check
+    &lt;/h1&gt;
+    &lt;p&gt;
+      Check OpenOCD functionality for combination Amontec dongle JTAG cable 
+      and lpc2478 board.
+    &lt;/p&gt;
+    &lt;h2&gt;
+      terminal sessions
+    &lt;/h2&gt;
+    &lt;p&gt;
+      Run OpenOCD in first terminal window:
+    &lt;/p&gt;
+    &lt;p&gt;
+      sudo ${OOCD_ROOT}/src/openocd -s ${OOCD_ROOT}/tcl -c 'debug_level 3' -f 
+      interface/ftdi/jtagkey.cfg -f target/lpc2478.cfg
+    &lt;/p&gt;
+    &lt;p&gt;
+      Run telnet session with OpenOCD
+    &lt;/p&gt;
+    &lt;p&gt;
+      telnet localhost 4444
+    &lt;/p&gt;
+    &lt;p&gt;
+      Try to reset
+    &lt;/p&gt;
+    &lt;p&gt;
+      Try to halt
+    &lt;/p&gt;
+    &lt;p&gt;
+      read memory
+    &lt;/p&gt;
+    &lt;p&gt;
+      write memory
+    &lt;/p&gt;
+    &lt;h1&gt;
+      SC_RV32I FPGA check
+    &lt;/h1&gt;
+    &lt;h2&gt;
+      TAP-level checks
+    &lt;/h2&gt;
+    &lt;p&gt;
+      Manual step by step tap init
+    &lt;/p&gt;
+    &lt;p&gt;
+      Run OpenOCD
+    &lt;/p&gt;
+    &lt;p&gt;
+      sudo ${OOCD_ROOT}/src/openocd -s ${OOCD_ROOT}/tcl -c 'debug_level 3' -f 
+      interface/ftdi/jtagkey.cfg -c 'noinit'
+    &lt;/p&gt;
+    &lt;p&gt;
+      Open telnet session with OpenOCD
+    &lt;/p&gt;
+    &lt;p&gt;
+      telnet localhost 4444
+    &lt;/p&gt;
+    &lt;h3&gt;
+      Setup DC TAP
+    &lt;/h3&gt;
+    &lt;p&gt;
+      jtag_rclk 2000
+    &lt;/p&gt;
+    &lt;p&gt;
+      reset_config trst_and_srst
+    &lt;/p&gt;
+    &lt;p&gt;
+      jtag newtap sc_rv32i cpu -irlen 4 -expected-id 0xc0dedeb1
+    &lt;/p&gt;
+    &lt;p&gt;
+      target create sc_rv32i.cpu syntacore_riscv32i -endian little 
+      -chain-position sc_rv32i.cpu
+    &lt;/p&gt;
+    &lt;h3&gt;
+      IDCODE check
+    &lt;/h3&gt;
+    &lt;p&gt;
+      irscan sc_rv32i.cpu 0xE; drscan sc_rv32i.cpu 32 0
+    &lt;/p&gt;
+    &lt;p&gt;
+      Check that result is 0xC0DEDEB1
+    &lt;/p&gt;
+    &lt;h3&gt;
+      TAP_INSTR_DBG_ID check
+    &lt;/h3&gt;
+    &lt;p&gt;
+      irscan sc_rv32i.cpu 0x3; drscan sc_rv32i.cpu 32 0
+    &lt;/p&gt;
+    &lt;p&gt;
+      Check that result is 0x10000001
+    &lt;/p&gt;
+    &lt;h3&gt;
+      TAP_INSTR_BLD_ID check
+    &lt;/h3&gt;
+    &lt;p&gt;
+      irscan sc_rv32i.cpu 0x4; drscan sc_rv32i.cpu 32 0
+    &lt;/p&gt;
+    &lt;p&gt;
+      Check that result is 0x16021200 or other valid date
+    &lt;/p&gt;
+    &lt;h3&gt;
+      TAP_INSTR_DBG_STATUS check
+    &lt;/h3&gt;
+    &lt;p&gt;
+      irscan sc_rv32i.cpu 0x5; drscan sc_rv32i.cpu 32 0
+    &lt;/p&gt;
+    &lt;p&gt;
+      Check that result is 0x80000000
+    &lt;/p&gt;
+    &lt;h3&gt;
+      Write and read TAP_INSTR_DAP_CTRL
+    &lt;/h3&gt;
+    &lt;h2&gt;
+      OpenOCD syntacore_riscv32 target check
+    &lt;/h2&gt;
+    &lt;p&gt;
+      Run OpenOCD with options:
+    &lt;/p&gt;
+    &lt;p&gt;
+      sudo ${OOCD_ROOT}/src/openocd -s ${OOCD_ROOT}/tcl -c 'debug_level 3' -f 
+      interface/ftdi/jtagkey.cfg -f target/syntacore_riscv32i.cfg |&amp;amp; tee 
+      openocd.log
+    &lt;/p&gt;
+    &lt;p&gt;
+      Run OpenOCD telnet session
+    &lt;/p&gt;
+    &lt;p&gt;
+      telnet localhost 4444
+    &lt;/p&gt;
+    &lt;p&gt;
+      Stop polling:
+    &lt;/p&gt;
+    &lt;p&gt;
+      poll off
+    &lt;/p&gt;
+    &lt;h3&gt;
+      Regression tests for low-level TAP commands
+    &lt;/h3&gt;
+    &lt;p&gt;
+      Repeat all commands to verify that low-level functionality still active 
+      after target init
+    &lt;/p&gt;
+    &lt;h4&gt;
+      IDCODE check
+    &lt;/h4&gt;
+    &lt;p&gt;
+      irscan sc_rv32i.cpu 0xE; drscan sc_rv32i.cpu 32 0
+    &lt;/p&gt;
+    &lt;p&gt;
+      Check
+    &lt;/p&gt;
+    &lt;p&gt;
+      0xC0DEDEB1
+    &lt;/p&gt;
+    &lt;h4&gt;
+      TAP_INSTR_DBG_ID check
+    &lt;/h4&gt;
+    &lt;p&gt;
+      irscan sc_rv32i.cpu 0x3; drscan sc_rv32i.cpu 32 0
+    &lt;/p&gt;
+    &lt;p&gt;
+      Check
+    &lt;/p&gt;
+    &lt;p&gt;
+      0x10000001
+    &lt;/p&gt;
+    &lt;h4&gt;
+      TAP_INSTR_BLD_ID check
+    &lt;/h4&gt;
+    &lt;p&gt;
+      irscan sc_rv32i.cpu 0x4; drscan sc_rv32i.cpu 32 0
+    &lt;/p&gt;
+    &lt;p&gt;
+      result
+    &lt;/p&gt;
+    &lt;p&gt;
+      0x16021200
+    &lt;/p&gt;
+    &lt;h4&gt;
+      TAP_INSTR_DBG_STATUS check
+    &lt;/h4&gt;
+    &lt;p&gt;
+      irscan sc_rv32i.cpu 0x5; drscan sc_rv32i.cpu 32 0
+    &lt;/p&gt;
+    &lt;p&gt;
+      result
+    &lt;/p&gt;
+    &lt;p&gt;
+      0x80000000
+    &lt;/p&gt;
+    &lt;h3&gt;
+      sc_rv32i.cpu target command group
+    &lt;/h3&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu arp_examine
+    &lt;/h4&gt;
+    &lt;p&gt;
+      used internally for reset processing
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu arp_halt
+    &lt;/h4&gt;
+    &lt;p&gt;
+      used internally for reset processing
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu arp_halt_gdb
+    &lt;/h4&gt;
+    &lt;p&gt;
+      used internally for reset processing to halt GDB
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu arp_poll
+    &lt;/h4&gt;
+    &lt;p&gt;
+      used internally for reset processing
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu arp_reset
+    &lt;/h4&gt;
+    &lt;p&gt;
+      used internally for reset processing
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu arp_waitstate
+    &lt;/h4&gt;
+    &lt;p&gt;
+      used internally for reset processing
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu array2mem arrayname bitwidth address count
+    &lt;/h4&gt;
+    &lt;p&gt;
+      Writes Tcl array of 8/16/32 bit numbers to target memory
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu cget target_attribute
+    &lt;/h4&gt;
+    &lt;p&gt;
+      returns the specified target attribute (command valid any time)
+    &lt;/p&gt;
+    &lt;p&gt;
+      sc_rv32i.cpu configure [target_attribute ...]
+    &lt;/p&gt;
+    &lt;p&gt;
+      configure a new target for use (configuration command)
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu curstate
+    &lt;/h4&gt;
+    &lt;p&gt;
+      displays the current state of this target
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu eventlist
+    &lt;/h4&gt;
+    &lt;p&gt;
+      displays a table of events defined for this target
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu invoke-event event_name
+    &lt;/h4&gt;
+    &lt;p&gt;
+      invoke handler for specified event
+    &lt;/p&gt;
+    &lt;h&gt;
+    sc_rv32i.cpu mdb address [count]
+
+    &lt;p&gt;
+      Display target memory as 8-bit bytes
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu mdh address [count]
+    &lt;/h4&gt;
+    &lt;p&gt;
+      Display target memory as 16-bit half-words
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu mdw address [count]
+    &lt;/h4&gt;
+    &lt;p&gt;
+      Display target memory as 32-bit words
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu mem2array arrayname bitwidth address count
+    &lt;/h4&gt;
+    &lt;p&gt;
+      Loads Tcl array of 8/16/32 bit numbers from target memory
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu mwb address data [count]
+    &lt;/h4&gt;
+    &lt;p&gt;
+      Write byte(s) to target memory
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu mwh address data [count]
+    &lt;/h4&gt;
+    &lt;p&gt;
+      Write 16-bit half-word(s) to target memory
+    &lt;/p&gt;
+    &lt;h4&gt;
+      sc_rv32i.cpu mww address data [count]
+    &lt;/h4&gt;
+    &lt;p&gt;
+      Write 32-bit word(s) to target memory
+    &lt;/p&gt;
+  &lt;/body&gt;
+&lt;/html&gt;
+</richcontent>
 </node>
 </node>
 </node>
@@ -794,7 +1183,7 @@
 </node>
 </node>
 </node>
-<node CREATED="1455722865859" FOLDED="true" ID="ID_689833967" MODIFIED="1455727276172" POSITION="left" TEXT="OpenOCD memo">
+<node CREATED="1455722865859" FOLDED="true" ID="ID_689833967" MODIFIED="1455897794214" POSITION="left" TEXT="OpenOCD memo">
 <node CREATED="1455722870716" ID="ID_1279114424" MODIFIED="1455724356814">
 <richcontent TYPE="NODE"><html>
   <head>
