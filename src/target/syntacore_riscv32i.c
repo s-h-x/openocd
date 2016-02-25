@@ -26,7 +26,7 @@
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
 #define BIT_NUM_TO_MASK(bit_num) (1 << (bit_num))
 #define LOW_BITS_MASK(n) (~(~0 << (n)))
-#define NUM_BITS_TO_SIZE(num_bits) ( ( (size_t)(num_bits) + (CHAR_BIT - 1) ) / CHAR_BIT )
+#define NUM_BITS_TO_SIZE(num_bits) ( ( (size_t)(num_bits) + (8 - 1) ) / 8 )
 
 #define x0 0u
 #define zero x0
@@ -35,54 +35,55 @@
 #define x14 14u
 #define sp x14
 
-#define RV_INSTR_EXTRACT_FIELD(bits, first_bit, last_bit) (((uint32_t)(bits) >> (first_bit)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit)))
-#define RV_INSTR_SET_FIELD(bits, first_bit, last_bit)     (((uint32_t)(bits) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
+typedef uint32_t instr_type;
+#define EXTRACT_FIELD(bits, first_bit, last_bit) (((instr_type)(bits) >> (first_bit)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit)))
+#define MAKE_FIELD(bits, first_bit, last_bit)     (((instr_type)(bits) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
 
 #define RV_INSTR_R_TYPE(func7, rs2, rs1, func3, rd, opcode) ( \
-    RV_INSTR_SET_FIELD((func7), 25, 31) | \
-    RV_INSTR_SET_FIELD((rs2),   20, 24) | \
-    RV_INSTR_SET_FIELD((rs1),   15, 19) | \
-    RV_INSTR_SET_FIELD((func3), 12, 14) | \
-    RV_INSTR_SET_FIELD((rd),     7, 11) | \
-    RV_INSTR_SET_FIELD((opcode), 0,  6))
+    MAKE_FIELD((func7), 25, 31) | \
+    MAKE_FIELD((rs2),   20, 24) | \
+    MAKE_FIELD((rs1),   15, 19) | \
+    MAKE_FIELD((func3), 12, 14) | \
+    MAKE_FIELD((rd),     7, 11) | \
+    MAKE_FIELD((opcode), 0,  6))
 
 #define RV_INSTR_I_TYPE(imm, rs1, func3, rd, opcode) ( \
-    RV_INSTR_SET_FIELD((imm),   20, 31) | \
-    RV_INSTR_SET_FIELD((rs1),   15, 19) | \
-    RV_INSTR_SET_FIELD((func3), 12, 14) | \
-    RV_INSTR_SET_FIELD((rd),     7, 11) | \
-    RV_INSTR_SET_FIELD((opcode), 0,  6))
+    MAKE_FIELD((imm),   20, 31) | \
+    MAKE_FIELD((rs1),   15, 19) | \
+    MAKE_FIELD((func3), 12, 14) | \
+    MAKE_FIELD((rd),     7, 11) | \
+    MAKE_FIELD((opcode), 0,  6))
 
 #define RV_INSTR_S_TYPE(imm, rs2, rs1, func3, opcode) ( \
-    RV_INSTR_SET_FIELD(RV_INSTR_EXTRACT_FIELD((imm), 5, 11), 25, 31) | \
-    RV_INSTR_SET_FIELD((rs2),                                20, 24) | \
-    RV_INSTR_SET_FIELD((rs1),                                15, 19) | \
-    RV_INSTR_SET_FIELD((func3),                              12, 14) | \
-    RV_INSTR_SET_FIELD(RV_INSTR_EXTRACT_FIELD((imm), 0,  4),  7, 11) | \
-    RV_INSTR_SET_FIELD((opcode),                              0,  6))
+    MAKE_FIELD(EXTRACT_FIELD((imm), 5, 11), 25, 31) | \
+    MAKE_FIELD((rs2),                                20, 24) | \
+    MAKE_FIELD((rs1),                                15, 19) | \
+    MAKE_FIELD((func3),                              12, 14) | \
+    MAKE_FIELD(EXTRACT_FIELD((imm), 0,  4),  7, 11) | \
+    MAKE_FIELD((opcode),                              0,  6))
 
 #define RV_INSTR_SB_TYPE(imm, rs2, rs1, func3, opcode) ( \
-    RV_INSTR_SET_FIELD(RV_INSTR_EXTRACT_FIELD((imm), 12, 12), 31, 31) | \
-    RV_INSTR_SET_FIELD(RV_INSTR_EXTRACT_FIELD((imm),  5, 10), 25, 30) | \
-    RV_INSTR_SET_FIELD((rs2),                                 20, 24) | \
-    RV_INSTR_SET_FIELD((rs1),                                 15, 19) | \
-    RV_INSTR_SET_FIELD((func3),                               12, 14) | \
-    RV_INSTR_SET_FIELD(RV_INSTR_EXTRACT_FIELD((imm),  1,  4),  8, 11) | \
-    RV_INSTR_SET_FIELD(RV_INSTR_EXTRACT_FIELD((imm), 11, 11),  7,  7) | \
-    RV_INSTR_SET_FIELD((opcode),                               0,  6))
+    MAKE_FIELD(EXTRACT_FIELD((imm), 12, 12), 31, 31) | \
+    MAKE_FIELD(EXTRACT_FIELD((imm),  5, 10), 25, 30) | \
+    MAKE_FIELD((rs2),                                 20, 24) | \
+    MAKE_FIELD((rs1),                                 15, 19) | \
+    MAKE_FIELD((func3),                               12, 14) | \
+    MAKE_FIELD(EXTRACT_FIELD((imm),  1,  4),  8, 11) | \
+    MAKE_FIELD(EXTRACT_FIELD((imm), 11, 11),  7,  7) | \
+    MAKE_FIELD((opcode),                               0,  6))
 
 #define RV_INSTR_U_TYPE(imm, rd, opcode) ( \
-    RV_INSTR_SET_FIELD(RV_INSTR_EXTRACT_FIELD((imm), 12, 31), 12, 31) | \
-    RV_INSTR_SET_FIELD((rd),                                   7, 11) | \
-    RV_INSTR_SET_FIELD((opcode),                               0,  6))
+    MAKE_FIELD(EXTRACT_FIELD((imm), 12, 31), 12, 31) | \
+    MAKE_FIELD((rd),                                   7, 11) | \
+    MAKE_FIELD((opcode),                               0,  6))
 
 #define RV_INSTR_UJ_TYPE(imm, rd, opcode) ( \
-    RV_INSTR_SET_FIELD(RV_INSTR_EXTRACT_FIELD((imm), 20, 20), 31, 31) | \
-    RV_INSTR_SET_FIELD(RV_INSTR_EXTRACT_FIELD((imm),  1, 10), 21, 30) | \
-    RV_INSTR_SET_FIELD(RV_INSTR_EXTRACT_FIELD((imm), 11, 11), 20, 20) | \
-    RV_INSTR_SET_FIELD(RV_INSTR_EXTRACT_FIELD((imm), 12, 19), 12, 19) | \
-    RV_INSTR_SET_FIELD((rd),                                   7, 11) | \
-    RV_INSTR_SET_FIELD((opcode),                               0,  6))
+    MAKE_FIELD(EXTRACT_FIELD((imm), 20, 20), 31, 31) | \
+    MAKE_FIELD(EXTRACT_FIELD((imm),  1, 10), 21, 30) | \
+    MAKE_FIELD(EXTRACT_FIELD((imm), 11, 11), 20, 20) | \
+    MAKE_FIELD(EXTRACT_FIELD((imm), 12, 19), 12, 19) | \
+    MAKE_FIELD((rd),                                   7, 11) | \
+    MAKE_FIELD((opcode),                               0,  6))
 
 #define RV_ADD(rd, rs1, rs2) RV_INSTR_R_TYPE(0u, rs2, rs1, 0u, rd, 0x33u)
 #define RV_ADDI(rd, rs1, imm) RV_INSTR_I_TYPE(imm, rs1, 0, rd, 0x13)
@@ -189,6 +190,13 @@ enum
 	DBGC_CORE_REGS_DBG_CMD = 3,
 };
 
+enum
+{
+	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_HALT = 0,
+	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME = 1,
+	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS = 2,
+};
+
 typedef struct reg_cache reg_cache;
 typedef struct reg_arch_type reg_arch_type;
 typedef struct target_type target_type;
@@ -281,7 +289,7 @@ DBG_STATUS_get(target const* const restrict p_target)
 	}
 
 	uint8_t result_buffer[NUM_BITS_TO_SIZE(TAP_LEN_DBG_STATUS)] = {};
-	scan_field field =
+	scan_field const field =
 	{
 		.num_bits = TAP_LEN_DBG_STATUS,
 		.in_value = result_buffer,
@@ -295,7 +303,7 @@ DBG_STATUS_get(target const* const restrict p_target)
 	}
 
 	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DBG_STATUS) <= sizeof(uint32_t));
-	uint32_t const result = buf_get_u32(result_buffer, 0, 32);
+	uint32_t const result = buf_get_u32(result_buffer, 0, TAP_LEN_DBG_STATUS);
 	LOG_DEBUG("drscan %s %d 0 --> %#0x", p_target->cmd_name, field.num_bits, result);
 
 	if ( (result & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) != (uint32_t)BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT) ) {
@@ -319,10 +327,15 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 		(dap_unit == DBGC_UNIT_ID_CORE && dap_group == DBGC_FGRP_HART_REGTRANS)
 		);
 
-	uint8_t const set_dap_unit_group = ((((uint8_t)dap_unit & LOW_BITS_MASK(TAP_LEN_DAP_CTRL_UNIT)) << TAP_LEN_DAP_CTRL_FGROUP) | (((uint8_t)dap_group) & LOW_BITS_MASK(TAP_LEN_DAP_CTRL_FGROUP))) & LOW_BITS_MASK(TAP_LEN_DAP_CTRL);
+	uint8_t const set_dap_unit_group =
+		MAKE_FIELD(
+		MAKE_FIELD(dap_unit, TAP_LEN_DAP_CTRL_FGROUP, TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1) |
+		MAKE_FIELD(dap_group, 0, TAP_LEN_DAP_CTRL_FGROUP - 1),
+		0,
+		TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1);
 	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof set_dap_unit_group);
+	/// set unit/group
 	{
-		/// set unit/group
 		IR_select(p_target, TAP_INSTR_DAP_CTRL);
 		if ( error_code__get(p_target) != ERROR_OK ) {
 			return;
@@ -350,8 +363,8 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 		}
 	}
 
+	/// verify unit/group
 	{
-		/// verify unit/group
 		IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
 		if ( error_code__get(p_target) != ERROR_OK ) {
 			return;
@@ -414,14 +427,25 @@ HART_DBG_STATUS_get(target const* const restrict p_target)
 static uint32_t
 DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT)
 {
+	assert(p_target);
 	IR_select(p_target, TAP_INSTR_DAP_CMD);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return 0;
 	}
-	uint32_t const dap_opcode_ext = DAP_OPCODE_EXT;
+	// Output fields
 	uint8_t const dap_opcode = DAP_OPCODE;
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE) == sizeof dap_opcode);
+
+	uint32_t const dap_opcode_ext = DAP_OPCODE_EXT;
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE_EXT) == sizeof dap_opcode_ext);
+
+	// Input fields
 	uint8_t DAP_OPSTATUS = 0;
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE) == sizeof DAP_OPSTATUS);
+
 	uint32_t DBG_DATA = 0;
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE_EXT) == sizeof DBG_DATA);
+
 	scan_field const fields[2] =
 	{
 		[0] = {
@@ -436,13 +460,10 @@ DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, ui
 				.in_value = &DAP_OPSTATUS,
 			},
 	};
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE_EXT) == sizeof dap_opcode_ext);
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE_EXT) == sizeof DBG_DATA);
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE) == sizeof dap_opcode);
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE) == sizeof DAP_OPSTATUS);
 
 	assert(p_target->tap);
 	jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
+
 	// enforse jtag_execute_queue() to get values
 	if ( error_code__update(p_target, jtag_execute_queue()) != ERROR_OK ) {
 		LOG_ERROR("JTAG error %d", error_code__get(p_target));
@@ -460,21 +481,22 @@ DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, ui
 
 /// @}
 
-/// @todo
+/// Execute single RISC-V instruction with data in csr_data
 static uint32_t
-exec_instruction(target *p_target, uint32_t inctruction, uint32_t csr_data)
+exec_instruction(target *p_target, uint32_t instruction, uint32_t csr_data)
 {
-	uint32_t result = 0;
+	uint32_t result = 0xBADBAD;
 	DAP_CTRL_REG_set(p_target, DBGC_UNIT_ID_HART_0, DBGC_FGRP_HART_DBGCMD);
 	if ( error_code__get(p_target) != ERROR_OK ) {
-		return result;
+		return 0xBADBAD00;
 	}
 
 	DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR, csr_data);
 	if ( error_code__get(p_target) != ERROR_OK ) {
-		return result;
+		return 0xBADBAD01;
 	}
-	result = DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC, inctruction);
+	result = DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC, instruction);
+	// @todo remove extra code
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return result;
 	}
@@ -482,6 +504,8 @@ exec_instruction(target *p_target, uint32_t inctruction, uint32_t csr_data)
 	return result;
 }
 
+/// GP registers accessors
+///@{
 static void
 reg_x_operation_conditions_check(reg *p_reg)
 {
@@ -530,7 +554,7 @@ reg_x_get(reg *p_reg)
 	}
 
 	/// update cache value
-	buf_set_u32(p_reg->value, 0, 32, value);
+	buf_set_u32(p_reg->value, 0, XLEN, value);
 	p_reg->valid = true;
 	/// force pc to be dirty
 	p_reg->dirty = false;
@@ -548,20 +572,26 @@ reg_x_set(reg *p_reg, uint8_t *buf)
 		return error_code__clear(p_target);
 	}
 
-	uint32_t const value = buf_get_u32(buf, 0, 32);
+	uint32_t const value = buf_get_u32(buf, 0, XLEN);
 	LOG_DEBUG("Updating cache for register %s <-- %08x", p_reg->name, value);
 
-	if ( p_reg->valid && (buf_get_u32(p_reg->value, 0, 32) == value) ) {
+	if ( p_reg->valid && (buf_get_u32(p_reg->value, 0, XLEN) == value) ) {
 		// skip same value
 		return error_code__clear(p_target);
 	}
 
-	buf_set_u32(p_reg->value, 0, 32, value);
+	buf_set_u32(p_reg->value, 0, XLEN, value);
 	p_reg->valid = true;
 	p_reg->dirty = true;
 
 	return error_code__clear(p_target);
 }
+
+static reg_arch_type const reg_x_accessors =
+{
+	.get = reg_x_get,
+	.set = reg_x_set,
+};
 
 static int
 reg_x0_get(reg *p_reg)
@@ -590,7 +620,7 @@ static int
 reg_pc_get(reg *p_reg)
 {
 	assert(p_reg);
-	assert(p_reg->number == 50);
+	assert(p_reg->number == 32);
 	assert(!(!p_reg->valid && p_reg->dirty));
 	if ( p_reg->valid ) {
 		// register cache already valid
@@ -600,11 +630,13 @@ reg_pc_get(reg *p_reg)
 	/// Find temporary GP register
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
+	
 	This_Arch* const p_arch_info = p_target->arch_info;
 	assert(p_arch_info);
+	
 	reg_cache* const p_reg_cache = p_target->reg_cache;
 	reg* const p_reg_begin = p_reg_cache->reg_list;
-	reg* const p_reg_end = p_reg_cache->reg_list + 32;
+	reg* const p_reg_end = p_reg_cache->reg_list + p_reg->number;
 	/// scan until found dirty register
 	reg* p_wrk_reg = p_reg_begin + 1;
 	for ( ; p_wrk_reg != p_reg_end; ++p_wrk_reg ) {
@@ -648,7 +680,7 @@ reg_pc_get(reg *p_reg)
 		return error_code__clear(p_target);
 	}
 	// update cached value
-	buf_set_u32(p_reg->value, 0, 32, value);
+	buf_set_u32(p_reg->value, 0, XLEN, value);
 	p_reg->valid = true;
 	p_reg->dirty = true;
 
@@ -660,12 +692,17 @@ static int
 reg_pc_set(reg *p_reg, uint8_t *buf)
 {
 	assert(p_reg);
-	assert(p_reg->number == 50);
+	assert(p_reg->number == 32);
 	assert(!(!p_reg->valid && p_reg->dirty));
 	if ( !p_reg->valid ) {
-		LOG_WARNING("force rewriting of pc register before read");
+		LOG_DEBUG("force rewriting of pc register before read");
 	}
-	memmove(p_reg->value, buf, NUM_BITS_TO_SIZE(p_reg->size));
+	if ( !p_reg->dirty ) {
+		// enforce read with temporary register allocation
+		target* const p_target = p_reg->arch_info;
+		error_code__update(p_target, reg_pc_get(p_reg));
+	}
+	buf_set_u32(p_reg->value, 0, p_reg->size, buf_get_u32(buf, 0, p_reg->size));
 	p_reg->valid = true;
 	p_reg->dirty = true;
 	return ERROR_OK;
@@ -675,13 +712,6 @@ static reg_arch_type const reg_pc_accessors =
 {
 	.get = reg_pc_get,
 	.set = reg_pc_set,
-};
-
-
-static reg_arch_type const reg_x_accessors =
-{
-	.get = reg_x_get,
-	.set = reg_x_set,
 };
 
 static int
@@ -762,73 +792,69 @@ static reg const reg_def_array[] = {
 	{.name = "x30", .number = 30, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
 	{.name = "x31", .number = 31, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
 
-	{.name = "pc", .number = 50, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_pc_accessors},
+	{.name = "pc", .number = 32, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_pc_accessors},
 
 	// FP temporaries
-	{.name = "f0", .number = 100, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f1", .number = 101, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f2", .number = 102, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f3", .number = 103, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f4", .number = 104, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f5", .number = 105, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f6", .number = 106, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f7", .number = 107, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f0", .number = 33, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f1", .number = 34, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f2", .number = 35, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f3", .number = 36, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f4", .number = 37, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f5", .number = 38, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f6", .number = 39, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f7", .number = 40, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
 
 	// FP saved registers
-	{.name = "f8", .number = 108, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f9", .number = 109, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f8", .number = 41, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f9", .number = 42, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
 
 	// FP arguments/return values
-	{.name = "f10", .number = 110, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f11", .number = 111, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f10", .number = 43, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f11", .number = 44, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
 
 	// FP arguments
-	{.name = "f12", .number = 112, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f13", .number = 113, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f14", .number = 114, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f15", .number = 115, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f16", .number = 116, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f17", .number = 117, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f12", .number = 45, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f13", .number = 46, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f14", .number = 47, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f15", .number = 48, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f16", .number = 49, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f17", .number = 50, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
 
 	// FP saved registers
-	{.name = "f18", .number = 118, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f19", .number = 119, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f20", .number = 120, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f21", .number = 121, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f22", .number = 122, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f23", .number = 123, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f24", .number = 124, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f25", .number = 125, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f26", .number = 126, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f27", .number = 127, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f18", .number = 51, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f19", .number = 52, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f20", .number = 53, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f21", .number = 54, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f22", .number = 55, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f23", .number = 56, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f24", .number = 57, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f25", .number = 58, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f26", .number = 59, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f27", .number = 60, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
 
 	// FP temporaries
-	{.name = "f28", .number = 128, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f29", .number = 129, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f30", .number = 130, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f31", .number = 131, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f28", .number = 61, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f29", .number = 62, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f30", .number = 63, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f31", .number = 64, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
 };
 
 static reg_cache*
-reg_cache__create(target * p_target)
+reg_cache__create(char const* name, reg const regs_templates[], size_t const num_regs, void* const p_arch_info)
 {
-	static size_t const num_regs = ARRAY_LEN(reg_def_array);
 	reg* const p_dst_array = calloc(num_regs, sizeof(reg));
 	reg* p_dst_iter = &p_dst_array[0];
-	reg const* p_src_iter = &reg_def_array[0];
+	reg const* p_src_iter = &regs_templates[0];
 	for ( size_t i = 0; i < num_regs; ++i ) {
 		*p_dst_iter = *p_src_iter;
 		p_dst_iter->value = calloc(1, NUM_BITS_TO_SIZE(p_src_iter->size));
-		if ( p_src_iter->valid ) {
-			memset(p_dst_iter->value, 0, NUM_BITS_TO_SIZE(p_src_iter->size));
-		}
-		p_dst_iter->arch_info = p_target;
+		p_dst_iter->arch_info = p_arch_info;
 
 		++p_src_iter;
 		++p_dst_iter;
 	}
 	reg_cache const the_reg_cache = {
-		.name = "rv32i",
+		.name = name,
 		.reg_list = p_dst_array,
 		.num_regs = num_regs,
 	};
@@ -843,7 +869,7 @@ static int
 this_init_target(struct command_context *cmd_ctx, target *p_target)
 {
 	assert(p_target);
-	p_target->reg_cache = reg_cache__create(p_target);
+	p_target->reg_cache = reg_cache__create("rv32i", reg_def_array, ARRAY_LEN(reg_def_array), p_target);
 	This_Arch the_arch = {
 		.nc_poll_requested = DBG_REASON_DBGRQ,
 	};
@@ -883,11 +909,14 @@ regs_commit_and_invalidate(target *p_target)
 	/// @todo multiple caches
 	reg_cache* p_reg_cache = p_target->reg_cache;
 
-	reg* p_tmp_reg = p_reg_cache->reg_list;
+	// pc number == 32
 	reg* const p_pc = &p_reg_cache->reg_list[32];
 	assert(p_reg_cache->num_regs > 0);
+
+	/// If pc is dirty find first dirty GP register (except zero register)
+	reg* p_tmp_reg = p_reg_cache->reg_list;
 	if ( p_pc->dirty ) {
-		for ( unsigned i = 1; i < 32; ++i) {
+		for ( unsigned i = 1; i < 32; ++i ) {
 			reg* p_reg = &p_reg_cache->reg_list[i];
 			if ( p_reg->dirty ) {
 				p_tmp_reg = p_reg;
@@ -896,37 +925,51 @@ regs_commit_and_invalidate(target *p_target)
 		}
 		assert(p_tmp_reg != p_reg_cache->reg_list);
 	}
-	for (reg* p_reg = &p_reg_cache->reg_list[31]; p_reg != p_tmp_reg; --p_reg ) {
+
+	/// From last GP register upto first dirty register (or upto zero register)
+	for ( reg* p_reg = &p_reg_cache->reg_list[31]; p_reg != p_tmp_reg; --p_reg ) {
 		if ( !p_reg->dirty ) {
 			continue;
 		}
+		/// store dirt registers to HW
 		exec_instruction(p_target, RV_CSRRW(p_reg->number, DBG_SCRATCH, x0), buf_get_u32(p_reg->value, 0, p_reg->size));
 		if ( error_code__get(p_target) ) {
 			return;
 		}
+		/// mark it's values non-dirty and invalid
 		p_reg->dirty = false;
 		p_reg->valid = false;
+
+		/// Correct pc back after each instruction
 		exec_instruction(p_target, RV_JAL(x0, -4), 0);
 		if ( error_code__get(p_target) ) {
 			return;
 		}
 	}
+
 	if ( p_tmp_reg != p_reg_cache->reg_list ) {
+		/// If first dirty register is not zero, i.e. pc needs save to HW and then temporary register needs save
 		assert(p_pc->dirty);
+		/// Set temporary register by restoring value of pc
 		exec_instruction(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, x0), buf_get_u32(p_pc->value, 0, p_pc->size));
 		if ( error_code__get(p_target) ) {
 			return;
 		}
+		/// Exec JARL to set pc
 		exec_instruction(p_target, RV_JALR(x0, p_tmp_reg->number, 0), 0);
 		if ( error_code__get(p_target) ) {
 			return;
 		}
+		/// OK pc restored
 		p_pc->dirty = false;
 		p_pc->valid = false;
+
+		/// Restore temporary register value
 		exec_instruction(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, x0), buf_get_u32(p_tmp_reg->value, 0, p_tmp_reg->size));
 		if ( error_code__get(p_target) ) {
 			return;
 		}
+		/// and correct pc back
 		exec_instruction(p_target, RV_JAL(x0, -4), 0);
 		if ( error_code__get(p_target) ) {
 			return;
@@ -952,22 +995,21 @@ this_poll(target *p_target)
 
 	if ( p_arch->nc_poll_requested == DBG_REASON_SINGLESTEP ) {
 		/// @todo enable interrupts
-#if 0
-		debug_write_register(p_target, DEBUG_CONTROL_COMMAND, 0x0);
-#endif
-}
+	}
 	p_target->debug_reason = p_arch->nc_poll_requested;
 	target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
 	p_arch->nc_poll_requested = DBG_REASON_DBGRQ;
 	return error_code__clear(p_target);
 }
 
+#if 0
 static int
 this_arch_state(target *p_target)
 {
 	LOG_ERROR("Unimplemented");
 	return error_code__clear(p_target);
 }
+#endif
 
 static int
 this_halt(target *p_target)
@@ -998,7 +1040,7 @@ this_halt(target *p_target)
 			return error_code__clear(p_target);
 		}
 
-		(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, 1u);
+		(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_HALT));
 		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__clear(p_target);
 		}
@@ -1030,8 +1072,15 @@ this_halt(target *p_target)
 	return error_code__clear(p_target);
 }
 
+static inline uint8_t
+REGTRANS_scan_type(bool write, uint8_t index)
+{
+	assert((index & !LOW_BITS_MASK(3)) == 0);
+	return (write ? BIT_NUM_TO_MASK(3) : 0) | index;
+}
+
 static int
-this_resume(target *p_target, int current, uint32_t address, int handle_breakpoints, int debug_execution)
+common_resume(target *p_target, int current, uint32_t address, int handle_breakpoints, int debug_execution)
 {
 	assert(p_target);
 	if ( p_target->state != TARGET_HALTED ) {
@@ -1040,21 +1089,19 @@ this_resume(target *p_target, int current, uint32_t address, int handle_breakpoi
 	}
 
 	if ( !current ) {
-		This_Arch* const p_arch_info = p_target->arch_info;
-		assert(p_arch_info);
 		/// @todo multiple caches
 		reg_cache* const p_reg_cache = p_target->reg_cache;
 		reg* const p_pc = &p_reg_cache->reg_list[32];
-		if ( !p_pc->valid ) {
-			error_code__update(p_target, reg_pc_get(p_pc));
-			if ( error_code__get(p_target) ) {
-				return error_code__clear(p_target);
-			}
+		uint8_t buf[sizeof address];
+		buf_set_u32(buf, 0, XLEN, address);
+		error_code__update(p_target, reg_pc_set(p_pc, buf));
+		if ( error_code__get(p_target) ) {
+			return error_code__clear(p_target);
 		}
 		assert(p_pc->valid);
-		buf_set_u32(p_pc->value, 0, p_pc->size, address);
-		p_pc->dirty = true;
+		assert(p_pc->dirty);
 	}
+
 	// upload reg values into HW
 	regs_commit_and_invalidate(p_target);
 	if ( error_code__get(p_target) ) {
@@ -1066,7 +1113,7 @@ this_resume(target *p_target, int current, uint32_t address, int handle_breakpoi
 		return error_code__clear(p_target);
 	}
 
-	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, 2 + 4);
+	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME));
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
@@ -1078,76 +1125,25 @@ this_resume(target *p_target, int current, uint32_t address, int handle_breakpoi
 		}
 		p_target->state = state;
 	}
+	return error_code__clear(p_target);
+}
+
+static int
+this_resume(target *p_target, int current, uint32_t address, int handle_breakpoints, int debug_execution)
+{
+	assert(p_target);
 	This_Arch* p_arch = p_target->arch_info;
 	p_arch->nc_poll_requested = DBG_REASON_BREAKPOINT;
-	p_target->state = TARGET_RUNNING;
-	return error_code__clear(p_target);
+	return common_resume(p_target, current, address, handle_breakpoints, debug_execution);
 }
 
 static int
 this_step(target *p_target, int current, uint32_t address, int handle_breakpoints)
 {
 	assert(p_target);
-	if ( p_target->state != TARGET_HALTED ) {
-		LOG_ERROR("Target not halted");
-		return ERROR_TARGET_NOT_HALTED;
-	}
-
-	if ( !current ) {
-		This_Arch* const p_arch_info = p_target->arch_info;
-		assert(p_arch_info);
-		/// @todo multiple caches
-		reg_cache* const p_reg_cache = p_target->reg_cache;
-		reg* const p_pc = &p_reg_cache->reg_list[32];
-		if ( !p_pc->valid ) {
-			error_code__update(p_target, reg_pc_get(p_pc));
-			if ( error_code__get(p_target) ) {
-				return error_code__clear(p_target);
-			}
-		}
-		assert(p_pc->valid);
-		buf_set_u32(p_pc->value, 0, p_pc->size, address);
-		p_pc->dirty = true;
-	}
-	// upload reg values into HW
-	regs_commit_and_invalidate(p_target);
-	if ( error_code__get(p_target) ) {
-		return error_code__clear(p_target);
-	}
-	// upload reg values into HW
-	regs_commit_and_invalidate(p_target);
-	if ( error_code__get(p_target) ) {
-		return error_code__clear(p_target);
-	}
-	/// @todo setup single step
-	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return error_code__clear(p_target);
-	}
-
-	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, 2 + 4);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return error_code__clear(p_target);
-	}
-	{
-		// update state
-		int state = HART_DBG_STATUS_get(p_target);
-		if ( error_code__get(p_target) != ERROR_OK ) {
-			return error_code__clear(p_target);
-		}
-		p_target->state = state;
-	}
 	This_Arch* p_arch = p_target->arch_info;
 	p_arch->nc_poll_requested = DBG_REASON_SINGLESTEP;
-	p_target->state = TARGET_RUNNING;
-	return error_code__clear(p_target);
-}
-
-static inline uint8_t
-REGTRANS_scan_type(bool write, uint8_t index)
-{
-	assert((index & !LOW_BITS_MASK(3)) == 0);
-	return (write ? BIT_NUM_TO_MASK(3) : 0) | index;
+	return common_resume(p_target, current, address, handle_breakpoints, false);
 }
 
 static int
@@ -1373,7 +1369,9 @@ target_type syntacore_riscv32i_target =
 	.name = "syntacore_riscv32i",
 
 	.poll = this_poll,
+#if 0
 	.arch_state = this_arch_state,
+#endif
 
 	.halt = this_halt,
 	.resume = this_resume,
