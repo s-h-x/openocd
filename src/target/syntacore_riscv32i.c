@@ -818,7 +818,10 @@ reg_cache__create(target * p_target)
 	reg const* p_src_iter = &reg_def_array[0];
 	for ( size_t i = 0; i < num_regs; ++i ) {
 		*p_dst_iter = *p_src_iter;
-		p_dst_iter->value = malloc(NUM_BITS_TO_SIZE(p_src_iter->size));
+		p_dst_iter->value = calloc(1, NUM_BITS_TO_SIZE(p_src_iter->size));
+		if ( p_src_iter->valid ) {
+			memset(p_dst_iter->value, 0, NUM_BITS_TO_SIZE(p_src_iter->size));
+		}
 		p_dst_iter->arch_info = p_target;
 
 		++p_src_iter;
