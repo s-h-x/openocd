@@ -100,6 +100,7 @@
 #define RV_AUIPC(rd, imm) RV_INSTR_U_TYPE(imm, rd, 0x17u)
 #define RV_CSRRW(rd, csr, rs1) RV_INSTR_I_TYPE((csr), rs1, 1u, rd, 0x73u)
 #define RV_JAL(rd, imm) RV_INSTR_UJ_TYPE(imm, rd, 0x6Fu)
+#define RV_JALR(rd, rs1, imm) RV_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x67u)
 
 #define DBG_SCRATCH (0x788)
 
@@ -511,7 +512,7 @@ reg_x_get(reg *p_reg)
 		return error_code__clear(p_target);
 	}
 
-	if ( p_reg->valid) {
+	if ( p_reg->valid ) {
 		// register cache already valid
 		LOG_WARNING("Try re-read cache register %s", p_reg->name);
 		return error_code__clear(p_target);
@@ -632,7 +633,7 @@ reg_pc_get(reg *p_reg)
 		if ( !p_wrk_reg->valid ) {
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 		}
-		if ( error_code__get(p_target) != ERROR_OK) {
+		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__clear(p_target);
 		}
 		p_wrk_reg->dirty = true;
@@ -855,15 +856,15 @@ this_init_target(struct command_context *cmd_ctx, target *p_target)
 static void
 this_deinit_target(target* p_target)
 {
-	This_Arch* p_arch_info = p_target->arch_info;
-	reg_cache* this_reg_cache = p_arch_info->m_p_reg_cache;
-	reg* reg_list = this_reg_cache->reg_list;
-	size_t const num_regs = this_reg_cache->num_regs;
+	This_Arch* const p_arch_info = p_target->arch_info;
+	reg_cache* const p_reg_cache = p_arch_info->m_p_reg_cache;
+	reg* reg_list = p_reg_cache->reg_list;
+	size_t const num_regs = p_reg_cache->num_regs;
 	for ( size_t i = 0; i < num_regs; ++i ) {
 		free(reg_list[i].value);
 	}
 	free(reg_list);
-	free(this_reg_cache);
+	free(p_reg_cache);
 	free(p_arch_info);
 	p_target->arch_info = NULL;
 }
@@ -877,7 +878,63 @@ this_target_create(target *p_target, struct Jim_Interp *interp)
 static void
 regs_commit_and_invalidate(target *p_target)
 {
-	LOG_ERROR("Unimplemented");
+	assert(p_target);
+	This_Arch* const p_arch_info = p_target->arch_info;
+
+	/// @todo multiple caches
+	reg_cache* p_reg_cache = p_arch_info->m_p_reg_cache;
+
+	reg* p_tmp_reg = p_reg_cache->reg_list;
+	reg* const p_pc = &p_reg_cache->reg_list[32];
+	assert(p_reg_cache->num_regs > 0);
+	if ( p_pc->dirty ) {
+		for ( unsigned i = 1; i < 32; ++i) {
+			reg* p_reg = &p_reg_cache->reg_list[i];
+			if ( p_reg->dirty ) {
+				p_tmp_reg = p_reg;
+				break;
+			}
+		}
+		assert(p_tmp_reg != p_reg_cache->reg_list);
+	}
+	for (reg* p_reg = &p_reg_cache->reg_list[p_reg_cache->num_regs - 1]; p_reg != p_tmp_reg; --p_reg ) {
+		if ( !p_reg->dirty ) {
+			continue;
+		}
+		exec_instruction(p_target, RV_CSRRW(p_reg->number, DBG_SCRATCH, x0), buf_get_u32(p_reg->value, 0, p_reg->size));
+		if ( error_code__get(p_target) ) {
+			return;
+		}
+		p_reg->dirty = false;
+		p_reg->valid = false;
+		exec_instruction(p_target, RV_JAL(x0, -4), 0);
+		if ( error_code__get(p_target) ) {
+			return;
+		}
+	}
+	if ( p_tmp_reg != p_reg_cache->reg_list ) {
+		assert(p_pc->dirty);
+		exec_instruction(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, x0), buf_get_u32(p_pc->value, 0, p_pc->size));
+		if ( error_code__get(p_target) ) {
+			return;
+		}
+		exec_instruction(p_target, RV_JALR(x0, p_tmp_reg->number, 0), 0);
+		if ( error_code__get(p_target) ) {
+			return;
+		}
+		p_pc->dirty = false;
+		p_pc->valid = false;
+		exec_instruction(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, x0), buf_get_u32(p_tmp_reg->value, 0, p_tmp_reg->size));
+		if ( error_code__get(p_target) ) {
+			return;
+		}
+		exec_instruction(p_target, RV_JAL(x0, -4), 0);
+		if ( error_code__get(p_target) ) {
+			return;
+		}
+		p_tmp_reg->dirty = false;
+		p_tmp_reg->valid = false;
+	}
 }
 
 static int
@@ -899,7 +956,7 @@ this_poll(target *p_target)
 #if 0
 		debug_write_register(p_target, DEBUG_CONTROL_COMMAND, 0x0);
 #endif
-	}
+}
 	p_target->debug_reason = p_arch->nc_poll_requested;
 	target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
 	p_arch->nc_poll_requested = DBG_REASON_DBGRQ;
@@ -977,9 +1034,51 @@ this_halt(target *p_target)
 static int
 this_resume(target *p_target, int current, uint32_t address, int handle_breakpoints, int debug_execution)
 {
+	assert(p_target);
+	if ( p_target->state != TARGET_HALTED ) {
+		LOG_ERROR("Target not halted");
+		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	if ( !current ) {
+		This_Arch* const p_arch_info = p_target->arch_info;
+		assert(p_arch_info);
+		/// @todo multiple caches
+		reg_cache* const p_reg_cache = p_arch_info->m_p_reg_cache;
+		reg* const p_pc = &p_reg_cache->reg_list[32];
+		if ( !p_pc->valid ) {
+			error_code__update(p_target, reg_pc_get(p_pc));
+			if ( error_code__get(p_target) ) {
+				return error_code__clear(p_target);
+			}
+		}
+		assert(p_pc->valid);
+		buf_set_u32(p_pc->value, 0, p_pc->size, address);
+		p_pc->dirty = true;
+	}
 	// upload reg values into HW
 	regs_commit_and_invalidate(p_target);
-	/// @todo issue resume command
+	if ( error_code__get(p_target) ) {
+		return error_code__clear(p_target);
+	}
+
+	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
+
+	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, 2 + 4);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
+	{
+		// update state
+		int state = HART_DBG_STATUS_get(p_target);
+		if ( error_code__get(p_target) != ERROR_OK ) {
+			return error_code__clear(p_target);
+		}
+		p_target->state = state;
+	}
 	This_Arch* p_arch = p_target->arch_info;
 	p_arch->nc_poll_requested = DBG_REASON_BREAKPOINT;
 	p_target->state = TARGET_RUNNING;
@@ -989,13 +1088,57 @@ this_resume(target *p_target, int current, uint32_t address, int handle_breakpoi
 static int
 this_step(target *p_target, int current, uint32_t address, int handle_breakpoints)
 {
+	assert(p_target);
+	if ( p_target->state != TARGET_HALTED ) {
+		LOG_ERROR("Target not halted");
+		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	if ( !current ) {
+		This_Arch* const p_arch_info = p_target->arch_info;
+		assert(p_arch_info);
+		/// @todo multiple caches
+		reg_cache* const p_reg_cache = p_arch_info->m_p_reg_cache;
+		reg* const p_pc = &p_reg_cache->reg_list[32];
+		if ( !p_pc->valid ) {
+			error_code__update(p_target, reg_pc_get(p_pc));
+			if ( error_code__get(p_target) ) {
+				return error_code__clear(p_target);
+			}
+		}
+		assert(p_pc->valid);
+		buf_set_u32(p_pc->value, 0, p_pc->size, address);
+		p_pc->dirty = true;
+	}
 	// upload reg values into HW
 	regs_commit_and_invalidate(p_target);
-#if 0
-	debug_write_register(target, DEBUG_CONTROL_STATUS, DEBUG_CONTROL_STATUS_IRQ_DISABLE);
-	debug_write_register(target, DEBUG_CONTROL_COMMAND, DEBUG_CONTROL_COMMAND_STEP);
-#endif
-	This_Arch* p_arch = (This_Arch*)p_target->arch_info;
+	if ( error_code__get(p_target) ) {
+		return error_code__clear(p_target);
+	}
+	// upload reg values into HW
+	regs_commit_and_invalidate(p_target);
+	if ( error_code__get(p_target) ) {
+		return error_code__clear(p_target);
+	}
+	/// @todo setup single step
+	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
+
+	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, 2 + 4);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
+	{
+		// update state
+		int state = HART_DBG_STATUS_get(p_target);
+		if ( error_code__get(p_target) != ERROR_OK ) {
+			return error_code__clear(p_target);
+		}
+		p_target->state = state;
+	}
+	This_Arch* p_arch = p_target->arch_info;
 	p_arch->nc_poll_requested = DBG_REASON_SINGLESTEP;
 	p_target->state = TARGET_RUNNING;
 	return error_code__clear(p_target);
