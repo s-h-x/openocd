@@ -1160,11 +1160,11 @@ set_reset_state(target *p_target, bool active)
 		return error_code__clear(p_target);
 	}
 
-	uint32_t const get_old_value1 = DAP_CMD_scan(p_target, REGTRANS_scan_type(false, DBGC_CORE_REGS_DBG_CTRL), 0);
+	uint32_t get_old_value1 = DAP_CMD_scan(p_target, REGTRANS_scan_type(false, DBGC_CORE_REGS_DBG_CTRL), 0);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
-
+	get_old_value1 = DAP_CMD_scan(p_target, REGTRANS_scan_type(true, DBGC_CORE_REGS_DBG_CTRL), 0);
 	static uint32_t const bit_mask = BIT_NUM_TO_MASK(0);
 
 	uint32_t const set_value = (get_old_value1 & ~bit_mask) | (active ? bit_mask : 0u);
