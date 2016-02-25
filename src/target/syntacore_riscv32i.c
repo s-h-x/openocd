@@ -98,6 +98,9 @@
 #define RV_SH(rs1, rs2, imm) RV_INSTR_S_TYPE(imm, rs2, rs1, 1u, 0x23)
 #define RV_SW(rs1, rs2, imm) RV_INSTR_S_TYPE(imm, rs2, rs1, 2u, 0x23)
 #define RV_AUIPC(rd, imm) RV_INSTR_U_TYPE(imm, rd, 0x17u)
+#define RV_CSRRW(rd, csr, rs1) RV_INSTR_I_TYPE((csr), rs1, 1u, rd, 0x73u)
+#define RV_JAL(rd, imm) RV_INSTR_UJ_TYPE(imm, rd, 0x6Fu)
+
 #define DBG_SCRATCH (0x788)
 
 enum TAP_IR
@@ -185,20 +188,21 @@ enum
 	DBGC_CORE_REGS_DBG_CMD = 3,
 };
 
-struct This_Arch
-{
-	struct reg_cache *m_reg_cache;
-	/// @todo reasons
-	enum target_debug_reason nc_poll_requested;
-	int error_code;
-};
-
+typedef struct reg_cache reg_cache;
 typedef struct reg_arch_type reg_arch_type;
 typedef struct target_type target_type;
 typedef struct scan_field scan_field;
 typedef struct target target;
-typedef struct This_Arch This_Arch;
 typedef struct reg reg;
+
+struct This_Arch
+{
+	reg_cache *m_p_reg_cache;
+	/// @todo reasons
+	enum target_debug_reason nc_poll_requested;
+	int error_code;
+};
+typedef struct This_Arch This_Arch;
 
 /// Error code handling
 ///@{
@@ -456,13 +460,36 @@ DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, ui
 
 /// @}
 
+/// @todo
+static uint32_t
+exec_instruction(target *p_target, uint32_t inctruction, uint32_t csr_data)
+{
+	uint32_t result = 0;
+	DAP_CTRL_REG_set(p_target, DBGC_UNIT_ID_HART_0, DBGC_FGRP_HART_DBGCMD);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return result;
+	}
+
+	DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR, csr_data);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return result;
+	}
+	result = DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC, inctruction);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return result;
+	}
+
+	return result;
+}
+
 static void
 reg_x_operation_conditions_check(reg *p_reg)
 {
 	assert(p_reg);
+	assert(!(!p_reg->valid && p_reg->dirty));
 	target* p_target = p_reg->arch_info;
 	assert(p_target);
-	if ( p_reg->number > 32 ) {
+	if ( !(0 < p_reg->number && p_reg->number < 32) ) {
 		LOG_WARNING("Bad reg id =%d for register %s", p_reg->number, p_reg->name);
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return;
@@ -475,45 +502,6 @@ reg_x_operation_conditions_check(reg *p_reg)
 }
 
 static int
-reg_x0_get(reg *p_reg)
-{
-	LOG_WARNING("NOT IMPLEMENTED");
-	return ERROR_OK;
-}
-
-static int
-reg_x0_set(reg *p_reg, uint8_t *buf)
-{
-	return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-}
-
-static reg_arch_type const reg_x0_accessors =
-{
-	.get = reg_x0_get,
-	.set = reg_x0_set,
-};
-
-static int
-reg_pc_get(reg *p_reg)
-{
-	LOG_WARNING("NOT IMPLEMENTED");
-	return ERROR_OK;
-}
-
-static int
-reg_pc_set(reg *p_reg, uint8_t *buf)
-{
-	LOG_WARNING("NOT IMPLEMENTED");
-	return ERROR_OK;
-}
-
-static reg_arch_type const reg_pc_accessors =
-{
-	.get = reg_pc_get,
-	.set = reg_pc_set,
-};
-
-static int
 reg_x_get(reg *p_reg)
 {
 	reg_x_operation_conditions_check(p_reg);
@@ -523,15 +511,31 @@ reg_x_get(reg *p_reg)
 		return error_code__clear(p_target);
 	}
 
-	/// @todo implement HW register read
-#if 0
-	uint32_t const value = read_core_register(p_reg->number);
+	if ( p_reg->valid) {
+		// register cache already valid
+		LOG_WARNING("Try re-read cache register %s", p_reg->name);
+		return error_code__clear(p_target);
+	}
+
+	// Save p_reg->number register to DBG_SCRATCH CSR
+	exec_instruction(p_target, RV_CSRRW(x0, DBG_SCRATCH, p_reg->number), 0);
+	if ( error_code__get(p_target) ) {
+		return error_code__clear(p_target);
+	}
+
+	// Exec jump back to previous instruction and get saved into DBG_SCRATCH CSR value
+	uint32_t const value = exec_instruction(p_target, RV_JAL(x0, -4), 0);
+	if ( error_code__get(p_target) ) {
+		return error_code__clear(p_target);
+	}
+
+	/// update cache value
 	buf_set_u32(p_reg->value, 0, 32, value);
 	p_reg->valid = true;
-#endif
+	/// force pc to be dirty
 	p_reg->dirty = false;
 
-	return ERROR_OK;
+	return error_code__clear(p_target);
 }
 
 static int
@@ -547,12 +551,132 @@ reg_x_set(reg *p_reg, uint8_t *buf)
 	uint32_t const value = buf_get_u32(buf, 0, 32);
 	LOG_DEBUG("Updating cache for register %s <-- %08x", p_reg->name, value);
 
+	if ( p_reg->valid && (buf_get_u32(p_reg->value, 0, 32) == value) ) {
+		// skip same value
+		return error_code__clear(p_target);
+	}
+
 	buf_set_u32(p_reg->value, 0, 32, value);
 	p_reg->valid = true;
 	p_reg->dirty = true;
 
+	return error_code__clear(p_target);
+}
+
+static int
+reg_x0_get(reg *p_reg)
+{
+	assert(p_reg->valid && !p_reg->dirty);
+	LOG_WARNING("NOT IMPLEMENTED");
 	return ERROR_OK;
 }
+
+static int
+reg_x0_set(reg *p_reg, uint8_t *buf)
+{
+	LOG_ERROR("Try to write to read-only register");
+	assert(p_reg->valid && !p_reg->dirty);
+	return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+}
+
+static reg_arch_type const reg_x0_accessors =
+{
+	.get = reg_x0_get,
+	.set = reg_x0_set,
+};
+
+/// Update pc cache from HW (if non-cached)
+static int
+reg_pc_get(reg *p_reg)
+{
+	assert(p_reg);
+	assert(p_reg->number == 50);
+	assert(!(!p_reg->valid && p_reg->dirty));
+	if ( p_reg->valid ) {
+		// register cache already valid
+		LOG_WARNING("Try re-read cache register %s", p_reg->name);
+		return ERROR_OK;
+	}
+	/// Find temporary GP register
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
+	This_Arch* const p_arch_info = p_target->arch_info;
+	assert(p_arch_info);
+	reg_cache* const p_reg_cache = p_arch_info->m_p_reg_cache;
+	reg* const p_reg_begin = p_reg_cache->reg_list;
+	reg* const p_reg_end = p_reg_cache->reg_list + 32;
+	/// scan until found dirty register
+	reg* p_wrk_reg = p_reg_begin + 1;
+	for ( ; p_wrk_reg != p_reg_end; ++p_wrk_reg ) {
+		if ( p_wrk_reg->dirty ) {
+			break;
+		}
+	}
+	if ( p_wrk_reg == p_reg_end ) {
+		/// if dirty register is not found
+		/// try to use first valid register
+		p_wrk_reg = p_reg_begin + 1;
+		for ( ; p_wrk_reg != p_reg_end; ++p_wrk_reg ) {
+			if ( p_wrk_reg->valid ) {
+				/// and mark valid register dirty
+				p_wrk_reg->dirty = true;
+				break;
+			}
+		}
+	}
+	if ( p_wrk_reg == p_reg_end ) {
+		/// if there are no dirty or valid register
+		p_wrk_reg = p_reg_begin + 1;
+		/// force read HW first register
+		error_code__update(p_target, reg_x_get(p_wrk_reg));
+		if ( !p_wrk_reg->valid ) {
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+		}
+		if ( error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+		p_wrk_reg->dirty = true;
+	}
+	/// OK, we have temporary register.
+	/// Copy pc to temporary register by AUIPC instruction
+	exec_instruction(p_target, RV_AUIPC(p_wrk_reg->number, 0), 0);
+	/// and store temporary register to DBG_SCRATCH CSR.
+	exec_instruction(p_target, RV_CSRRW(x0, DBG_SCRATCH, p_wrk_reg->number), 0);
+	/// Correct pc by jump 2 instructions back and get previous command result.
+	uint32_t const value = exec_instruction(p_target, RV_JAL(x0, -4 * 2), 0);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
+	// update cached value
+	buf_set_u32(p_reg->value, 0, 32, value);
+	p_reg->valid = true;
+	p_reg->dirty = true;
+
+	return error_code__clear(p_target);
+}
+
+/// @todo implementation
+static int
+reg_pc_set(reg *p_reg, uint8_t *buf)
+{
+	assert(p_reg);
+	assert(p_reg->number == 50);
+	assert(!(!p_reg->valid && p_reg->dirty));
+	if ( !p_reg->valid ) {
+		LOG_WARNING("force rewriting of pc register before read");
+	}
+	memmove(p_reg->value, buf, NUM_BITS_TO_SIZE(p_reg->size));
+	p_reg->valid = true;
+	p_reg->dirty = true;
+	return ERROR_OK;
+}
+
+static reg_arch_type const reg_pc_accessors =
+{
+	.get = reg_pc_get,
+	.set = reg_pc_set,
+};
+
 
 static reg_arch_type const reg_x_accessors =
 {
@@ -685,10 +809,9 @@ static reg const reg_def_array[] = {
 	{.name = "f31", .number = 131, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
 };
 
-static struct reg_cache*
+static reg_cache*
 reg_cache__create(target * p_target)
 {
-	typedef struct reg_cache reg_cache;
 	static size_t const num_regs = ARRAY_LEN(reg_def_array);
 	reg* const p_dst_array = calloc(num_regs, sizeof(reg));
 	reg* p_dst_iter = &p_dst_array[0];
@@ -707,7 +830,7 @@ reg_cache__create(target * p_target)
 		.num_regs = num_regs,
 	};
 
-	reg_cache* const p_obj = calloc(1, sizeof(struct reg_cache));
+	reg_cache* const p_obj = calloc(1, sizeof(reg_cache));
 	assert(p_obj);
 	*p_obj = the_reg_cache;
 	return p_obj;
@@ -720,7 +843,7 @@ this_init_target(struct command_context *cmd_ctx, target *p_target)
 
 	This_Arch the_arch = {
 		.nc_poll_requested = DBG_REASON_DBGRQ,
-		.m_reg_cache = reg_cache__create(p_target)
+		.m_p_reg_cache = reg_cache__create(p_target)
 	};
 	This_Arch* p_arch_info = calloc(1, sizeof(This_Arch));
 	*p_arch_info = the_arch;
@@ -733,8 +856,8 @@ static void
 this_deinit_target(target* p_target)
 {
 	This_Arch* p_arch_info = p_target->arch_info;
-	struct reg_cache* this_reg_cache = p_arch_info->m_reg_cache;
-	struct reg * reg_list = this_reg_cache->reg_list;
+	reg_cache* this_reg_cache = p_arch_info->m_p_reg_cache;
+	reg* reg_list = this_reg_cache->reg_list;
 	size_t const num_regs = this_reg_cache->num_regs;
 	for ( size_t i = 0; i < num_regs; ++i ) {
 		free(reg_list[i].value);
@@ -936,28 +1059,6 @@ set_reset_state(target *p_target, bool active)
 	return error_code__clear(p_target);
 }
 
-/// @todo
-static uint32_t
-exec_instruction(target *p_target, uint32_t inctruction, uint32_t csr_data)
-{
-	uint32_t result = 0;
-	DAP_CTRL_REG_set(p_target, DBGC_UNIT_ID_HART_0, DBGC_FGRP_HART_DBGCMD);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return result;
-	}
-
-	DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR, csr_data);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return result;
-	}
-	result = DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC, inctruction);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return result;
-	}
-
-	return result;
-}
-
 static int
 this_assert_reset(target *p_target)
 {
@@ -1113,7 +1214,7 @@ this_get_gdb_reg_list(target *p_target, reg **reg_list[], int *reg_list_size, en
 
 	size_t const num_regs = 33 + (reg_class == REG_CLASS_ALL ? 32 : 0);
 	reg** p_reg_array = calloc(num_regs, sizeof(reg*));
-	reg *a_reg_list = arch_info->m_reg_cache->reg_list;
+	reg *a_reg_list = arch_info->m_p_reg_cache->reg_list;
 	for ( size_t i = 0; i < num_regs; ++i ) {
 		p_reg_array[i] = &a_reg_list[i];
 	}
