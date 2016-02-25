@@ -896,7 +896,7 @@ regs_commit_and_invalidate(target *p_target)
 		}
 		assert(p_tmp_reg != p_reg_cache->reg_list);
 	}
-	for (reg* p_reg = &p_reg_cache->reg_list[p_reg_cache->num_regs - 1]; p_reg != p_tmp_reg; --p_reg ) {
+	for (reg* p_reg = &p_reg_cache->reg_list[31]; p_reg != p_tmp_reg; --p_reg ) {
 		if ( !p_reg->dirty ) {
 			continue;
 		}
