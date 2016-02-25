@@ -198,7 +198,6 @@ typedef struct reg reg;
 
 struct This_Arch
 {
-	reg_cache *m_p_reg_cache;
 	/// @todo reasons
 	enum target_debug_reason nc_poll_requested;
 	int error_code;
@@ -603,7 +602,7 @@ reg_pc_get(reg *p_reg)
 	assert(p_target);
 	This_Arch* const p_arch_info = p_target->arch_info;
 	assert(p_arch_info);
-	reg_cache* const p_reg_cache = p_arch_info->m_p_reg_cache;
+	reg_cache* const p_reg_cache = p_target->reg_cache;
 	reg* const p_reg_begin = p_reg_cache->reg_list;
 	reg* const p_reg_end = p_reg_cache->reg_list + 32;
 	/// scan until found dirty register
@@ -841,10 +840,9 @@ static int
 this_init_target(struct command_context *cmd_ctx, target *p_target)
 {
 	assert(p_target);
-
+	p_target->reg_cache = reg_cache__create(p_target);
 	This_Arch the_arch = {
 		.nc_poll_requested = DBG_REASON_DBGRQ,
-		.m_p_reg_cache = reg_cache__create(p_target)
 	};
 	This_Arch* p_arch_info = calloc(1, sizeof(This_Arch));
 	*p_arch_info = the_arch;
@@ -857,7 +855,7 @@ static void
 this_deinit_target(target* p_target)
 {
 	This_Arch* const p_arch_info = p_target->arch_info;
-	reg_cache* const p_reg_cache = p_arch_info->m_p_reg_cache;
+	reg_cache* const p_reg_cache = p_target->reg_cache;
 	reg* reg_list = p_reg_cache->reg_list;
 	size_t const num_regs = p_reg_cache->num_regs;
 	for ( size_t i = 0; i < num_regs; ++i ) {
@@ -879,10 +877,8 @@ static void
 regs_commit_and_invalidate(target *p_target)
 {
 	assert(p_target);
-	This_Arch* const p_arch_info = p_target->arch_info;
-
 	/// @todo multiple caches
-	reg_cache* p_reg_cache = p_arch_info->m_p_reg_cache;
+	reg_cache* p_reg_cache = p_target->reg_cache;
 
 	reg* p_tmp_reg = p_reg_cache->reg_list;
 	reg* const p_pc = &p_reg_cache->reg_list[32];
@@ -1044,7 +1040,7 @@ this_resume(target *p_target, int current, uint32_t address, int handle_breakpoi
 		This_Arch* const p_arch_info = p_target->arch_info;
 		assert(p_arch_info);
 		/// @todo multiple caches
-		reg_cache* const p_reg_cache = p_arch_info->m_p_reg_cache;
+		reg_cache* const p_reg_cache = p_target->reg_cache;
 		reg* const p_pc = &p_reg_cache->reg_list[32];
 		if ( !p_pc->valid ) {
 			error_code__update(p_target, reg_pc_get(p_pc));
@@ -1098,7 +1094,7 @@ this_step(target *p_target, int current, uint32_t address, int handle_breakpoint
 		This_Arch* const p_arch_info = p_target->arch_info;
 		assert(p_arch_info);
 		/// @todo multiple caches
-		reg_cache* const p_reg_cache = p_arch_info->m_p_reg_cache;
+		reg_cache* const p_reg_cache = p_target->reg_cache;
 		reg* const p_pc = &p_reg_cache->reg_list[32];
 		if ( !p_pc->valid ) {
 			error_code__update(p_target, reg_pc_get(p_pc));
@@ -1360,7 +1356,7 @@ this_get_gdb_reg_list(target *p_target, reg **reg_list[], int *reg_list_size, en
 
 	size_t const num_regs = 33 + (reg_class == REG_CLASS_ALL ? 32 : 0);
 	reg** p_reg_array = calloc(num_regs, sizeof(reg*));
-	reg *a_reg_list = arch_info->m_p_reg_cache->reg_list;
+	reg *a_reg_list = p_target->reg_cache->reg_list;
 	for ( size_t i = 0; i < num_regs; ++i ) {
 		p_reg_array[i] = &a_reg_list[i];
 	}
