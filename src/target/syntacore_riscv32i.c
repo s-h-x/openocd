@@ -481,27 +481,22 @@ DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, ui
 
 /// @}
 
-/// Execute single RISC-V instruction with data in csr_data
-static uint32_t
-exec_instruction(target *p_target, uint32_t instruction, uint32_t csr_data)
+static inline void
+exec__setup(target *p_target)
 {
-	uint32_t result = 0xBADBAD;
 	DAP_CTRL_REG_set(p_target, DBGC_UNIT_ID_HART_0, DBGC_FGRP_HART_DBGCMD);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return 0xBADBAD00;
-	}
+}
 
+static inline void
+exec__set_csr(target *p_target, uint32_t csr_data)
+{
 	DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR, csr_data);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return 0xBADBAD01;
-	}
-	result = DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC, instruction);
-	// @todo remove extra code
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return result;
-	}
+}
 
-	return result;
+static inline uint32_t
+exec__step(target *p_target, uint32_t instruction)
+{
+	return DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC, instruction);
 }
 
 /// GP registers accessors
@@ -542,13 +537,17 @@ reg_x_get(reg *p_reg)
 	}
 
 	// Save p_reg->number register to DBG_SCRATCH CSR
-	exec_instruction(p_target, RV_CSRRW(x0, DBG_SCRATCH, p_reg->number), 0);
+	exec__setup(p_target);
+	if ( error_code__get(p_target) ) {
+		return error_code__clear(p_target);
+	}
+	exec__step(p_target, RV_CSRRW(x0, DBG_SCRATCH, p_reg->number));
 	if ( error_code__get(p_target) ) {
 		return error_code__clear(p_target);
 	}
 
 	// Exec jump back to previous instruction and get saved into DBG_SCRATCH CSR value
-	uint32_t const value = exec_instruction(p_target, RV_JAL(x0, -4), 0);
+	uint32_t const value = exec__step(p_target, RV_JAL(x0, -4));
 	if ( error_code__get(p_target) ) {
 		return error_code__clear(p_target);
 	}
@@ -671,11 +670,21 @@ reg_pc_get(reg *p_reg)
 	}
 	/// OK, we have temporary register.
 	/// Copy pc to temporary register by AUIPC instruction
-	exec_instruction(p_target, RV_AUIPC(p_wrk_reg->number, 0), 0);
+	exec__setup(p_target);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
+	exec__step(p_target, RV_AUIPC(p_wrk_reg->number, 0));
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
 	/// and store temporary register to DBG_SCRATCH CSR.
-	exec_instruction(p_target, RV_CSRRW(x0, DBG_SCRATCH, p_wrk_reg->number), 0);
+	exec__step(p_target, RV_CSRRW(x0, DBG_SCRATCH, p_wrk_reg->number));
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
 	/// Correct pc by jump 2 instructions back and get previous command result.
-	uint32_t const value = exec_instruction(p_target, RV_JAL(x0, -4 * 2), 0);
+	uint32_t const value = exec__step(p_target, RV_JAL(x0, -4 * 2));
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
@@ -926,13 +935,21 @@ regs_commit_and_invalidate(target *p_target)
 		assert(p_tmp_reg != p_reg_cache->reg_list);
 	}
 
+	exec__setup(p_target);
+	if ( error_code__get(p_target) ) {
+		return;
+	}
 	/// From last GP register upto first dirty register (or upto zero register)
 	for ( reg* p_reg = &p_reg_cache->reg_list[31]; p_reg != p_tmp_reg; --p_reg ) {
 		if ( !p_reg->dirty ) {
 			continue;
 		}
-		/// store dirt registers to HW
-		exec_instruction(p_target, RV_CSRRW(p_reg->number, DBG_SCRATCH, x0), buf_get_u32(p_reg->value, 0, p_reg->size));
+		/// store dirty registers to HW
+		exec__set_csr(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
+		if ( error_code__get(p_target) ) {
+			return;
+		}
+		exec__step(p_target, RV_CSRRW(p_reg->number, DBG_SCRATCH, x0));
 		if ( error_code__get(p_target) ) {
 			return;
 		}
@@ -941,7 +958,7 @@ regs_commit_and_invalidate(target *p_target)
 		p_reg->valid = false;
 
 		/// Correct pc back after each instruction
-		exec_instruction(p_target, RV_JAL(x0, -4), 0);
+		exec__step(p_target, RV_JAL(x0, -4));
 		if ( error_code__get(p_target) ) {
 			return;
 		}
@@ -951,12 +968,16 @@ regs_commit_and_invalidate(target *p_target)
 		/// If first dirty register is not zero, i.e. pc needs save to HW and then temporary register needs save
 		assert(p_pc->dirty);
 		/// Set temporary register by restoring value of pc
-		exec_instruction(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, x0), buf_get_u32(p_pc->value, 0, p_pc->size));
+		exec__set_csr(p_target, buf_get_u32(p_pc->value, 0, p_pc->size));
+		if ( error_code__get(p_target) ) {
+			return;
+		}
+		exec__step(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, x0));
 		if ( error_code__get(p_target) ) {
 			return;
 		}
 		/// Exec JARL to set pc
-		exec_instruction(p_target, RV_JALR(x0, p_tmp_reg->number, 0), 0);
+		exec__step(p_target, RV_JALR(x0, p_tmp_reg->number, 0));
 		if ( error_code__get(p_target) ) {
 			return;
 		}
@@ -965,12 +986,16 @@ regs_commit_and_invalidate(target *p_target)
 		p_pc->valid = false;
 
 		/// Restore temporary register value
-		exec_instruction(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, x0), buf_get_u32(p_tmp_reg->value, 0, p_tmp_reg->size));
+		exec__set_csr(p_target, buf_get_u32(p_tmp_reg->value, 0, p_tmp_reg->size));
+		if ( error_code__get(p_target) ) {
+			return;
+		}
+		exec__step(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, x0));
 		if ( error_code__get(p_target) ) {
 			return;
 		}
 		/// and correct pc back
-		exec_instruction(p_target, RV_JAL(x0, -4), 0);
+		exec__step(p_target, RV_JAL(x0, -4));
 		if ( error_code__get(p_target) ) {
 			return;
 		}
