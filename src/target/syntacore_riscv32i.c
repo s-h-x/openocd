@@ -209,6 +209,7 @@ struct This_Arch
 	/// @todo reasons
 	enum target_debug_reason nc_poll_requested;
 	int error_code;
+	uint8_t last_DAP_ctrl;
 };
 typedef struct This_Arch This_Arch;
 
@@ -253,29 +254,29 @@ static void
 IR_select(target const* const restrict p_target, enum TAP_IR const new_instr)
 {
 	assert(p_target);
-#if 0
-	if ( buf_get_u32(tap->cur_instr, 0u, tap->ir_length) != new_instr ) {
-#endif
-		assert(p_target->tap);
-		assert(p_target->tap->ir_length == TAP_IR_LEN);
-		uint8_t out_buffer[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {};
-		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_IR_LEN) == 1u);
-		STATIC_ASSERT(sizeof out_buffer == 1u);
-		buf_set_u32(out_buffer, 0, TAP_IR_LEN, new_instr);
-		scan_field field =
-		{
-			.num_bits = p_target->tap->ir_length,
-			.out_value = out_buffer,
-		};
-		jtag_add_ir_scan(p_target->tap, &field, TAP_IDLE);
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, new_instr);
-		// force jtag_execute_queue() because field referenced local variable out_buffer
-		if ( error_code__update(p_target, jtag_execute_queue()) != ERROR_OK ) {
-			LOG_ERROR("Error %d", error_code__get(p_target));
-		}
-#if 0
+	assert(p_target->tap);
+#if 1
+	if ( buf_get_u32(p_target->tap->cur_instr, 0u, p_target->tap->ir_length) == new_instr ) {
+		LOG_DEBUG("IR %s resently selected %d", p_target->cmd_name, new_instr);
+		return;
 	}
 #endif
+	assert(p_target->tap->ir_length == TAP_IR_LEN);
+	uint8_t out_buffer[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {};
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_IR_LEN) == 1u);
+	STATIC_ASSERT(sizeof out_buffer == 1u);
+	buf_set_u32(out_buffer, 0, TAP_IR_LEN, new_instr);
+	scan_field field =
+	{
+		.num_bits = p_target->tap->ir_length,
+		.out_value = out_buffer,
+	};
+	jtag_add_ir_scan(p_target->tap, &field, TAP_IDLE);
+	LOG_DEBUG("irscan %s %d", p_target->cmd_name, new_instr);
+	// force jtag_execute_queue() because field referenced local variable out_buffer
+	if ( error_code__update(p_target, jtag_execute_queue()) != ERROR_OK ) {
+		LOG_ERROR("Error %d", error_code__get(p_target));
+	}
 }
 
 static uint32_t
@@ -304,7 +305,7 @@ DBG_STATUS_get(target const* const restrict p_target)
 
 	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DBG_STATUS) <= sizeof(uint32_t));
 	uint32_t const result = buf_get_u32(result_buffer, 0, TAP_LEN_DBG_STATUS);
-	LOG_DEBUG("drscan %s %d 0 --> %#0x", p_target->cmd_name, field.num_bits, result);
+	LOG_DEBUG("drscan %s %d 0 --> %#010x", p_target->cmd_name, field.num_bits, result);
 
 	if ( (result & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) != (uint32_t)BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT) ) {
 		LOG_WARNING("TAP_INSTR_DBG_STATUS is %x!", result);
@@ -333,6 +334,14 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 		MAKE_FIELD(dap_group, 0, TAP_LEN_DAP_CTRL_FGROUP - 1),
 		0,
 		TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1);
+
+	This_Arch* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	if ( p_arch->last_DAP_ctrl == set_dap_unit_group ) {
+		LOG_DEBUG("DAP_CTRL_REG of %s already %#03x", p_target->cmd_name, set_dap_unit_group);
+		return;
+	}
+
 	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof set_dap_unit_group);
 	/// set unit/group
 	{
@@ -355,7 +364,7 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 			LOG_ERROR("JTAG error %d", error_code__get(p_target));
 			return;
 		}
-		LOG_DEBUG("drscan %s %d %#0x --> %#0x", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
+		LOG_DEBUG("drscan %s %d %#03x --> %#03x", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
 		if ( (status & BIT_NUM_TO_MASK(DAP_OPSTATUS_READY)) != BIT_NUM_TO_MASK(DAP_OPSTATUS_READY) ) {
 			LOG_ERROR("TAP status %0x", (uint32_t)status);
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
@@ -382,13 +391,14 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 			LOG_ERROR("JTAG error %d", error_code__get(p_target));
 			return;
 		}
-		LOG_DEBUG("drscan %s %d %#0x --> %#0x", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
+		LOG_DEBUG("drscan %s %d %#03x --> %#03x", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
 		if ( get_dap_unit_group != set_dap_unit_group ) {
 			LOG_ERROR("Unit/Group verification error: set %#0x, but get %#0x!", set_dap_unit_group, get_dap_unit_group);
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return;
 		}
 	}
+	p_arch->last_DAP_ctrl = set_dap_unit_group;
 }
 
 static int
@@ -470,7 +480,7 @@ DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, ui
 		return DBG_DATA;
 	}
 
-	LOG_DEBUG("drscan %s %d %#0x %d %#0x --> %#0x %#0x", p_target->cmd_name, fields[0].num_bits, dap_opcode_ext, fields[1].num_bits, dap_opcode, DBG_DATA, DAP_OPSTATUS);
+	LOG_DEBUG("drscan %s %d %#010x %d %#03x --> %#010x %#03x", p_target->cmd_name, fields[0].num_bits, dap_opcode_ext, fields[1].num_bits, dap_opcode, DBG_DATA, DAP_OPSTATUS);
 
 	if ( (DAP_OPSTATUS & BIT_NUM_TO_MASK(DAP_OPSTATUS_READY)) != BIT_NUM_TO_MASK(DAP_OPSTATUS_READY) ) {
 		LOG_ERROR("DAP_OPSTATUS == %#0x", (uint32_t)DAP_OPSTATUS);
@@ -557,6 +567,7 @@ reg_x_get(reg *p_reg)
 	if ( error_code__get(p_target) ) {
 		return error_code__clear(p_target);
 	}
+	LOG_DEBUG("Updating cache from register %s <-- %#010x", p_reg->name, value);
 
 	/// update cache value
 	buf_set_u32(p_reg->value, 0, XLEN, value);
@@ -576,7 +587,7 @@ reg_x_set(reg *p_reg, uint8_t *buf)
 	}
 
 	uint32_t const value = buf_get_u32(buf, 0, XLEN);
-	LOG_DEBUG("Updating cache for register %s <-- %08x", p_reg->name, value);
+	LOG_DEBUG("Updating register %s <-- %#010x", p_reg->name, value);
 
 #if 0
 	if ( p_reg->valid && (buf_get_u32(p_reg->value, 0, XLEN) == value) ) {
@@ -606,7 +617,7 @@ reg_x_set(reg *p_reg, uint8_t *buf)
 		return error_code__clear(p_target);
 	}
 	p_reg->dirty = false;
-	if ( advance_pc_counter ) {
+	if ( advance_pc_counter != 0) {
 		/// Correct pc back after each instruction
 		assert(advance_pc_counter % 4 == 0);
 		exec__step(p_target, RV_JAL(x0, -advance_pc_counter));
@@ -699,16 +710,17 @@ reg_pc_get(reg *p_pc)
 {
 	assert(p_pc);
 	assert(p_pc->number == 32);
-	if ( p_pc->valid ) {
-		// register cache already valid
-		LOG_WARNING("Try re-read cache register %s", p_pc->name);
-		return ERROR_OK;
-	}
 	assert(!(!p_pc->valid && p_pc->dirty));
 
 	/// Find temporary GP register
 	target* const p_target = p_pc->arch_info;
 	assert(p_target);
+
+	if ( p_target->state != TARGET_HALTED ) {
+		LOG_ERROR("Target not halted");
+		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
+		return error_code__clear(p_target);
+	}
 
 	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target);
 	if ( !p_wrk_reg ) {
@@ -718,25 +730,31 @@ reg_pc_get(reg *p_pc)
 	}
 
 	/// OK, we have temporary register.
-	/// Copy pc to temporary register by AUIPC instruction
+	int advance_pc_counter = 0;
 	exec__setup(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
+	/// Copy pc to temporary register by AUIPC instruction
 	exec__step(p_target, RV_AUIPC(p_wrk_reg->number, 0));
+	advance_pc_counter += 4;
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
 	/// and store temporary register to DBG_SCRATCH CSR.
 	exec__step(p_target, RV_CSRRW(x0, DBG_SCRATCH, p_wrk_reg->number));
+	advance_pc_counter += 4;
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
 	/// Correct pc by jump 2 instructions back and get previous command result.
 	uint32_t const value = exec__step(p_target, RV_JAL(x0, -4 * 2));
+	advance_pc_counter = 0;
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
+	assert(advance_pc_counter == 0);
+	LOG_DEBUG("Updating cache from register %s <-- %#010x", p_pc->name, value);
 	// update cached value
 	buf_set_u32(p_pc->value, 0, p_pc->size, value);
 	p_pc->valid = true;
@@ -744,6 +762,7 @@ reg_pc_get(reg *p_pc)
 
 	// restore temporary register
 	error_code__update(p_target, reg_x_set(p_wrk_reg, p_wrk_reg->value));
+	assert(p_wrk_reg->valid && !p_wrk_reg->dirty);
 	return error_code__clear(p_target);
 }
 
@@ -759,6 +778,12 @@ reg_pc_set(reg *p_pc, uint8_t *buf)
 
 	target* const p_target = p_pc->arch_info;
 	assert(p_target);
+	if ( p_target->state != TARGET_HALTED ) {
+		LOG_ERROR("Target not halted");
+		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
+		return error_code__clear(p_target);
+	}
+
 	buf_set_u32(p_pc->value, 0, p_pc->size, buf_get_u32(buf, 0, p_pc->size));
 	p_pc->valid = true;
 	p_pc->dirty = true;
@@ -963,6 +988,8 @@ this_init_target(struct command_context *cmd_ctx, target *p_target)
 	p_target->reg_cache = reg_cache__create("rv32i", reg_def_array, ARRAY_LEN(reg_def_array), p_target);
 	This_Arch the_arch = {
 		.nc_poll_requested = DBG_REASON_DBGRQ,
+		.error_code = ERROR_OK,
+		.last_DAP_ctrl = 0xFF,
 	};
 	This_Arch* p_arch_info = calloc(1, sizeof(This_Arch));
 	*p_arch_info = the_arch;
@@ -1220,7 +1247,6 @@ common_resume(target *p_target, int current, uint32_t address, int handle_breakp
 			return error_code__clear(p_target);
 		}
 		assert(p_pc->valid);
-		assert(p_pc->dirty);
 	}
 
 	// upload reg values into HW
@@ -1247,6 +1273,9 @@ common_resume(target *p_target, int current, uint32_t address, int handle_breakp
 		}
 		p_target->state = state;
 	}
+#if 0
+	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
+#endif
 	return error_code__clear(p_target);
 }
 
