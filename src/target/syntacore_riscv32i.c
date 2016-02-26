@@ -508,12 +508,11 @@ reg_x_operation_conditions_check(reg *p_reg)
 	assert(!(!p_reg->valid && p_reg->dirty));
 	target* p_target = p_reg->arch_info;
 	assert(p_target);
-	if ( !(0 < p_reg->number && p_reg->number < 32) ) {
+	if ( !(/*0u <= p_reg->number && */p_reg->number < 32u) ) {
 		LOG_WARNING("Bad reg id =%d for register %s", p_reg->number, p_reg->name);
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return;
 	}
-	assert(p_target);
 	if ( p_target->state != TARGET_HALTED ) {
 		LOG_ERROR("Target not halted");
 		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
@@ -532,8 +531,15 @@ reg_x_get(reg *p_reg)
 
 	if ( p_reg->valid ) {
 		// register cache already valid
-		LOG_WARNING("Try re-read cache register %s", p_reg->name);
-		return error_code__clear(p_target);
+		if ( p_reg->dirty ) {
+			LOG_ERROR("Try re-read dirty cache register %s", p_reg->name);
+#if 0
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+			return error_code__clear(p_target);
+#endif
+		} else {
+			LOG_WARNING("Try re-read cache register %s", p_reg->name);
+		}
 	}
 
 	// Save p_reg->number register to DBG_SCRATCH CSR
@@ -555,9 +561,7 @@ reg_x_get(reg *p_reg)
 	/// update cache value
 	buf_set_u32(p_reg->value, 0, XLEN, value);
 	p_reg->valid = true;
-	/// force pc to be dirty
 	p_reg->dirty = false;
-
 	return error_code__clear(p_target);
 }
 
@@ -574,15 +578,45 @@ reg_x_set(reg *p_reg, uint8_t *buf)
 	uint32_t const value = buf_get_u32(buf, 0, XLEN);
 	LOG_DEBUG("Updating cache for register %s <-- %08x", p_reg->name, value);
 
+#if 0
 	if ( p_reg->valid && (buf_get_u32(p_reg->value, 0, XLEN) == value) ) {
 		// skip same value
 		return error_code__clear(p_target);
 	}
-
+#endif
 	buf_set_u32(p_reg->value, 0, XLEN, value);
 	p_reg->valid = true;
 	p_reg->dirty = true;
 
+	/// store dirty register to HW
+	exec__setup(p_target);
+	if ( error_code__get(p_target) ) {
+		return error_code__clear(p_target);
+	}
+
+	int advance_pc_counter = 0;
+
+	exec__set_csr(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
+	if ( error_code__get(p_target) ) {
+		return error_code__clear(p_target);
+	}
+	exec__step(p_target, RV_CSRRW(p_reg->number, DBG_SCRATCH, x0));
+	advance_pc_counter += 4;
+	if ( error_code__get(p_target) ) {
+		return error_code__clear(p_target);
+	}
+	p_reg->dirty = false;
+	if ( advance_pc_counter ) {
+		/// Correct pc back after each instruction
+		assert(advance_pc_counter % 4 == 0);
+		exec__step(p_target, RV_JAL(x0, -advance_pc_counter));
+		advance_pc_counter = 0;
+		if ( error_code__get(p_target) ) {
+			return error_code__clear(p_target);
+		}
+	}
+	assert(advance_pc_counter == 0);
+	assert(p_reg->valid && !p_reg->dirty);
 	return error_code__clear(p_target);
 }
 
@@ -592,82 +626,97 @@ static reg_arch_type const reg_x_accessors =
 	.set = reg_x_set,
 };
 
+#if 0
 static int
 reg_x0_get(reg *p_reg)
 {
-	assert(p_reg->valid && !p_reg->dirty);
-	LOG_WARNING("NOT IMPLEMENTED");
+	assert(p_reg);
+	memset(p_reg->value, 0, NUM_BITS_TO_SIZE(p_reg->size));
+	p_reg->valid = true;
+	p_reg->dirty = false;
 	return ERROR_OK;
 }
 
 static int
 reg_x0_set(reg *p_reg, uint8_t *buf)
 {
+	assert(p_reg);
 	LOG_ERROR("Try to write to read-only register");
-	assert(p_reg->valid && !p_reg->dirty);
+	memset(p_reg->value, 0, NUM_BITS_TO_SIZE(p_reg->size));
+	p_reg->valid = true;
+	p_reg->dirty = false;
 	return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 }
 
 static reg_arch_type const reg_x0_accessors =
 {
-	.get = reg_x0_get,
-	.set = reg_x0_set,
+	.get = reg_x_get,
+	.set = reg_x_set,
 };
+#endif
 
-/// Update pc cache from HW (if non-cached)
-static int
-reg_pc_get(reg *p_reg)
+static reg*
+prepare_temporary_GP_register(target* const p_target)
 {
-	assert(p_reg);
-	assert(p_reg->number == 32);
-	assert(!(!p_reg->valid && p_reg->dirty));
-	if ( p_reg->valid ) {
-		// register cache already valid
-		LOG_WARNING("Try re-read cache register %s", p_reg->name);
-		return ERROR_OK;
-	}
-	/// Find temporary GP register
-	target* const p_target = p_reg->arch_info;
 	assert(p_target);
-	
-	This_Arch* const p_arch_info = p_target->arch_info;
-	assert(p_arch_info);
-	
-	reg_cache* const p_reg_cache = p_target->reg_cache;
-	reg* const p_reg_begin = p_reg_cache->reg_list;
-	reg* const p_reg_end = p_reg_cache->reg_list + p_reg->number;
-	/// scan until found dirty register
-	reg* p_wrk_reg = p_reg_begin + 1;
-	for ( ; p_wrk_reg != p_reg_end; ++p_wrk_reg ) {
-		if ( p_wrk_reg->dirty ) {
-			break;
-		}
-	}
-	if ( p_wrk_reg == p_reg_end ) {
-		/// if dirty register is not found
-		/// try to use first valid register
-		p_wrk_reg = p_reg_begin + 1;
-		for ( ; p_wrk_reg != p_reg_end; ++p_wrk_reg ) {
-			if ( p_wrk_reg->valid ) {
-				/// and mark valid register dirty
-				p_wrk_reg->dirty = true;
-				break;
+	reg_cache const* const p_reg_cache = p_target->reg_cache;
+	assert(p_reg_cache);
+	reg* const p_reg_list = p_reg_cache->reg_list;
+	assert(p_reg_list);
+	assert(p_reg_cache->num_regs >= 32);
+	reg* p_valid = NULL;
+	reg* p_dirty = NULL;
+	for ( size_t i = 31; 0 < i; --i ) {
+		if ( p_reg_list[i].valid ) {
+			p_valid = &p_reg_list[i];
+			if ( p_reg_list[i].dirty ) {
+				p_dirty = &p_reg_list[i];
 			}
 		}
 	}
-	if ( p_wrk_reg == p_reg_end ) {
-		/// if there are no dirty or valid register
-		p_wrk_reg = p_reg_begin + 1;
-		/// force read HW first register
-		error_code__update(p_target, reg_x_get(p_wrk_reg));
-		if ( !p_wrk_reg->valid ) {
-			error_code__update(p_target, ERROR_TARGET_FAILURE);
+	if ( !p_dirty ) {
+		if ( !p_valid ) {
+			p_valid = &p_reg_list[1];
+			error_code__update(p_target, reg_x_get(p_valid));
+			if ( error_code__get(p_target) != ERROR_OK ) {
+				return NULL;
+			}
 		}
-		if ( error_code__get(p_target) != ERROR_OK ) {
-			return error_code__clear(p_target);
-		}
-		p_wrk_reg->dirty = true;
+		assert(p_valid);
+		assert(p_valid->valid);
+		p_valid->dirty = true;
+		p_dirty = p_valid;
 	}
+	assert(p_dirty);
+	assert(p_dirty->valid);
+	assert(p_dirty->dirty);
+	return p_dirty;
+}
+
+/// Update pc cache from HW (if non-cached)
+static int
+reg_pc_get(reg *p_pc)
+{
+	assert(p_pc);
+	assert(p_pc->number == 32);
+	if ( p_pc->valid ) {
+		// register cache already valid
+		LOG_WARNING("Try re-read cache register %s", p_pc->name);
+		return ERROR_OK;
+	}
+	assert(!(!p_pc->valid && p_pc->dirty));
+
+	/// Find temporary GP register
+	target* const p_target = p_pc->arch_info;
+	assert(p_target);
+
+	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target);
+	if ( !p_wrk_reg ) {
+		LOG_ERROR("Temporary GP register not found!");
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+		return error_code__clear(p_target);
+	}
+
 	/// OK, we have temporary register.
 	/// Copy pc to temporary register by AUIPC instruction
 	exec__setup(p_target);
@@ -689,32 +738,65 @@ reg_pc_get(reg *p_reg)
 		return error_code__clear(p_target);
 	}
 	// update cached value
-	buf_set_u32(p_reg->value, 0, XLEN, value);
-	p_reg->valid = true;
-	p_reg->dirty = true;
+	buf_set_u32(p_pc->value, 0, p_pc->size, value);
+	p_pc->valid = true;
+	p_pc->dirty = false;
 
+	// restore temporary register
+	error_code__update(p_target, reg_x_set(p_wrk_reg, p_wrk_reg->value));
 	return error_code__clear(p_target);
 }
 
-/// @todo implementation
 static int
-reg_pc_set(reg *p_reg, uint8_t *buf)
+reg_pc_set(reg *p_pc, uint8_t *buf)
 {
-	assert(p_reg);
-	assert(p_reg->number == 32);
-	assert(!(!p_reg->valid && p_reg->dirty));
-	if ( !p_reg->valid ) {
+	assert(p_pc);
+	assert(p_pc->number == 32);
+	assert(!(!p_pc->valid && p_pc->dirty));
+	if ( !p_pc->valid ) {
 		LOG_DEBUG("force rewriting of pc register before read");
 	}
-	if ( !p_reg->dirty ) {
-		// enforce read with temporary register allocation
-		target* const p_target = p_reg->arch_info;
-		error_code__update(p_target, reg_pc_get(p_reg));
+
+	target* const p_target = p_pc->arch_info;
+	assert(p_target);
+	buf_set_u32(p_pc->value, 0, p_pc->size, buf_get_u32(buf, 0, p_pc->size));
+	p_pc->valid = true;
+	p_pc->dirty = true;
+
+	// Update to HW
+	int advance_pc_counter = 0;
+	exec__setup(p_target);
+	if ( error_code__get(p_target) ) {
+		return error_code__clear(p_target);
 	}
-	buf_set_u32(p_reg->value, 0, p_reg->size, buf_get_u32(buf, 0, p_reg->size));
-	p_reg->valid = true;
-	p_reg->dirty = true;
-	return ERROR_OK;
+	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target);
+	assert(p_wrk_reg);
+	exec__set_csr(p_target, buf_get_u32(p_pc->value, 0, p_pc->size));
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
+	// set temporary register value to restoring pc value
+	exec__step(p_target, RV_CSRRW(p_wrk_reg->number, DBG_SCRATCH, x0));
+	advance_pc_counter += 4;
+	if ( error_code__get(p_target) ) {
+		return error_code__clear(p_target);
+	}
+
+	assert(p_pc->dirty);
+	assert(p_wrk_reg->dirty);
+	/// and exec JARL to set pc
+	exec__step(p_target, RV_JALR(x0, p_wrk_reg->number, 0));
+	advance_pc_counter = 0;
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
+	/// OK pc restored
+	p_pc->dirty = false;
+
+	// restore temporary register
+	error_code__update(p_target, reg_x_set(p_wrk_reg, p_wrk_reg->value));
+	assert(p_wrk_reg->valid && !p_wrk_reg->dirty);
+	return error_code__clear(p_target);
 }
 
 static reg_arch_type const reg_pc_accessors =
@@ -746,7 +828,7 @@ static reg_arch_type const reg_f_accessors =
 
 static reg const reg_def_array[] = {
 	// Hard-wired zero
-	{.name = "x0", .number = 0, .caller_save = false, .dirty = false, .valid = true, .exist = true, .size = XLEN, .type = &reg_x0_accessors},
+	{.name = "x0", .number = 0, .caller_save = false, .dirty = false, .valid = true, .exist = true, .size = XLEN, .type = &reg_x_accessors},
 
 	// Return address
 	{.name = "x1", .number = 1, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
@@ -912,7 +994,19 @@ this_target_create(target *p_target, struct Jim_Interp *interp)
 }
 
 static void
-regs_commit_and_invalidate(target *p_target)
+regs_invalidate(target *p_target)
+{
+	assert(p_target);
+	/// @todo multiple caches
+	reg_cache* p_reg_cache = p_target->reg_cache;
+	for ( size_t i = 0; i < p_reg_cache->num_regs; ++i ) {
+		assert(!p_reg_cache->reg_list[i].dirty);
+		p_reg_cache->reg_list[i].valid = false;
+	}
+}
+
+static void
+regs_commit(target *p_target)
 {
 	assert(p_target);
 	/// @todo multiple caches
@@ -920,26 +1014,17 @@ regs_commit_and_invalidate(target *p_target)
 
 	// pc number == 32
 	reg* const p_pc = &p_reg_cache->reg_list[32];
-	assert(p_reg_cache->num_regs > 0);
+	assert(32 <= p_reg_cache->num_regs);
 
 	/// If pc is dirty find first dirty GP register (except zero register)
-	reg* p_tmp_reg = p_reg_cache->reg_list;
-	if ( p_pc->dirty ) {
-		for ( unsigned i = 1; i < 32; ++i ) {
-			reg* p_reg = &p_reg_cache->reg_list[i];
-			if ( p_reg->dirty ) {
-				p_tmp_reg = p_reg;
-				break;
-			}
-		}
-		assert(p_tmp_reg != p_reg_cache->reg_list);
-	}
+	reg* const p_tmp_reg = p_pc->dirty ? prepare_temporary_GP_register(p_target) : &p_reg_cache->reg_list[0];
 
 	exec__setup(p_target);
 	if ( error_code__get(p_target) ) {
 		return;
 	}
-	/// From last GP register upto first dirty register (or upto zero register)
+	/// From last GP register down to first dirty register (or down to zero register)
+	int advance_pc_counter = 0;
 	for ( reg* p_reg = &p_reg_cache->reg_list[31]; p_reg != p_tmp_reg; --p_reg ) {
 		if ( !p_reg->dirty ) {
 			continue;
@@ -950,58 +1035,69 @@ regs_commit_and_invalidate(target *p_target)
 			return;
 		}
 		exec__step(p_target, RV_CSRRW(p_reg->number, DBG_SCRATCH, x0));
+		advance_pc_counter += 4;
 		if ( error_code__get(p_target) ) {
 			return;
 		}
-		/// mark it's values non-dirty and invalid
+		/// mark it's values non-dirty
 		p_reg->dirty = false;
-		p_reg->valid = false;
-
-		/// Correct pc back after each instruction
-		exec__step(p_target, RV_JAL(x0, -4));
+	}
+	if ( advance_pc_counter ) {
+		/// Correct pc back after instructions
+		assert(advance_pc_counter % 4 == 0);
+		exec__step(p_target, RV_JAL(x0, -advance_pc_counter));
+		advance_pc_counter = 0;
 		if ( error_code__get(p_target) ) {
 			return;
 		}
 	}
 
-	if ( p_tmp_reg != p_reg_cache->reg_list ) {
-		/// If first dirty register is not zero, i.e. pc needs save to HW and then temporary register needs save
-		assert(p_pc->dirty);
-		/// Set temporary register by restoring value of pc
-		exec__set_csr(p_target, buf_get_u32(p_pc->value, 0, p_pc->size));
-		if ( error_code__get(p_target) ) {
-			return;
-		}
-		exec__step(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, x0));
-		if ( error_code__get(p_target) ) {
-			return;
-		}
-		/// Exec JARL to set pc
-		exec__step(p_target, RV_JALR(x0, p_tmp_reg->number, 0));
-		if ( error_code__get(p_target) ) {
-			return;
-		}
-		/// OK pc restored
-		p_pc->dirty = false;
-		p_pc->valid = false;
-
-		/// Restore temporary register value
-		exec__set_csr(p_target, buf_get_u32(p_tmp_reg->value, 0, p_tmp_reg->size));
-		if ( error_code__get(p_target) ) {
-			return;
-		}
-		exec__step(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, x0));
-		if ( error_code__get(p_target) ) {
-			return;
-		}
-		/// and correct pc back
-		exec__step(p_target, RV_JAL(x0, -4));
-		if ( error_code__get(p_target) ) {
-			return;
-		}
-		p_tmp_reg->dirty = false;
-		p_tmp_reg->valid = false;
+	if ( p_tmp_reg == &p_reg_cache->reg_list[0] ) {
+		/// If first dirty register is zero register, then all already saved
+		assert(!p_pc->dirty);
+		return;
 	}
+	/// else
+	exec__set_csr(p_target, buf_get_u32(p_pc->value, 0, p_pc->size));
+	if ( error_code__get(p_target) ) {
+		return;
+	}
+	/// set temporary register value to restoring pc value
+	exec__step(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, x0));
+	advance_pc_counter += 4;
+	if ( error_code__get(p_target) ) {
+		return;
+	}
+
+	assert(p_pc->dirty);
+	assert(p_tmp_reg->dirty);
+	/// and exec JARL to set pc
+	exec__step(p_target, RV_JALR(x0, p_tmp_reg->number, 0));
+	advance_pc_counter = 0;
+	if ( error_code__get(p_target) ) {
+		return;
+	}
+	/// OK pc restored
+	p_pc->dirty = false;
+
+	/// Restoring temporary register value
+	exec__set_csr(p_target, buf_get_u32(p_tmp_reg->value, 0, p_tmp_reg->size));
+	if ( error_code__get(p_target) ) {
+		return;
+	}
+	exec__step(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, x0));
+	advance_pc_counter += 4;
+	if ( error_code__get(p_target) ) {
+		return;
+	}
+	/// and correct pc back
+	exec__step(p_target, RV_JAL(x0, -advance_pc_counter));
+	advance_pc_counter = 0;
+	if ( error_code__get(p_target) ) {
+		return;
+	}
+	p_tmp_reg->dirty = false;
+	assert(advance_pc_counter == 0);
 }
 
 static int
@@ -1128,11 +1224,12 @@ common_resume(target *p_target, int current, uint32_t address, int handle_breakp
 	}
 
 	// upload reg values into HW
-	regs_commit_and_invalidate(p_target);
+	regs_commit(p_target);
 	if ( error_code__get(p_target) ) {
 		return error_code__clear(p_target);
 	}
 
+	regs_invalidate(p_target);
 	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
