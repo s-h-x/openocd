@@ -626,7 +626,7 @@ static reg_arch_type const reg_x_accessors =
 	.set = reg_x_set,
 };
 
-#if 0
+#if 1
 static int
 reg_x0_get(reg *p_reg)
 {
@@ -650,8 +650,8 @@ reg_x0_set(reg *p_reg, uint8_t *buf)
 
 static reg_arch_type const reg_x0_accessors =
 {
-	.get = reg_x_get,
-	.set = reg_x_set,
+	.get = reg_x0_get,
+	.set = reg_x0_set,
 };
 #endif
 
@@ -828,7 +828,7 @@ static reg_arch_type const reg_f_accessors =
 
 static reg const reg_def_array[] = {
 	// Hard-wired zero
-	{.name = "x0", .number = 0, .caller_save = false, .dirty = false, .valid = true, .exist = true, .size = XLEN, .type = &reg_x_accessors},
+	{.name = "x0", .number = 0, .caller_save = false, .dirty = false, .valid = true, .exist = true, .size = XLEN, .type = &reg_x0_accessors},
 
 	// Return address
 	{.name = "x1", .number = 1, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
