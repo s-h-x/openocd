@@ -553,16 +553,19 @@ reg_x_get(reg *p_reg)
 
 	// Save p_reg->number register to DBG_SCRATCH CSR
 	exec__setup(p_target);
+	int advance_pc_counter = 0;
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
 	exec__step(p_target, RV_CSRRW(x0, DBG_SCRATCH, p_reg->number));
+	advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
 
 	// Exec jump back to previous instruction and get saved into DBG_SCRATCH CSR value
-	uint32_t const value = exec__step(p_target, RV_JAL(x0, -4));
+	uint32_t const value = exec__step(p_target, RV_JAL(x0, -advance_pc_counter));
+	advance_pc_counter = 0;
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
