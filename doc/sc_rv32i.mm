@@ -85,7 +85,7 @@
 <node CREATED="1455057874253" ID="ID_916188376" MODIFIED="1455290145186" TEXT="DBGC_CORE_CDSR_HART0_ERR_STKY_BIT">
 <node CREATED="1455290145189" ID="ID_636409323" MODIFIED="1455290145190" TEXT="= 4"/>
 </node>
-<node CREATED="1455290165176" FOLDED="true" ID="ID_485280117" MODIFIED="1455290170393" TEXT="">
+<node CREATED="1455290165176" FOLDED="true" ID="ID_485280117" MODIFIED="1456747693466" TEXT="">
 <node CREATED="1455057868236" ID="ID_1966277421" MODIFIED="1455290157489" TEXT="DBGC_CORE_CDSR_RSRV0_BIT_R">
 <node CREATED="1455290157493" ID="ID_879244591" MODIFIED="1455290157494" TEXT="= 5"/>
 </node>
@@ -120,7 +120,7 @@
 <node CREATED="1455058058663" ID="ID_1192798113" MODIFIED="1455290045730" TEXT="DBGC_CORE_CDSR_RST_BIT">
 <node CREATED="1455058054960" ID="ID_1660767602" MODIFIED="1455290053683" TEXT="=28"/>
 </node>
-<node CREATED="1455058051615" ID="ID_1484018981" MODIFIED="1455289970715" TEXT="DBGC_CORE_CDSR_RST_STKY_BIT">
+<node CREATED="1455058051615" ID="ID_1484018981" MODIFIED="1456771283445" TEXT="DBGC_CORE_CDSR_RST_STKY_BIT">
 <node CREATED="1455058047221" ID="ID_1095719857" MODIFIED="1455290025107" TEXT="=29"/>
 </node>
 <node CREATED="1455058026690" ID="ID_1725170484" MODIFIED="1455557878639" TEXT="DBGC_CORE_CDSR_LOCK_BIT">
@@ -271,7 +271,7 @@
 <node CREATED="1455030963648" ID="ID_1840331698" MODIFIED="1455030966955" TEXT="4+32"/>
 </node>
 <node CREATED="1455030815727" ID="ID_664078593" MODIFIED="1455559424919" TEXT="data">
-<node CREATED="1455030824800" ID="ID_630863690" MODIFIED="1455899059858" STYLE="fork" TEXT="guard[fgrp==DBGC_FGRP_HART_REGTRANS]">
+<node CREATED="1455030824800" ID="ID_630863690" MODIFIED="1456761888002" STYLE="fork" TEXT="guard[fgrp==DBGC_FGRP_HART_REGTRANS]">
 <cloud/>
 <node CREATED="1455034892437" ID="ID_1961116868" MODIFIED="1455058353406" TEXT="">
 <node CREATED="1453991273804" ID="ID_1302162387" MODIFIED="1455100840157" STYLE="fork" TEXT="IN">
@@ -336,7 +336,7 @@
 <node CREATED="1455028658806" ID="ID_479474567" MODIFIED="1455028997165" TEXT="// Hart Debug Control Register (HART_DBG_CTRL, HDCR)&#xa;"/>
 <node CREATED="1455033925832" ID="ID_779806621" MODIFIED="1455033941525" TEXT="reset by bit 0"/>
 <node CREATED="1455033946226" ID="ID_370237667" MODIFIED="1455034216130" TEXT="">
-<node CREATED="1455031146597" FOLDED="true" ID="ID_1999283348" MODIFIED="1456402059106" TEXT="typedef enum int { } type_dbgc_hart_dbg_ctrl_reg_bits_e;&#xa;&#xa;">
+<node CREATED="1455031146597" FOLDED="true" ID="ID_1999283348" MODIFIED="1456761650102" TEXT="typedef enum int { } type_dbgc_hart_dbg_ctrl_reg_bits_e;&#xa;&#xa;">
 <node CREATED="1455031141052" ID="ID_586390539" MODIFIED="1455031242330" TEXT="    DBGC_HART_HDCR_RST_BIT              = 0,&#xa;"/>
 <node CREATED="1455031242332" ID="ID_1460662122" MODIFIED="1455031248762" TEXT="    DBGC_HART_HDCR_RSRV0_BIT_R          = 1,&#xa;"/>
 <node CREATED="1455031248763" ID="ID_446571650" MODIFIED="1455033890297" TEXT="    DBGC_HART_HDCR_RSRV0_BIT_L          = DBGC_DAP_DATA_REG_WIDTH-1 "/>
@@ -415,8 +415,28 @@
 </node>
 <node CREATED="1455033610707" ID="ID_1754645033" MODIFIED="1455100805711" TEXT="guard[index==DBGC_HART_REGS_DMODE_ENBL]">
 <node CREATED="1455028831011" ID="ID_1305011431" MODIFIED="1455029041694" TEXT="// Hart Debug Mode Enable Register (HART_DMODE_ENBL, HDMER)&#xa;"/>
-<node CREATED="1455029041697" FOLDED="true" ID="ID_1151441155" MODIFIED="1456413774411" TEXT="typedef enum int { } type_dbgc_hart_dmode_enbl_reg_bits_e;&#xa;">
-<node CREATED="1455028871347" ID="ID_956413628" MODIFIED="1455031447056" TEXT="    DBGC_HART_HDMER_RSRV0_BIT_R         = 0,&#xa;    DBGC_HART_HDMER_RSRV0_BIT_L         = 2,&#xa;    DBGC_HART_HDMER_SW_BRKPT_BIT        = 3,&#xa;    DBGC_HART_HDMER_RSRV1_BIT_R         = 4,&#xa;    DBGC_HART_HDMER_RSRV1_BIT_L         = DBGC_DAP_DATA_REG_WIDTH-3,&#xa;    DBGC_HART_HDMER_SINGLE_STEP_BIT     = DBGC_DAP_DATA_REG_WIDTH-2,&#xa;    DBGC_HART_HDMER_RST_BREAK_BIT       = DBGC_DAP_DATA_REG_WIDTH-1&#xa;"/>
+<node CREATED="1455029041697" ID="ID_1151441155" MODIFIED="1456489650476" TEXT="typedef enum int { } type_dbgc_hart_dmode_enbl_reg_bits_e;&#xa;">
+<node CREATED="1456489627735" FOLDED="true" ID="ID_1754892824" MODIFIED="1456489628635" TEXT="">
+<node CREATED="1455028871347" ID="ID_956413628" MODIFIED="1456489625494" TEXT="    DBGC_HART_HDMER_RSRV0_BIT_R         = 0,&#xa;    DBGC_HART_HDMER_RSRV0_BIT_L         = 2,&#xa;"/>
+</node>
+<node CREATED="1456489625499" ID="ID_573557604" MODIFIED="1456489636278" TEXT="    DBGC_HART_HDMER_SW_BRKPT_BIT        = 3,&#xa;">
+<node CREATED="1456489703298" ID="ID_1697994767" MODIFIED="1456489706717" TEXT="bit">
+<node CREATED="1456489707914" ID="ID_1931848759" MODIFIED="1456489710685" TEXT="3"/>
+</node>
+</node>
+<node CREATED="1456489650453" FOLDED="true" ID="ID_1642671449" MODIFIED="1456489662475" TEXT="">
+<node CREATED="1456489636281" ID="ID_1224225042" MODIFIED="1456489646398" TEXT="    DBGC_HART_HDMER_RSRV1_BIT_R         = 4,&#xa;    DBGC_HART_HDMER_RSRV1_BIT_L         = DBGC_DAP_DATA_REG_WIDTH-3,&#xa;"/>
+</node>
+<node CREATED="1456489646403" ID="ID_1578888533" MODIFIED="1456489679469" TEXT="    DBGC_HART_HDMER_SINGLE_STEP_BIT     = DBGC_DAP_DATA_REG_WIDTH-2,&#xa;">
+<node CREATED="1456489691482" ID="ID_1283369805" MODIFIED="1456489694629" TEXT="bit">
+<node CREATED="1456489698658" ID="ID_144419562" MODIFIED="1456489700757" TEXT="30"/>
+</node>
+</node>
+<node CREATED="1456489679471" ID="ID_992695976" MODIFIED="1456489679472" TEXT="    DBGC_HART_HDMER_RST_BREAK_BIT       = DBGC_DAP_DATA_REG_WIDTH-1&#xa;">
+<node CREATED="1456489682142" ID="ID_1219581146" MODIFIED="1456489685678" TEXT="bit">
+<node CREATED="1456489686665" ID="ID_460654123" MODIFIED="1456489689213" TEXT="31"/>
+</node>
+</node>
 </node>
 <node CREATED="1455028850465" ID="ID_33377069" MODIFIED="1456393940226" TEXT="typedef struct packed { } type_dbgc_hart_dmode_enbl_reg_s;&#xa;">
 <node CREATED="1455031473906" ID="ID_572858475" MODIFIED="1456393917412" TEXT="rst_brk">
@@ -465,7 +485,7 @@
 <node CREATED="1455034555029" ID="ID_431067033" MODIFIED="1456393824268" TEXT="29"/>
 </node>
 </node>
-<node CREATED="1456393855307" FOLDED="true" ID="ID_623766817" MODIFIED="1456393856523" TEXT="">
+<node CREATED="1456393855307" FOLDED="true" ID="ID_623766817" MODIFIED="1456489565972" TEXT="">
 <node CREATED="1455034530190" ID="ID_1492820404" MODIFIED="1455034530192" TEXT="    logic [DBGC_HART_HDMCR_RSRV1_BIT_L-DBGC_HART_HDMCR_RSRV1_BIT_R:0] rsrv1;&#xa;"/>
 </node>
 <node CREATED="1455034526004" ID="ID_1432397109" MODIFIED="1456393888868" TEXT="sw_brkpt">
@@ -473,7 +493,7 @@
 <node CREATED="1455034545613" ID="ID_910733560" MODIFIED="1455034546385" TEXT="3"/>
 </node>
 </node>
-<node CREATED="1456393893571" FOLDED="true" ID="ID_633368659" MODIFIED="1456393894786" TEXT="">
+<node CREATED="1456393893571" FOLDED="true" ID="ID_633368659" MODIFIED="1456489900736" TEXT="">
 <node CREATED="1455034521608" ID="ID_1443631779" MODIFIED="1455034521610" TEXT="    logic [DBGC_HART_HDMCR_RSRV0_BIT_L-DBGC_HART_HDMCR_RSRV0_BIT_R:0] rsrv0;&#xa;"/>
 </node>
 </node>
@@ -563,7 +583,7 @@
 </node>
 </node>
 <node CREATED="1453992927963" ID="ID_1829011158" MODIFIED="1455058385696" TEXT="DAP_OPCODE_EXT ">
-<node CREATED="1455033330461" FOLDED="true" ID="ID_543798218" MODIFIED="1456391286535" TEXT="bits">
+<node CREATED="1455033330461" FOLDED="true" ID="ID_543798218" MODIFIED="1456496711038" TEXT="bits">
 <node CREATED="1455033316772" ID="ID_806988233" MODIFIED="1455058385696" TEXT="32"/>
 </node>
 <node CREATED="1455033462101" ID="ID_592924990" MODIFIED="1455058385696" TEXT="choise">
@@ -580,12 +600,12 @@
 </node>
 </node>
 </node>
-<node CREATED="1455033386378" ID="ID_1409019923" MODIFIED="1455058584227" TEXT="guard[DAP_OPCODE=DBGC_DAP_OPCODE_DBGCMD_UNLOCK]">
+<node CREATED="1455037530983" ID="ID_1405086691" MODIFIED="1456496667516" TEXT="guard[DAP_OPCODE=DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC]">
+<node CREATED="1455057507555" ID="ID_74870460" MODIFIED="1455058385696" TEXT="RV instruction"/>
+</node>
+<node CREATED="1455033386378" ID="ID_1409019923" MODIFIED="1456749239890" TEXT="guard[DAP_OPCODE=DBGC_DAP_OPCODE_DBGCMD_UNLOCK]">
 <icon BUILTIN="help"/>
 <node CREATED="1455562648621" ID="ID_1659653271" MODIFIED="1455562652933" TEXT="any value"/>
-</node>
-<node CREATED="1455037530983" FOLDED="true" ID="ID_1405086691" MODIFIED="1455058588074" TEXT="guard[DAP_OPCODE=DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC]">
-<node CREATED="1455057507555" ID="ID_74870460" MODIFIED="1455058385696" TEXT="RV instruction"/>
 </node>
 </node>
 </node>
@@ -644,7 +664,7 @@
 <node CREATED="1453991524610" ID="ID_1803407150" MODIFIED="1455647235822" TEXT="32-bits">
 <node CREATED="1455647235770" ID="ID_782632626" MODIFIED="1455647256100" TEXT="guard[index==DBGC_CORE_REGS_DBG_CTRL]">
 <node CREATED="1455647155028" ID="ID_1833938872" MODIFIED="1456488449379" TEXT="// Core Debug Control Register (CORE_DBG_CTRL, CDCR)&#xa;typedef enum int {&#xa;"/>
-<node CREATED="1456488449385" ID="ID_1594166493" MODIFIED="1456488457997" TEXT="    DBGC_CORE_CDCR_HART0_RST_BIT        = 0, "/>
+<node CREATED="1456488449385" ID="ID_1594166493" MODIFIED="1456504263485" TEXT="DBGC_CORE_CDCR_HART0_RST_BIT        = 0, "/>
 <node CREATED="1456488455271" ID="ID_605092071" MODIFIED="1456488455272" TEXT="    DBGC_CORE_CDCR_RSRV0_BIT_R          = 1,&#xa;    DBGC_CORE_CDCR_RSRV0_BIT_L          = 7,&#xa;    DBGC_CORE_CDCR_HART1_RST_BIT        = 8,&#xa;    DBGC_CORE_CDCR_RSRV1_BIT_R          = 9,&#xa;    DBGC_CORE_CDCR_RSRV1_BIT_L          = 15,&#xa;    DBGC_CORE_CDCR_RSRV2_BIT_R          = 16,&#xa;    DBGC_CORE_CDCR_RSRV2_BIT_L          = 23,&#xa;"/>
 <node CREATED="1456429587084" ID="ID_769296760" MODIFIED="1456429591695" TEXT="    DBGC_CORE_CDCR_RST_BIT              = 24,&#xa;">
 <icon BUILTIN="messagebox_warning"/>
@@ -854,9 +874,6 @@
 </node>
 </node>
 </node>
-</node>
-<node CREATED="1456318411074" FOLDED="true" ID="ID_737665173" MODIFIED="1456342734822" TEXT="">
-<node CREATED="1455720410416" ID="ID_1371151150" MODIFIED="1456342698515" TEXT="&amp;lt;html&amp;gt;&#xa;  &amp;lt;body&amp;gt;&#xa;    &amp;lt;h1&amp;gt;&#xa;      Environment setup&#xa;    &amp;lt;/h1&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      export OOCD_ROOT=~/openocd&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h1&amp;gt;&#xa;      Build openocd&#xa;    &amp;lt;/h1&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      clone --recursive https://github.com/syntacore/openocd.git&amp;lt;br&amp;gt;${OOCD_ROOT} &#xa;      ./bootstrap&amp;lt;br&amp;gt;../configure --enable-maintainer-mode --disable-werror &#xa;      --enable-ftdi&amp;lt;br&amp;gt;make&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h1&amp;gt;&#xa;      OpenOCD functional check&#xa;    &amp;lt;/h1&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Check OpenOCD functionality for combination Amontec dongle JTAG cable &#xa;      and lpc2478 board.&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h2&amp;gt;&#xa;      terminal sessions&#xa;    &amp;lt;/h2&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Run OpenOCD in first terminal window:&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      sudo ${OOCD_ROOT}/src/openocd -s ${OOCD_ROOT}/tcl -c &apos;debug_level 3&apos; -f &#xa;      interface/ftdi/jtagkey.cfg -f target/lpc2478.cfg&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Run telnet session with OpenOCD&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      telnet localhost 4444&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Try to reset&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Try to halt&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      read memory&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      write memory&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h1&amp;gt;&#xa;      SC_RV32I FPGA check&#xa;    &amp;lt;/h1&amp;gt;&#xa;    &amp;lt;h2&amp;gt;&#xa;      TAP-level checks&#xa;    &amp;lt;/h2&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Manual step by step tap init&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Run OpenOCD&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      sudo ${OOCD_ROOT}/src/openocd -s ${OOCD_ROOT}/tcl -c &apos;debug_level 3&apos; -f &#xa;      interface/ftdi/jtagkey.cfg -c &apos;noinit&apos;&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Open telnet session with OpenOCD&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      telnet localhost 4444&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h3&amp;gt;&#xa;      Setup DC TAP&#xa;    &amp;lt;/h3&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      jtag_rclk 2000&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      reset_config trst_and_srst&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      jtag newtap sc_rv32i cpu -irlen 4 -expected-id 0xc0dedeb1&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      target create sc_rv32i.cpu syntacore_riscv32i -endian little &#xa;      -chain-position sc_rv32i.cpu&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h3&amp;gt;&#xa;      IDCODE check&#xa;    &amp;lt;/h3&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      irscan sc_rv32i.cpu 0xE; drscan sc_rv32i.cpu 32 0&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Check that result is 0xC0DEDEB1&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h3&amp;gt;&#xa;      TAP_INSTR_DBG_ID check&#xa;    &amp;lt;/h3&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      irscan sc_rv32i.cpu 0x3; drscan sc_rv32i.cpu 32 0&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Check that result is 0x10000001&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h3&amp;gt;&#xa;      TAP_INSTR_BLD_ID check&#xa;    &amp;lt;/h3&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      irscan sc_rv32i.cpu 0x4; drscan sc_rv32i.cpu 32 0&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Check that result is 0x16021200 or other valid date&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h3&amp;gt;&#xa;      TAP_INSTR_DBG_STATUS check&#xa;    &amp;lt;/h3&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      irscan sc_rv32i.cpu 0x5; drscan sc_rv32i.cpu 32 0&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Check that result is 0x80000000&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h3&amp;gt;&#xa;      Write and read TAP_INSTR_DAP_CTRL&#xa;    &amp;lt;/h3&amp;gt;&#xa;    &amp;lt;h2&amp;gt;&#xa;      OpenOCD syntacore_riscv32 target check&#xa;    &amp;lt;/h2&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Run OpenOCD with options:&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      sudo ${OOCD_ROOT}/src/openocd -s ${OOCD_ROOT}/tcl -c &apos;debug_level 3&apos; -f &#xa;      interface/ftdi/jtagkey.cfg -f target/syntacore_riscv32i.cfg |&amp;amp;amp; tee &#xa;      openocd.log&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Run OpenOCD telnet session&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      telnet localhost 4444&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Stop polling:&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      poll off&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h3&amp;gt;&#xa;      Regression tests for low-level TAP commands&#xa;    &amp;lt;/h3&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Repeat all commands to verify that low-level functionality still active &#xa;      after target init&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      IDCODE check&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      irscan sc_rv32i.cpu 0xE; drscan sc_rv32i.cpu 32 0&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Check&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      0xC0DEDEB1&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      TAP_INSTR_DBG_ID check&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      irscan sc_rv32i.cpu 0x3; drscan sc_rv32i.cpu 32 0&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Check&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      0x10000001&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      TAP_INSTR_BLD_ID check&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      irscan sc_rv32i.cpu 0x4; drscan sc_rv32i.cpu 32 0&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      result&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      0x16021200&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      TAP_INSTR_DBG_STATUS check&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      irscan sc_rv32i.cpu 0x5; drscan sc_rv32i.cpu 32 0&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      result&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      0x80000000&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h3&amp;gt;&#xa;      sc_rv32i.cpu target command group&#xa;    &amp;lt;/h3&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu arp_examine&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      used internally for reset processing&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu arp_halt&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      used internally for reset processing&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu arp_halt_gdb&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      used internally for reset processing to halt GDB&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu arp_poll&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      used internally for reset processing&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu arp_reset&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      used internally for reset processing&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu arp_waitstate&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      used internally for reset processing&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu array2mem arrayname bitwidth address count&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Writes Tcl array of 8/16/32 bit numbers to target memory&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu cget target_attribute&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      returns the specified target attribute (command valid any time)&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      sc_rv32i.cpu configure [target_attribute ...]&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      configure a new target for use (configuration command)&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu curstate&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      displays the current state of this target&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu eventlist&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      displays a table of events defined for this target&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu invoke-event event_name&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      invoke handler for specified event&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h&amp;gt;&#xa;    sc_rv32i.cpu mdb address [count]&#xa;&#xa;    &amp;lt;p&amp;gt;&#xa;      Display target memory as 8-bit bytes&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu mdh address [count]&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Display target memory as 16-bit half-words&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu mdw address [count]&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Display target memory as 32-bit words&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu mem2array arrayname bitwidth address count&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Loads Tcl array of 8/16/32 bit numbers from target memory&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu mwb address data [count]&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Write byte(s) to target memory&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu mwh address data [count]&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Write 16-bit half-word(s) to target memory&#xa;    &amp;lt;/p&amp;gt;&#xa;    &amp;lt;h4&amp;gt;&#xa;      sc_rv32i.cpu mww address data [count]&#xa;    &amp;lt;/h4&amp;gt;&#xa;    &amp;lt;p&amp;gt;&#xa;      Write 32-bit word(s) to target memory&#xa;    &amp;lt;/p&amp;gt;&#xa;  &amp;lt;/body&amp;gt;&#xa;&amp;lt;/html&amp;gt;"/>
 </node>
 </node>
 </node>
@@ -1216,7 +1233,7 @@ arm reg</pre>
 </node>
 <node CREATED="1455724531265" ID="ID_90249647" LINK="https://github.com/ar-sc/sc_riscv/wiki/OpenOCD" MODIFIED="1455724550500" TEXT="Wiki"/>
 </node>
-<node CREATED="1456404596412" ID="ID_1358688177" MODIFIED="1456404609505" POSITION="left" TEXT="OpenOCD">
+<node CREATED="1456404596412" FOLDED="true" ID="ID_1358688177" MODIFIED="1456741684191" POSITION="left" TEXT="OpenOCD">
 <node CREATED="1456404611447" ID="ID_937668412" MODIFIED="1456404621282" TEXT="registers cache">
 <node CREATED="1456404625973" ID="ID_722857158" MODIFIED="1456404630553" TEXT="valid">
 <node CREATED="1456404635037" ID="ID_1769017222" MODIFIED="1456404638761" TEXT="dirty">
