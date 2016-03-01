@@ -1530,9 +1530,6 @@ this_write_memory(target *p_target, uint32_t address, uint32_t size, uint32_t co
 static int
 this_examine(target *p_target)
 {
-	if ( target_was_examined(p_target) ) {
-		return ERROR_OK;
-	}
 	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT));
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
