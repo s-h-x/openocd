@@ -1356,11 +1356,12 @@ static int
 this_resume(target *p_target, int current, uint32_t address, int handle_breakpoints, int debug_execution)
 {
 	assert(p_target);
-	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT));
+	uint32_t const value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT);
+	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, value);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
-
+	assert(value == HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL));
 	This_Arch* p_arch = p_target->arch_info;
 	p_arch->nc_poll_requested = DBG_REASON_BREAKPOINT;
 
@@ -1371,10 +1372,12 @@ static int
 this_step(target *p_target, int current, uint32_t address, int handle_breakpoints)
 {
 	assert(p_target);
-	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT));
+	uint32_t const value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
+	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, value);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
+	assert(value == HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL));
 
 	This_Arch* p_arch = p_target->arch_info;
 	p_arch->nc_poll_requested = DBG_REASON_SINGLESTEP;
