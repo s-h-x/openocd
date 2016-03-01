@@ -24,7 +24,7 @@
 // #define STATIC_ASSERT(e) typedef char LOCAL_CONCAT(___my_static_assert,__LINE__)[1 - 2 * !(e)]
 #define STATIC_ASSERT(e) {enum {___my_static_assert = 1 / (!!(e)) };}
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
-#define BIT_NUM_TO_MASK(bit_num) (1 << (bit_num))
+#define BIT_NUM_TO_MASK(bit_num) (1u << (bit_num))
 #define LOW_BITS_MASK(n) (~(~0 << (n)))
 #define NUM_BITS_TO_SIZE(num_bits) ( ( (size_t)(num_bits) + (8 - 1) ) / 8 )
 
@@ -36,7 +36,7 @@
 #define sp x14
 
 typedef uint32_t instr_type;
-#define EXTRACT_FIELD(bits, first_bit, last_bit) (((instr_type)(bits) >> (first_bit)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit)))
+#define EXTRACT_FIELD(bits, first_bit, last_bit) (((bits) >> (first_bit)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit)))
 #define MAKE_FIELD(bits, first_bit, last_bit)     (((instr_type)(bits) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
 
 #define RV_INSTR_R_TYPE(func7, rs2, rs1, func3, rd, opcode) ( \
@@ -172,7 +172,7 @@ enum DAP_OPSTATUS_BITS
 	DAP_OPSTATUS_READY = 3,
 };
 
-enum
+enum DBGC_HART_REGS_e
 {
 	DBGC_HART_REGS_DBG_CTRL = 0,
 	DBGC_HART_REGS_DBG_STS = 1,
@@ -182,7 +182,7 @@ enum
 	DBGC_HART_REGS_DBG_DATA = 5,
 };
 
-enum
+enum DBGC_CORE_REGS_e
 {
 	DBGC_CORE_REGS_DEBUG_ID = 0,
 	DBGC_CORE_REGS_DBG_CTRL = 1,
@@ -190,12 +190,29 @@ enum
 	DBGC_CORE_REGS_DBG_CMD = 3,
 };
 
-enum
+enum DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_e
 {
 	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_HALT = 0,
 	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME = 1,
 	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS = 2,
 };
+
+enum type_dbgc_hart_dmode_enbl_reg_bits_e
+{
+	DBGC_HART_HDMER_SW_BRKPT_BIT = 3,
+	DBGC_HART_HDMER_SINGLE_STEP_BIT = 30,
+	DBGC_HART_HDMER_RST_BREAK_BIT = 31,
+};
+
+/// Core Debug Control Register (CORE_DBG_CTRL, CDCR)
+enum type_dbgc_core_dbg_ctrl_reg_bits_e
+{
+	DBGC_CORE_CDCR_HART0_RST_BIT = 0,
+	DBGC_CORE_CDCR_HART1_RST_BIT = 8,
+	DBGC_CORE_CDCR_RST_BIT = 24,
+	DBGC_CORE_CDCR_IRQ_DSBL_BIT = 25,
+};
+
 
 typedef struct reg_cache reg_cache;
 typedef struct reg_arch_type reg_arch_type;
@@ -286,7 +303,8 @@ DBG_STATUS_get(target const* const restrict p_target)
 	assert(p_target->tap);
 	IR_select(p_target, TAP_INSTR_DBG_STATUS);
 	if ( error_code__get(p_target) != ERROR_OK ) {
-		return 0u;
+		/// @todo return bad status
+		return 0xBADC0DE0u;
 	}
 
 	uint8_t result_buffer[NUM_BITS_TO_SIZE(TAP_LEN_DBG_STATUS)] = {};
@@ -435,7 +453,8 @@ DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, ui
 	assert(p_target);
 	IR_select(p_target, TAP_INSTR_DAP_CMD);
 	if ( error_code__get(p_target) != ERROR_OK ) {
-		return 0;
+		/// @todo return bad data
+		return 0xBADC0DE1u;
 	}
 	// Output fields
 	uint8_t const dap_opcode = DAP_OPCODE;
@@ -484,12 +503,70 @@ DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, ui
 	return DBG_DATA;
 }
 
+static inline uint8_t
+REGTRANS_scan_type(bool write, uint8_t index)
+{
+	assert((index & !LOW_BITS_MASK(3)) == 0);
+	return (write ? BIT_NUM_TO_MASK(3) : 0) | index;
+}
+
+static void
+REGTRANS_write(target* const p_target, enum type_dbgc_unit_id_e a_unit, enum DBGC_FGRP a_fgrp, uint8_t const index, uint32_t const data)
+{
+	assert(p_target);
+	DAP_CTRL_REG_set(p_target, a_unit, a_fgrp);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return;
+	}
+	(void)DAP_CMD_scan(p_target, REGTRANS_scan_type(true, index), data);
+}
+
+static uint32_t
+REGTRANS_read(target* const p_target, enum type_dbgc_unit_id_e a_unit, enum DBGC_FGRP a_fgrp, uint8_t const index)
+{
+	assert(p_target);
+	DAP_CTRL_REG_set(p_target, a_unit, a_fgrp);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return 0xBADC0DE0;
+	}
+	(void)DAP_CMD_scan(p_target, REGTRANS_scan_type(false, index), 0);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return 0xBADC0DE1;
+	}
+	return DAP_CMD_scan(p_target, REGTRANS_scan_type(false, index), 0);
+}
+
+static inline void
+HART_REGTRANS_write(target * const p_target, enum DBGC_HART_REGS_e const index, uint32_t const data)
+{
+	REGTRANS_write(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_REGTRANS, index, data);
+}
+
+static inline uint32_t
+HART_REGTRANS_read(target* const p_target, enum DBGC_HART_REGS_e const index)
+{
+	return REGTRANS_read(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_REGTRANS, index);
+}
+
+static inline void
+core_REGTRANS_write(target * const p_target, enum DBGC_CORE_REGS_e const index, uint32_t const data)
+{
+	REGTRANS_write(p_target, DBGC_UNIT_ID_CORE, DBGC_FGRP_CORE_REGTRANS, index, data);
+}
+
+static inline uint32_t
+core_REGTRANS_read(target* const p_target, enum DBGC_CORE_REGS_e const index)
+{
+	return REGTRANS_read(p_target, DBGC_UNIT_ID_CORE, DBGC_FGRP_CORE_REGTRANS, index);
+}
+
+
 /// @}
 
 static inline void
 exec__setup(target *p_target)
 {
-	DAP_CTRL_REG_set(p_target, DBGC_UNIT_ID_HART_0, DBGC_FGRP_HART_DBGCMD);
+	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 }
 
 static inline void
@@ -519,7 +596,7 @@ reg_x_operation_conditions_check(reg *p_reg)
 		return;
 	}
 	update_status(p_target);
-	if ( error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return;
 	}
 	if ( p_target->state != TARGET_HALTED ) {
@@ -534,7 +611,7 @@ reg_x_get(reg *p_reg)
 	reg_x_operation_conditions_check(p_reg);
 	target* p_target = p_reg->arch_info;
 	assert(p_target);
-	if ( error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
 
@@ -549,7 +626,7 @@ reg_x_get(reg *p_reg)
 		} else {
 			LOG_WARNING("Try re-read cache register %s", p_reg->name);
 		}
-	}
+		}
 
 	// Save p_reg->number register to DBG_SCRATCH CSR
 	exec__setup(p_target);
@@ -576,7 +653,7 @@ reg_x_get(reg *p_reg)
 	p_reg->valid = true;
 	p_reg->dirty = false;
 	return error_code__clear(p_target);
-}
+	}
 
 static int
 reg_x_set(reg *p_reg, uint8_t *buf)
@@ -619,7 +696,7 @@ reg_x_set(reg *p_reg, uint8_t *buf)
 		return error_code__clear(p_target);
 	}
 	p_reg->dirty = false;
-	if ( advance_pc_counter != 0) {
+	if ( advance_pc_counter != 0 ) {
 		/// Correct pc back after each instruction
 		assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
 		exec__step(p_target, RV_JAL(x0, -advance_pc_counter));
@@ -631,7 +708,7 @@ reg_x_set(reg *p_reg, uint8_t *buf)
 	assert(advance_pc_counter == 0);
 	assert(p_reg->valid && !p_reg->dirty);
 	return error_code__clear(p_target);
-}
+	}
 
 static reg_arch_type const reg_x_accessors =
 {
@@ -1226,13 +1303,6 @@ this_halt(target *p_target)
 	return error_code__clear(p_target);
 }
 
-static inline uint8_t
-REGTRANS_scan_type(bool write, uint8_t index)
-{
-	assert((index & !LOW_BITS_MASK(3)) == 0);
-	return (write ? BIT_NUM_TO_MASK(3) : 0) | index;
-}
-
 static int
 common_resume(target *p_target, int current, uint32_t address, int handle_breakpoints, int debug_execution)
 {
@@ -1276,9 +1346,9 @@ common_resume(target *p_target, int current, uint32_t address, int handle_breakp
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
-#if 1
+
 	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
-#endif
+
 	return error_code__clear(p_target);
 }
 
@@ -1286,8 +1356,14 @@ static int
 this_resume(target *p_target, int current, uint32_t address, int handle_breakpoints, int debug_execution)
 {
 	assert(p_target);
+	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT));
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
+
 	This_Arch* p_arch = p_target->arch_info;
 	p_arch->nc_poll_requested = DBG_REASON_BREAKPOINT;
+
 	return common_resume(p_target, current, address, handle_breakpoints, debug_execution);
 }
 
@@ -1295,8 +1371,14 @@ static int
 this_step(target *p_target, int current, uint32_t address, int handle_breakpoints)
 {
 	assert(p_target);
+	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT));
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
+
 	This_Arch* p_arch = p_target->arch_info;
 	p_arch->nc_poll_requested = DBG_REASON_SINGLESTEP;
+
 	return common_resume(p_target, current, address, handle_breakpoints, false);
 }
 
@@ -1309,30 +1391,21 @@ set_reset_state(target *p_target, bool active)
 		return error_code__clear(p_target);
 	}
 
-	uint32_t get_old_value1 = DAP_CMD_scan(p_target, REGTRANS_scan_type(false, DBGC_CORE_REGS_DBG_CTRL), 0);
+	uint32_t const get_old_value1 = core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
-	get_old_value1 = DAP_CMD_scan(p_target, REGTRANS_scan_type(false, DBGC_CORE_REGS_DBG_CTRL), 0);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return error_code__clear(p_target);
-	}
-	static uint32_t const bit_mask = BIT_NUM_TO_MASK(0) | BIT_NUM_TO_MASK(24);
+	/// @todo replace literals
+	static uint32_t const bit_mask = BIT_NUM_TO_MASK(DBGC_CORE_CDCR_HART0_RST_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDCR_RST_BIT);
 
 	uint32_t const set_value = (get_old_value1 & ~bit_mask) | (active ? bit_mask : 0u);
-	uint32_t const get_old_value2 = DAP_CMD_scan(p_target, REGTRANS_scan_type(true, DBGC_CORE_REGS_DBG_CTRL), set_value);
+	core_REGTRANS_write(p_target, DBGC_CORE_REGS_DBG_CTRL, set_value);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
 	}
-	assert(get_old_value2 == get_old_value1);
-
 	{
 		// double check
-		DAP_CMD_scan(p_target, REGTRANS_scan_type(false, DBGC_CORE_REGS_DBG_CTRL), 0);
-		if ( error_code__get(p_target) != ERROR_OK ) {
-			return error_code__clear(p_target);
-		}
-		uint32_t const get_new_value2 = DAP_CMD_scan(p_target, REGTRANS_scan_type(false, DBGC_CORE_REGS_DBG_CTRL), 0);
+		uint32_t const get_new_value2 = core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
 		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__clear(p_target);
 		}
@@ -1342,6 +1415,7 @@ set_reset_state(target *p_target, bool active)
 			return error_code__clear(p_target);
 		}
 	}
+
 	update_status(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
@@ -1360,29 +1434,29 @@ set_reset_state(target *p_target, bool active)
 static int
 this_assert_reset(target *p_target)
 {
-	assert(p_target);
 	return set_reset_state(p_target, true);
 }
 
 static int
 this_deassert_reset(target *p_target)
 {
-	assert(p_target);
 	return set_reset_state(p_target, false);
 }
 
 static int
 this_soft_reset_halt(target *p_target)
 {
-#if 0
-	int retval;
-	// assert reset
-	if ( (retval = debug_write_register(target, DEBUG_CONTROL_PWR_RST, DEBUG_CONTROL_PWR_RST_HRESET)) != ERROR_OK ) {
-		return retval;
+	set_reset_state(p_target, true);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
 	}
-	// ...and deassert reset
-	return debug_write_register(target, DEBUG_CONTROL_PWR_RST, 0);
-#endif
+	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT));
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
+
+	set_reset_state(p_target, false);
+
 	return error_code__clear(p_target);
 }
 
@@ -1417,12 +1491,12 @@ this_read_memory(target *p_target, uint32_t address, uint32_t size, uint32_t cou
 	if ( address & 0x3 ) {
 		if ( (retval = read_mem_word(p_target, address & (~0x3), &x)) != ERROR_OK ) {
 			return error_code__clear(p_target);
-		}
+}
 		while ( (address + i) & 0x3 && i != buffer_size ) {
 			*(buffer + i) = ((uint8_t*)(&x))[(address + i) & 0x3];
 			++i;
 		}
-	}
+}
 	for ( ; i + 4 <= buffer_size; i += 4 ) {
 		if ( (retval = read_mem_word(p_target, address + i, (uint32_t*)(buffer + i))) != ERROR_OK ) {
 			return error_code__clear(p_target);
@@ -1453,14 +1527,13 @@ this_write_memory(target *p_target, uint32_t address, uint32_t size, uint32_t co
 static int
 this_examine(target *p_target)
 {
-#if 0
-	// initialize register values
-	set_reset_state(p_target, true);
-	debug_write_register(target, DEBUG_CONTROL_BREAK, DEBUG_CONTROL_RSTOFBE);
-	debug_write_register(target, DEBUG_CONTROL_HALT, DEBUG_CONTROL_HALT_INT3);
-	debug_write_register(target, DEBUG_CONTROL_PWR_RST, 0);
-	set_reset_state(p_target, false);
-#endif
+	if ( target_was_examined(p_target) ) {
+		return ERROR_OK;
+	}
+	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT));
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__clear(p_target);
+	}
 	update_status(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__clear(p_target);
@@ -1483,7 +1556,7 @@ this_add_breakpoint(target *p_target, struct breakpoint *breakpoint)
 	}
 
 	assert(breakpoint);
-	if ( (breakpoint->address % NUM_BITS_TO_SIZE(ILEN)) != 0) {
+	if ( (breakpoint->address % NUM_BITS_TO_SIZE(ILEN)) != 0 ) {
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__clear(p_target);
 	}
