@@ -1302,14 +1302,12 @@ this_poll(target* const restrict p_target)
 	return error_code__clear(p_target);
 }
 
-#if 0
 static int
 this_arch_state(target *p_target)
 {
 	LOG_ERROR("Unimplemented");
 	return error_code__clear(p_target);
 }
-#endif
 
 static int
 this_halt(target* const restrict p_target)
@@ -1699,9 +1697,7 @@ target_type syntacore_riscv32i_target =
 	.name = "syntacore_riscv32i",
 
 	.poll = this_poll,
-#if 0
 	.arch_state = this_arch_state,
-#endif
 
 	.halt = this_halt,
 	.resume = this_resume,
