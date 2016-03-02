@@ -1293,13 +1293,14 @@ regs_invalidate(target const* const restrict p_target)
 	/// @todo multiple caches
 	reg_cache const* const p_reg_cache = p_target->reg_cache;
 	assert(p_reg_cache);
-	assert(p_reg_cache->num_regs == (32 + 32 + 1));
+	assert(p_reg_cache->num_regs == TOTAL_NUMBER_OF_REGS);
 	for (size_t i = 0; i < p_reg_cache->num_regs; ++i) {
 		assert(!p_reg_cache->reg_list[i].dirty);
 		p_reg_cache->reg_list[i].valid = false;
 	}
 }
 
+#if 0
 static void
 regs_commit(target const* const restrict p_target)
 {
@@ -1395,6 +1396,7 @@ regs_commit(target const* const restrict p_target)
 	p_tmp_reg->dirty = false;
 	assert(advance_pc_counter == 0);
 }
+#endif
 
 static enum target_debug_reason
 read_debug_cause(target* const restrict p_target)
@@ -1538,13 +1540,13 @@ common_resume(target* const restrict p_target, int const current, uint32_t const
 		}
 		assert(p_pc->valid);
 	}
-
+#if 0
 	// upload reg values into HW
 	regs_commit(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
-
+#endif
 	regs_invalidate(p_target);
 	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 	if (error_code__get(p_target) != ERROR_OK) {
