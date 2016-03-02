@@ -1884,6 +1884,7 @@ target_type syntacore_riscv32i_target =
 
 	.poll = this_poll,
 	.arch_state = this_arch_state,
+	.target_request_data = NULL,
 
 	.halt = this_halt,
 	.resume = this_resume,
@@ -1898,13 +1899,46 @@ target_type syntacore_riscv32i_target =
 	.read_memory = this_read_memory,
 	.write_memory = this_write_memory,
 
+	.read_buffer = NULL,
+	.write_buffer = NULL,
+
+	.checksum_memory = NULL,
+	.blank_check_memory = NULL,
+
 	.add_breakpoint = this_add_breakpoint,
+	.add_context_breakpoint = NULL,
+	.add_hybrid_breakpoint = NULL,
+
 	.remove_breakpoint = this_remove_breakpoint,
 
+	.add_watchpoint = NULL,
+	.remove_watchpoint = NULL,
+
+	.hit_watchpoint = NULL,
+
+	.run_algorithm = NULL,
+	.start_algorithm = NULL,
+	.wait_algorithm = NULL,
+
+	.commands = NULL,
+
 	.target_create = this_target_create,
+	.target_jim_configure = NULL,
+	.target_jim_commands = NULL,
+
 	.examine = this_examine,
 
 	.init_target = this_init_target,
 	.deinit_target = this_deinit_target,
+
+	.virt2phys = NULL,
+	.read_phys_memory = NULL,
+	.write_phys_memory = NULL,
+
+	.mmu = NULL,
+	.check_reset = NULL,
+	.get_gdb_fileio_info = NULL,
+	.gdb_fileio_end = NULL,
+	.profiling = NULL,
 };
 
