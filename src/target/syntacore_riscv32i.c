@@ -1613,10 +1613,13 @@ this_write_memory(target* const restrict p_target, uint32_t const address, uint3
 static int
 this_examine(target* const restrict p_target)
 {
+#if 0
 	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT));
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
+#endif
+
 	update_status(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
