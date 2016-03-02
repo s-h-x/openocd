@@ -474,6 +474,16 @@ HART_status_bits_to_target_state(target const* const restrict p_target, uint8_t 
 	}
 }
 
+static void
+update_status(target* const restrict p_target)
+{
+	assert(p_target);
+	/// Only 1 HART available
+	assert(p_target->coreid == 0);
+	uint8_t const status = (DBG_STATUS_get(p_target) >> p_target->coreid) & 0xFFu;
+	p_target->state = HART_status_bits_to_target_state(p_target, status);
+}
+
 static uint32_t
 DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT)
 {
@@ -620,7 +630,8 @@ reg_x_operation_conditions_check(reg const* const restrict p_reg)
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return;
 	}
-	if (error_code__update(p_target, target_arch_state(p_target)) != ERROR_OK) {
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
 		return;
 	}
 	if (p_target->state != TARGET_HALTED) {
@@ -817,7 +828,8 @@ reg_pc_get(reg* const restrict p_pc)
 	target* const p_target = p_pc->arch_info;
 	assert(p_target);
 
-	if (error_code__update(p_target, target_arch_state(p_target)) != ERROR_OK) {
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
 	if (p_target->state != TARGET_HALTED) {
@@ -882,7 +894,8 @@ reg_pc_set(reg* const restrict p_pc, uint8_t* const restrict buf)
 
 	target* const p_target = p_pc->arch_info;
 	assert(p_target);
-	if (error_code__update(p_target, target_arch_state(p_target)) != ERROR_OK) {
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
 	if (p_target->state != TARGET_HALTED) {
@@ -1270,7 +1283,8 @@ update_debug_reason(target* const restrict p_target)
 static int
 this_poll(target* const restrict p_target)
 {
-	if (error_code__update(p_target, target_arch_state(p_target)) != ERROR_OK) {
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
 
@@ -1293,11 +1307,7 @@ this_poll(target* const restrict p_target)
 static int
 this_arch_state(target* const restrict p_target)
 {
-	assert(p_target);
-	/// Only 1 HART available now
-	assert(p_target->coreid == 0);
-	uint8_t const status = (DBG_STATUS_get(p_target) >> p_target->coreid) & 0xFFu;
-	p_target->state = HART_status_bits_to_target_state(p_target, status);
+	update_status(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
@@ -1320,7 +1330,8 @@ this_halt(target* const restrict p_target)
 	{
 		// May be already halted?
 		// Update state
-		if (error_code__update(p_target, target_arch_state(p_target)) != ERROR_OK) {
+		update_status(p_target);
+		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__clear(p_target);
 		}
 
@@ -1343,9 +1354,12 @@ this_halt(target* const restrict p_target)
 		}
 	}
 
-	// update state
-	if (error_code__update(p_target, target_arch_state(p_target)) != ERROR_OK) {
-		return error_code__clear(p_target);
+	{
+		// update state
+		update_status(p_target);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
 	}
 
 	// Verify that in debug mode
@@ -1400,7 +1414,8 @@ common_resume(target* const restrict p_target, int const current, uint32_t const
 		return error_code__clear(p_target);
 	}
 	// update state
-	if (error_code__update(p_target, target_arch_state(p_target)) != ERROR_OK) {
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
 
@@ -1487,7 +1502,8 @@ set_reset_state(target* const restrict p_target, bool const active)
 		}
 	}
 
-	if (error_code__update(p_target, target_arch_state(p_target)) != ERROR_OK) {
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
 	if (active && p_target->state != TARGET_RESET) {
@@ -1601,7 +1617,8 @@ this_examine(target* const restrict p_target)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
-	if (error_code__update(p_target, target_arch_state(p_target)) != ERROR_OK) {
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
 	target_set_examined(p_target);
@@ -1612,7 +1629,8 @@ static int
 this_add_breakpoint(target* const restrict p_target, struct breakpoint* const restrict breakpoint)
 {
 	assert(p_target);
-	if (error_code__update(p_target, target_arch_state(p_target)) != ERROR_OK) {
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
 	if (p_target->state != TARGET_HALTED) {
