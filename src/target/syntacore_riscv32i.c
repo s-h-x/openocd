@@ -1199,22 +1199,22 @@ static reg const reg_def_array[] = {
 	{.name = "f17", .number = 50, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
 
 	// FP saved registers
-	{.name = "f18", .number = 51, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f19", .number = 52, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f20", .number = 53, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f21", .number = 54, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f22", .number = 55, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f23", .number = 56, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f24", .number = 57, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f25", .number = 58, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f26", .number = 59, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f27", .number = 60, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f18", .number = 51, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f19", .number = 52, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f20", .number = 53, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f21", .number = 54, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f22", .number = 55, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f23", .number = 56, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f24", .number = 57, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f25", .number = 58, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f26", .number = 59, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f27", .number = 60, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
 
 	// FP temporaries
-	{.name = "f28", .number = 61, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f29", .number = 62, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f30", .number = 63, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
-	{.name = "f31", .number = 64, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_x_accessors},
+	{.name = "f28", .number = 61, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f29", .number = 62, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f30", .number = 63, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f31", .number = 64, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
 };
 
 static reg_cache*
