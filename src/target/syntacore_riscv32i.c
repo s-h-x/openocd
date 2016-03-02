@@ -16,6 +16,9 @@
 #include <limits.h>
 #include <memory.h>
 
+#define VERIFY_HART_REGTRANS_WRITE !0
+#define VERIFY_CORE_REGTRANS_WRITE !0
+
 #define XLEN 32
 #define ILEN 32
 #define FLEN 32
@@ -1433,6 +1436,7 @@ this_resume(target* const restrict p_target, int const current, uint32_t const a
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
+#if VERIFY_HART_REGTRANS_WRITE
 	uint32_t const get_value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
@@ -1442,7 +1446,7 @@ this_resume(target* const restrict p_target, int const current, uint32_t const a
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return error_code__clear(p_target);
 	}
-
+#endif
 	return common_resume(p_target, current, address, handle_breakpoints, debug_execution);
 }
 
@@ -1450,11 +1454,16 @@ static int
 this_step(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints)
 {
 	assert(p_target);
+#if 0
 	uint32_t const set_value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
+#else
+	uint32_t const set_value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
+#endif
 	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, set_value);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
+#if VERIFY_HART_REGTRANS_WRITE
 	uint32_t const get_value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
@@ -1464,6 +1473,7 @@ this_step(target* const restrict p_target, int const current, uint32_t const add
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return error_code__clear(p_target);
 	}
+#endif
 
 	return common_resume(p_target, current, address, handle_breakpoints, false);
 }
@@ -1489,6 +1499,8 @@ set_reset_state(target* const restrict p_target, bool const active)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
+
+#if VERIFY_CORE_REGTRANS_WRITE
 	{
 		// double check
 		uint32_t const get_new_value2 = core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
@@ -1501,6 +1513,7 @@ set_reset_state(target* const restrict p_target, bool const active)
 			return error_code__clear(p_target);
 		}
 	}
+#endif
 
 	update_status(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
@@ -1513,6 +1526,8 @@ set_reset_state(target* const restrict p_target, bool const active)
 	} else if (!active && p_target->state == TARGET_RESET) {
 		LOG_ERROR("RV is stiil in reset after reset deassert");
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
+	} else {
+		assert(("Invalid combination of active && p_target->state", 0));
 	}
 	return error_code__clear(p_target);
 }
@@ -1536,10 +1551,23 @@ this_soft_reset_halt(target* const restrict p_target)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
-	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT));
+	uint32_t const set_value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT);
+	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, set_value);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
+
+#if VERIFY_HART_REGTRANS_WRITE
+	uint32_t const get_value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+	if (get_value != set_value) {
+		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value %#010x, but re-read value is %#010x", set_value, get_value);
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+		return error_code__clear(p_target);
+	}
+#endif
 
 	set_reset_state(p_target, false);
 
