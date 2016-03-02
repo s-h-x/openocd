@@ -782,7 +782,7 @@ static reg_arch_type const reg_x0_accessors =
 };
 
 static reg*
-prepare_temporary_GP_register(target const* const restrict p_target)
+prepare_temporary_GP_register(target const* const restrict p_target, int const after_reg)
 {
 	assert(p_target);
 	reg_cache const* const p_reg_cache = p_target->reg_cache;
@@ -792,19 +792,22 @@ prepare_temporary_GP_register(target const* const restrict p_target)
 	assert(p_reg_cache->num_regs >= 32);
 	reg* p_valid = NULL;
 	reg* p_dirty = NULL;
-	for (size_t i = 31; 0 < i; --i) {
+	for (size_t i = after_reg + 1; i < 32; ++i) {
 		if (p_reg_list[i].valid) {
-			p_valid = &p_reg_list[i];
 			if (p_reg_list[i].dirty) {
 				p_dirty = &p_reg_list[i];
+				p_valid = p_dirty;
+				break;
+			} else if (!p_valid) {
+				p_valid = &p_reg_list[i];
 			}
 		}
 	}
 	if (!p_dirty) {
 		if (!p_valid) {
-			p_valid = &p_reg_list[1];
-			error_code__update(p_target, reg_x_get(p_valid));
-			if (error_code__get(p_target) != ERROR_OK) {
+			assert(after_reg + 1 < 32);
+			p_valid = &p_reg_list[after_reg + 1];
+			if (error_code__update(p_target, reg_x_get(p_valid)) != ERROR_OK) {
 				return NULL;
 			}
 		}
@@ -841,7 +844,7 @@ reg_pc_get(reg* const restrict p_pc)
 		return error_code__clear(p_target);
 	}
 
-	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target);
+	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 	if (!p_wrk_reg) {
 		LOG_ERROR("Temporary GP register not found!");
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
@@ -917,7 +920,7 @@ reg_pc_set(reg* const restrict p_pc, uint8_t* const restrict buf)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
-	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target);
+	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 	assert(p_wrk_reg);
 	exec__set_csr_data(p_target, buf_get_u32(p_pc->value, 0, p_pc->size));
 	if (error_code__get(p_target) != ERROR_OK) {
@@ -1174,7 +1177,7 @@ regs_commit(target const* const restrict p_target)
 	reg* const restrict p_pc = &p_reg_cache->reg_list[32];
 
 	/// If pc is dirty find first dirty GP register (except zero register)
-	reg* const restrict p_tmp_reg = p_pc->dirty ? prepare_temporary_GP_register(p_target) : &p_reg_cache->reg_list[0];
+	reg* const restrict p_tmp_reg = p_pc->dirty ? prepare_temporary_GP_register(p_target, 0) : &p_reg_cache->reg_list[0];
 
 	exec__setup(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
@@ -1527,7 +1530,7 @@ set_reset_state(target* const restrict p_target, bool const active)
 		LOG_ERROR("RV is stiil in reset after reset deassert");
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 	} else {
-		assert(("Invalid combination of active && p_target->state", 0));
+		assert(!"Invalid combination of active && p_target->state");
 	}
 	return error_code__clear(p_target);
 }
