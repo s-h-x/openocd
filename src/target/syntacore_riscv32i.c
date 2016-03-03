@@ -16,11 +16,11 @@
 #include <limits.h>
 #include <memory.h>
 
-#define VERIFY_HART_REGTRANS_WRITE !0
-#define VERIFY_CORE_REGTRANS_WRITE !0
 #define IR_SELECT_ALWAYS 0
 #define SET_DAP_CONTROL_ALWAYS 0
-#define VERIFY_DAP_CONTROL 1
+#define VERIFY_HART_REGTRANS_WRITE 0
+#define VERIFY_CORE_REGTRANS_WRITE 0
+#define VERIFY_DAP_CONTROL 0
 
 #define XLEN 32
 #define ILEN 32
@@ -429,7 +429,7 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 		}
 		LOG_DEBUG("drscan %s %d %#03x --> %#03x", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
 		if ((status & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
-			LOG_ERROR("TAP status %0x", (uint32_t)status);
+			LOG_ERROR("TAP status %#03x", (uint32_t)status);
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return;
 		}
@@ -1526,8 +1526,29 @@ this_halt(target* const restrict p_target)
 	return error_code__clear(p_target);
 }
 
+static void
+set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
+{
+	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, set_value);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return;
+	}
+
+#if VERIFY_HART_REGTRANS_WRITE
+	uint32_t const get_value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return;
+	}
+	if (get_value != set_value) {
+		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value %#010x, but re-read value is %#010x", set_value, get_value);
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+		return;
+	}
+#endif
+}
+
 static int
-common_resume(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
+common_resume(target* const restrict p_target, uint32_t const dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	assert(p_target);
 	/// @todo update state
@@ -1556,6 +1577,10 @@ common_resume(target* const restrict p_target, int const current, uint32_t const
 	}
 #endif
 	regs_invalidate(p_target);
+	set_DEMODE_ENBL(p_target, dmode_enabled);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
 	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
@@ -1581,23 +1606,8 @@ this_resume(target* const restrict p_target, int const current, uint32_t const a
 {
 	assert(p_target);
 	/// @todo Verify halt
-	uint32_t const set_value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT);
-	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, set_value);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-#if VERIFY_HART_REGTRANS_WRITE
-	uint32_t const get_value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-	if (get_value != set_value) {
-		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value %#010x, but re-read value is %#010x", set_value, get_value);
-		error_code__update(p_target, ERROR_TARGET_FAILURE);
-		return error_code__clear(p_target);
-	}
-#endif
-	return common_resume(p_target, current, address, handle_breakpoints, debug_execution);
+	uint32_t const dmode_enabled = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT);
+	return common_resume(p_target, dmode_enabled, current, address, handle_breakpoints, debug_execution);
 }
 
 static int
@@ -1606,27 +1616,11 @@ this_step(target* const restrict p_target, int const current, uint32_t const add
 	assert(p_target);
 	/// @todo Verify halt
 #if 1
-	uint32_t const set_value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
+	uint32_t const dmode_enabled = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
 #else
 	uint32_t const set_value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
 #endif
-	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, set_value);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-#if VERIFY_HART_REGTRANS_WRITE
-	uint32_t const get_value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-	if (get_value != set_value) {
-		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value %#010x, but re-read value is %#010x", set_value, get_value);
-		error_code__update(p_target, ERROR_TARGET_FAILURE);
-		return error_code__clear(p_target);
-	}
-#endif
-
-	return common_resume(p_target, current, address, handle_breakpoints, false);
+	return common_resume(p_target, dmode_enabled, current, address, handle_breakpoints, false);
 }
 
 static int
@@ -1697,6 +1691,7 @@ this_deassert_reset(target* const restrict p_target)
 	return set_reset_state(p_target, false);
 }
 
+
 static int
 this_soft_reset_halt(target* const restrict p_target)
 {
@@ -1704,24 +1699,11 @@ this_soft_reset_halt(target* const restrict p_target)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
-	uint32_t const set_value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT);
-	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, set_value);
+	uint32_t const dmode_enabled = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT);
+	set_DEMODE_ENBL(p_target, dmode_enabled);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
-
-#if VERIFY_HART_REGTRANS_WRITE
-	uint32_t const get_value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-	if (get_value != set_value) {
-		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value %#010x, but re-read value is %#010x", set_value, get_value);
-		error_code__update(p_target, ERROR_TARGET_FAILURE);
-		return error_code__clear(p_target);
-	}
-#endif
-
 	set_reset_state(p_target, false);
 
 	return error_code__clear(p_target);
@@ -1936,13 +1918,13 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 static int
 this_examine(target* const restrict p_target)
 {
-#if 0
-	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT));
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
+	if (!target_was_examined(p_target)) {
+		uint32_t const dmode_enabled = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT);
+		set_DEMODE_ENBL(p_target, dmode_enabled);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
 	}
-#endif
-
 	update_status(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
