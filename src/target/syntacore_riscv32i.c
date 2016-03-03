@@ -93,15 +93,15 @@ typedef uint32_t instr_type;
 #define RV_ADDI(rd, rs1, imm) RV_INSTR_I_TYPE(imm, rs1, 0, rd, 0x13)
 #define RV_NOP() RV_ADDI(zero, zero, 0u)
 #define RV_SBREAK() RV_INSTR_I_TYPE(1u, 0u, 0u, 0u, 0x73u)
-#define RV_LB(rd, rs1, imm) RV_INSTR_I_TYPE(imm, rs1, 0u, rd, 3u)
-#define RV_LH(rd, rs1, imm) RV_INSTR_I_TYPE(imm, rs1, 1u, rd, 3u)
-#define RV_LW(rd, rs1, imm) RV_INSTR_I_TYPE(imm, rs1, 2u, rd, 3u)
-#define RV_LBU(rd, rs1, imm) RV_INSTR_I_TYPE(imm, rs1, 4u, rd, 3u)
-#define RV_LHU(rd, rs1, imm) RV_INSTR_I_TYPE(imm, rs1, 5u, rd, 3u)
+#define RV_LB(rd, base, imm) RV_INSTR_I_TYPE(imm, base, 0u, rd, 3u)
+#define RV_LH(rd, base, imm) RV_INSTR_I_TYPE(imm, base, 1u, rd, 3u)
+#define RV_LW(rd, base, imm) RV_INSTR_I_TYPE(imm, base, 2u, rd, 3u)
+#define RV_LBU(rd, base, imm) RV_INSTR_I_TYPE(imm, base, 4u, rd, 3u)
+#define RV_LHU(rd, base, imm) RV_INSTR_I_TYPE(imm, base, 5u, rd, 3u)
 
-#define RV_SB(rs1, rs2, imm) RV_INSTR_S_TYPE(imm, rs2, rs1, 0u, 0x23)
-#define RV_SH(rs1, rs2, imm) RV_INSTR_S_TYPE(imm, rs2, rs1, 1u, 0x23)
-#define RV_SW(rs1, rs2, imm) RV_INSTR_S_TYPE(imm, rs2, rs1, 2u, 0x23)
+#define RV_SB(rs, base, imm) RV_INSTR_S_TYPE(imm, rs, base, 0u, 0x23)
+#define RV_SH(rs, base, imm) RV_INSTR_S_TYPE(imm, rs, base, 1u, 0x23)
+#define RV_SW(rs, base, imm) RV_INSTR_S_TYPE(imm, rs, base, 2u, 0x23)
 #define RV_AUIPC(rd, imm) RV_INSTR_U_TYPE(imm, rd, 0x17u)
 #define RV_CSRRW(rd, csr, rs1) RV_INSTR_I_TYPE((csr), rs1, 1u, rd, 0x73u)
 #define RV_JAL(rd, imm) RV_INSTR_UJ_TYPE(imm, rd, 0x6Fu)
@@ -1530,6 +1530,7 @@ static int
 common_resume(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	assert(p_target);
+	/// @todo update state
 	if (p_target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
@@ -1579,6 +1580,7 @@ static int
 this_resume(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	assert(p_target);
+	/// @todo Verify halt
 	uint32_t const set_value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT);
 	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, set_value);
 	if (error_code__get(p_target) != ERROR_OK) {
@@ -1602,6 +1604,7 @@ static int
 this_step(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints)
 {
 	assert(p_target);
+	/// @todo Verify halt
 #if 1
 	uint32_t const set_value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
 #else
@@ -1725,67 +1728,209 @@ this_soft_reset_halt(target* const restrict p_target)
 }
 
 static int
-read_mem_word(target* const restrict p_target, uint32_t const address, uint32_t* const data)
+this_read_memory(target* const restrict p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* restrict buffer)
 {
-#if 0
-	int retval = 0;
-	if ( (retval = debug_write_register(target, DEBUG_MEMORY_ACCESS_ADDRESS, address)) != ERROR_OK ) {
-		return retval;
+	LOG_DEBUG("Read_memory at %#010x, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
+	/// Check for size
+	if (!(size == 1 || size == 2 || size == 4)) {
+		LOG_ERROR("Invalid item size %d", size);
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+		return error_code__clear(p_target);
 	}
-	if ( (retval = debug_write_register(target, DEBUG_MEMORY_ACCESS_CMD, DEBUG_MEMORY_ACCESS_CMD_START)) != ERROR_OK ) {
-		return retval;
+
+	/// Check for alignment
+	if (address % size != 0) {
+		LOG_ERROR("Unaligned access at %#010x, for item size %d", address, size);
+		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+		return error_code__clear(p_target);
 	}
-	if ( (retval = debug_read_register(target, DEBUG_MEMORY_ACCESS_RD_DATA, data)) != ERROR_OK ) {
-		return retval;
+	
+	/// Check that target halted
+	{
+		update_status(p_target);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+		if (p_target->state != TARGET_HALTED) {
+			LOG_ERROR("Target not halted");
+			error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
+			return error_code__clear(p_target);
+		}
 	}
-#endif
-	LOG_DEBUG("MR A %08X D %08X", address, *data);
+
+	/// Reserve work register
+	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+	assert(p_wrk_reg);
+
+	/// Define opcode for load item to register
+	uint32_t const load_OP =
+		size == 4 ? RV_LW(p_wrk_reg->number, p_wrk_reg->number, 0) :
+		size == 2 ? RV_LH(p_wrk_reg->number, p_wrk_reg->number, 0) :
+		/*size == 1*/RV_LB(p_wrk_reg->number, p_wrk_reg->number, 0);
+
+	/// Setup exec operations mode
+	exec__setup(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+	int advance_pc_counter = 0;
+
+	/// For count number of items do loop
+	while (count--) {
+		/// Set address to CSR
+		exec__set_csr_data(p_target, address);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+
+		/// Load address to work register
+		exec__step(p_target, RV_CSRRW(p_wrk_reg->number, DBG_SCRATCH, zero));
+		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+
+		/// Exec load item to register
+		exec__step(p_target, load_OP);
+		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+
+		/// Exec store work register to csr
+		exec__step(p_target, RV_CSRRW(zero, DBG_SCRATCH, p_wrk_reg->number));
+		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+
+		/// get data from csr and jump back to correct pc
+		uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+		advance_pc_counter = 0;
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+
+		/// store read data to buffer
+		buf_set_u32(buffer, 0, 8 * size, value);
+
+		/// advance src/dst pointers
+		address += size;
+		buffer += size;
+	}
+	/// end loop
+	assert(advance_pc_counter == 0);
+
+	/// restore temporary register
+	error_code__update(p_target, reg_x_set(p_wrk_reg, p_wrk_reg->value));
+	assert(p_wrk_reg->valid && !p_wrk_reg->dirty);
 	return error_code__clear(p_target);
 }
 
 static int
-this_read_memory(target* const restrict p_target, uint32_t const address, uint32_t const size, uint32_t const count, uint8_t* const restrict buffer)
+this_write_memory(target* const restrict p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* restrict buffer)
 {
-	LOG_DEBUG("read_memory at %08X, %d bytes", address, size * count);
-	unsigned i = 0;  // byte count
-	uint32_t x = 0;  // buffer
-	int retval = 0;
-	unsigned const buffer_size = count * size;
-	// Address is not aligned
-	if (address & 0x3) {
-		if ((retval = read_mem_word(p_target, address & (~0x3), &x)) != ERROR_OK) {
-			return error_code__clear(p_target);
-		}
-		while ((address + i) & 0x3 && i != buffer_size) {
-			*(buffer + i) = ((uint8_t*)(&x))[(address + i) & 0x3];
-			++i;
-		}
-	}
-	for (; i + 4 <= buffer_size; i += 4) {
-		if ((retval = read_mem_word(p_target, address + i, (uint32_t*)(buffer + i))) != ERROR_OK) {
-			return error_code__clear(p_target);
-		}
-	}
-	if (buffer_size == i) {
+	LOG_DEBUG("Write_memory at %#010x, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
+	/// Check for size
+	if (!(size == 1 || size == 2 || size == 4)) {
+		LOG_ERROR("Invalid item size %d", size);
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return error_code__clear(p_target);
 	}
-	if ((retval = read_mem_word(p_target, address + i, &x)) != ERROR_OK) {
+
+	/// Check for alignment
+	if (address % size != 0) {
+		LOG_ERROR("Unaligned access at %#010x, for item size %d", address, size);
+		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__clear(p_target);
 	}
-	unsigned const word_start_offset = i;
-	for (; i != buffer_size; ++i) {
-		*(buffer + i) = ((uint8_t*)(&x))[(i - word_start_offset) & 0x3];
+
+	/// Check that target halted
+	{
+		update_status(p_target);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+		if (p_target->state != TARGET_HALTED) {
+			LOG_ERROR("Target not halted");
+			error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
+			return error_code__clear(p_target);
+		}
 	}
+	/// Reserve work register
+	reg* const p_addr_reg = prepare_temporary_GP_register(p_target, zero);
+	assert(p_addr_reg);
+	reg* const p_data_reg = prepare_temporary_GP_register(p_target, p_addr_reg->number);
+	assert(p_data_reg);
+	assert(p_addr_reg->number != p_addr_reg->number);
+
+	/// Define opcode for load item to register
+	uint32_t const store_OP =
+		size == 4 ?   RV_SW(p_data_reg->number, p_addr_reg->number, 0) :
+		size == 2 ?   RV_SH(p_data_reg->number, p_addr_reg->number, 0) :
+		/*size == 1*/ RV_SB(p_data_reg->number, p_addr_reg->number, 0);
+
+	/// Setup exec operations mode
+	exec__setup(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+	int advance_pc_counter = 0;
+
+	/// For count number of items do loop
+	while (count--) {
+		/// Set address to CSR
+		exec__set_csr_data(p_target, address);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+
+		/// Load address to work register
+		exec__step(p_target, RV_CSRRW(p_addr_reg->number, DBG_SCRATCH, zero));
+		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+
+		/// Set data to CSR
+		exec__set_csr_data(p_target, buf_get_u32(buffer, 0, 8 * size));
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+
+		/// Load data to work register
+		exec__step(p_target, RV_CSRRW(p_data_reg->number, DBG_SCRATCH, zero));
+		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+
+		/// Exec store item from register to memory
+		exec__step(p_target, store_OP);
+		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+
+		/// jump back to correct pc
+		exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+		advance_pc_counter = 0;
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+
+		/// advance src/dst pointers
+		address += size;
+		buffer += size;
+	}
+	/// end loop
+
+	assert(advance_pc_counter == 0);
+
+	/// restore temporary registers
+	error_code__update(p_target, reg_x_set(p_data_reg, p_data_reg->value));
+	assert(p_data_reg->valid && !p_data_reg->dirty);
+	error_code__update(p_target, reg_x_set(p_addr_reg, p_addr_reg->value));
+	assert(p_addr_reg->valid && !p_addr_reg->dirty);
+
 	return error_code__clear(p_target);
-}
-
-static int
-this_write_memory(target* const restrict p_target, uint32_t const address, uint32_t const size, uint32_t const count, uint8_t const* const restrict buffer)
-{
-	LOG_DEBUG("write_memory at %08X, size %d,  count %d, total %d bytes", address, size, count, size * count);
-	assert(size == 1 || size == 2 || size == 4);
-
-	return ERROR_OK;
 }
 
 static int
@@ -1809,6 +1954,22 @@ this_examine(target* const restrict p_target)
 static int
 this_add_breakpoint(target* const restrict p_target, struct breakpoint* const restrict breakpoint)
 {
+	assert(breakpoint);
+	if (breakpoint->length != NUM_BITS_TO_SIZE(ILEN)) {
+		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+		return error_code__clear(p_target);
+	}
+
+	if ((breakpoint->address % NUM_BITS_TO_SIZE(ILEN)) != 0) {
+		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+		return error_code__clear(p_target);
+	}
+
+	if (breakpoint->type != BKPT_SOFT) {
+		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+		return error_code__clear(p_target);
+	}
+
 	assert(p_target);
 	update_status(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
@@ -1819,21 +1980,6 @@ this_add_breakpoint(target* const restrict p_target, struct breakpoint* const re
 		return error_code__clear(p_target);
 	}
 
-	assert(breakpoint);
-	if ((breakpoint->address % NUM_BITS_TO_SIZE(ILEN)) != 0) {
-		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
-		return error_code__clear(p_target);
-	}
-	if (breakpoint->type != BKPT_SOFT) {
-		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
-		return error_code__clear(p_target);
-	}
-	if (breakpoint->length != NUM_BITS_TO_SIZE(ILEN)) {
-		error_code__update(p_target, ERROR_TARGET_INVALID);
-		return error_code__clear(p_target);
-	}
-
-	assert(p_target);
 	error_code__update(p_target, target_read_buffer(p_target, breakpoint->address, breakpoint->length, breakpoint->orig_instr));
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
@@ -1853,6 +1999,10 @@ static int
 this_remove_breakpoint(target* const restrict p_target, struct breakpoint* const restrict breakpoint)
 {
 	assert(breakpoint);
+	if (breakpoint->length != NUM_BITS_TO_SIZE(ILEN)) {
+		error_code__update(p_target, ERROR_TARGET_INVALID);
+		return error_code__clear(p_target);
+	}
 	if ((breakpoint->address % NUM_BITS_TO_SIZE(ILEN)) != 0) {
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__clear(p_target);
@@ -1861,8 +2011,14 @@ this_remove_breakpoint(target* const restrict p_target, struct breakpoint* const
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return error_code__clear(p_target);
 	}
-	if (breakpoint->length != NUM_BITS_TO_SIZE(ILEN)) {
-		error_code__update(p_target, ERROR_TARGET_INVALID);
+
+	assert(p_target);
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+	if (p_target->state != TARGET_HALTED) {
+		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
 		return error_code__clear(p_target);
 	}
 
