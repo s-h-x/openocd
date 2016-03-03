@@ -18,6 +18,9 @@
 
 #define VERIFY_HART_REGTRANS_WRITE !0
 #define VERIFY_CORE_REGTRANS_WRITE !0
+#define IR_SELECT_ALWAYS 0
+#define SET_DAP_CONTROL_ALWAYS 0
+#define VERIFY_DAP_CONTROL 1
 
 #define XLEN 32
 #define ILEN 32
@@ -312,7 +315,7 @@ IR_select(target const* const restrict p_target, enum TAP_IR_e const new_instr)
 {
 	assert(p_target);
 	assert(p_target->tap);
-#if 1
+#if !(IR_SELECT_ALWAYS)
 	if (buf_get_u32(p_target->tap->cur_instr, 0u, p_target->tap->ir_length) == new_instr) {
 		LOG_DEBUG("IR %s resently selected %d", p_target->cmd_name, new_instr);
 		return;
@@ -395,10 +398,12 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 
 	This_Arch* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
+#if !(SET_DAP_CONTROL_ALWAYS)
 	if (p_arch->last_DAP_ctrl == set_dap_unit_group) {
 		LOG_DEBUG("DAP_CTRL_REG of %s already %#03x", p_target->cmd_name, set_dap_unit_group);
 		return;
 	}
+#endif
 
 	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof set_dap_unit_group);
 	/// set unit/group
@@ -428,8 +433,11 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return;
 		}
+		/// Update cache of DAP control
+		p_arch->last_DAP_ctrl = set_dap_unit_group;
 	}
 
+#if VERIFY_DAP_CONTROL
 	/// verify unit/group
 	{
 		IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
@@ -456,7 +464,7 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 			return;
 		}
 	}
-	p_arch->last_DAP_ctrl = set_dap_unit_group;
+#endif
 }
 
 
@@ -656,22 +664,18 @@ reg_x_get(reg* const restrict p_reg)
 	if (p_reg->valid) {
 		// register cache already valid
 		if (p_reg->dirty) {
-			LOG_ERROR("Try re-read dirty cache register %s", p_reg->name);
-#if 0
-			error_code__update(p_target, ERROR_TARGET_FAILURE);
-			return error_code__clear(p_target);
-#endif
+			LOG_WARNING("Try re-read dirty cache register %s", p_reg->name);
 		} else {
-			LOG_WARNING("Try re-read cache register %s", p_reg->name);
+			LOG_DEBUG("Try re-read cache register %s", p_reg->name);
 		}
 	}
 
-	// Save p_reg->number register to DBG_SCRATCH CSR
 	exec__setup(p_target);
-	int advance_pc_counter = 0;
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
+	int advance_pc_counter = 0;
+	// Save p_reg->number register to DBG_SCRATCH CSR
 	exec__step(p_target, RV_CSRRW(zero, DBG_SCRATCH, p_reg->number));
 	advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 	if (error_code__get(p_target) != ERROR_OK) {
@@ -984,6 +988,7 @@ reg_f_get(reg* const restrict p_reg)
 		return error_code__clear(p_target);
 	}
 
+	/// @todo check that FPU is enabled
 	/// Find temporary GP register
 	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
 	if (!p_wrk_reg) {
@@ -1049,6 +1054,7 @@ reg_f_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 		return error_code__clear(p_target);
 	}
 
+	/// @todo check that FPU is enabled
 	/// Find temporary GP register
 	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
 	if (!p_wrk_reg) {
@@ -1170,51 +1176,52 @@ static reg const reg_def_array[] = {
 	{.name = "x30", .number = 30, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
 	{.name = "x31", .number = 31, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors},
 
+	// Program counter
 	{.name = "pc", .number = 32, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_pc_accessors},
 
 	// FP temporaries
-	{.name = "f0", .number = 33, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f1", .number = 34, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f2", .number = 35, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f3", .number = 36, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f4", .number = 37, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f5", .number = 38, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f6", .number = 39, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f7", .number = 40, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f0", .number = 33, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f1", .number = 34, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f2", .number = 35, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f3", .number = 36, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f4", .number = 37, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f5", .number = 38, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f6", .number = 39, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f7", .number = 40, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
 
 	// FP saved registers
-	{.name = "f8", .number = 41, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f9", .number = 42, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f8", .number = 41, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f9", .number = 42, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
 
 	// FP arguments/return values
-	{.name = "f10", .number = 43, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f11", .number = 44, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f10", .number = 43, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f11", .number = 44, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
 
 	// FP arguments
-	{.name = "f12", .number = 45, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f13", .number = 46, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f14", .number = 47, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f15", .number = 48, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f16", .number = 49, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f17", .number = 50, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f12", .number = 45, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f13", .number = 46, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f14", .number = 47, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f15", .number = 48, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f16", .number = 49, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f17", .number = 50, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
 
 	// FP saved registers
-	{.name = "f18", .number = 51, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f19", .number = 52, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f20", .number = 53, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f21", .number = 54, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f22", .number = 55, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f23", .number = 56, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f24", .number = 57, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f25", .number = 58, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f26", .number = 59, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f27", .number = 60, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f18", .number = 51, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f19", .number = 52, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f20", .number = 53, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f21", .number = 54, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f22", .number = 55, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f23", .number = 56, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f24", .number = 57, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f25", .number = 58, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f26", .number = 59, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f27", .number = 60, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
 
 	// FP temporaries
-	{.name = "f28", .number = 61, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f29", .number = 62, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f30", .number = 63, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
-	{.name = "f31", .number = 64, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f28", .number = 61, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f29", .number = 62, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f30", .number = 63, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
+	{.name = "f31", .number = 64, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
 };
 
 static reg_cache*
@@ -1595,7 +1602,7 @@ static int
 this_step(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints)
 {
 	assert(p_target);
-#if 0
+#if 1
 	uint32_t const set_value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
 #else
 	uint32_t const set_value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
@@ -1660,15 +1667,17 @@ set_reset_state(target* const restrict p_target, bool const active)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
-	if (active && p_target->state != TARGET_RESET) {
-		/// issue error if we are still running
-		LOG_ERROR("RV is not resetting after reset assert");
-		error_code__update(p_target, ERROR_TARGET_FAILURE);
-	} else if (!active && p_target->state == TARGET_RESET) {
-		LOG_ERROR("RV is stiil in reset after reset deassert");
-		error_code__update(p_target, ERROR_TARGET_FAILURE);
+	if (active) {
+		if (p_target->state != TARGET_RESET) {
+			/// issue error if we are still running
+			LOG_ERROR("RV is not resetting after reset assert");
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+		}
 	} else {
-		assert(!"Invalid combination of active && p_target->state");
+		if (p_target->state == TARGET_RESET) {
+			LOG_ERROR("RV is stiil in reset after reset deassert");
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+		}
 	}
 	return error_code__clear(p_target);
 }
