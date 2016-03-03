@@ -427,14 +427,16 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 			LOG_ERROR("JTAG error %d", error_code__get(p_target));
 			return;
 		}
+		/// Update cache of DAP control
+		p_arch->last_DAP_ctrl = set_dap_unit_group;
 		LOG_DEBUG("drscan %s %d %#03x --> %#03x", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
 		if ((status & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
 			LOG_ERROR("TAP status %#03x", (uint32_t)status);
+#if 0
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return;
+#endif
 		}
-		/// Update cache of DAP control
-		p_arch->last_DAP_ctrl = set_dap_unit_group;
 	}
 
 #if VERIFY_DAP_CONTROL
@@ -467,7 +469,6 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 #endif
 }
 
-
 static inline int
 HART_status_bits_to_target_state(target const* const restrict p_target, uint8_t const status)
 {
@@ -483,16 +484,6 @@ HART_status_bits_to_target_state(target const* const restrict p_target, uint8_t 
 	} else {
 		return TARGET_RUNNING;
 	}
-}
-
-static void
-update_status(target* const restrict p_target)
-{
-	assert(p_target);
-	/// Only 1 HART available
-	assert(p_target->coreid == 0);
-	uint8_t const status = (DBG_STATUS_get(p_target) >> p_target->coreid) & 0xFFu;
-	p_target->state = HART_status_bits_to_target_state(p_target, status);
 }
 
 static uint32_t
@@ -549,6 +540,70 @@ DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, ui
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 	}
 	return DBG_DATA;
+}
+
+static void
+unlock(target* const restrict p_target)
+{
+	LOG_WARNING("Try to unlock!");
+	IR_select(p_target, TAP_INSTR_DAP_CTRL);
+	uint8_t const set_dap_unit_group = 0x1;
+	uint8_t status = 0;
+	scan_field const field =
+	{
+		.num_bits = TAP_LEN_DAP_CTRL,
+		.out_value = &set_dap_unit_group,
+		.in_value = &status,
+	};
+	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
+	// enforce jtag_execute_queue() to get status
+	error_code__update(p_target, jtag_execute_queue());
+	if (error_code__get(p_target) != ERROR_OK) {
+		LOG_ERROR("JTAG error %d", error_code__get(p_target));
+	}
+	/// Update cache of DAP control
+	This_Arch* p_arch = p_target->arch_info;
+	p_arch->last_DAP_ctrl = set_dap_unit_group;
+
+	IR_select(p_target, TAP_INSTR_DAP_CMD);
+	// Output fields
+	uint8_t const dap_opcode = DBGC_DAP_OPCODE_DBGCMD_UNLOCK;
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE) == sizeof dap_opcode);
+
+	uint32_t const dap_opcode_ext = 0xFEEDBEEFu;
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE_EXT) == sizeof dap_opcode_ext);
+
+	scan_field const fields[2] =
+	{
+		[0] = {
+			.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,
+			.out_value = (uint8_t const*)&dap_opcode_ext,
+		},
+		[1] =
+			{
+				.num_bits = TAP_LEN_DAP_CMD_OPCODE,
+				.out_value = &dap_opcode,
+			},
+	};
+
+	assert(p_target->tap);
+	jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
+	// enforse jtag_execute_queue() to get values
+	error_code__update(p_target, jtag_execute_queue());
+}
+
+static void
+update_status(target* const restrict p_target)
+{
+	assert(p_target);
+	/// Only 1 HART available
+	assert(p_target->coreid == 0);
+	uint32_t const core_status = DBG_STATUS_get(p_target);
+	if (0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) {
+		unlock(p_target);
+	}
+	uint8_t const HART_status = (core_status >> p_target->coreid) & 0xFFu;
+	p_target->state = HART_status_bits_to_target_state(p_target, HART_status);
 }
 
 static inline uint8_t
@@ -714,7 +769,7 @@ reg_x_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	if ( p_reg->valid && (buf_get_u32(p_reg->value, 0, XLEN) == value) ) {
 		// skip same value
 		return error_code__clear(p_target);
-	}
+}
 #endif
 	buf_set_u32(p_reg->value, 0, XLEN, value);
 	p_reg->valid = true;
@@ -1543,7 +1598,7 @@ set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
 		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value %#010x, but re-read value is %#010x", set_value, get_value);
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return;
-	}
+}
 #endif
 }
 
@@ -1657,7 +1712,7 @@ set_reset_state(target* const restrict p_target, bool const active)
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return error_code__clear(p_target);
 		}
-	}
+}
 #endif
 
 	update_status(p_target);
@@ -1726,7 +1781,7 @@ this_read_memory(target* const restrict p_target, uint32_t address, uint32_t con
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__clear(p_target);
 	}
-	
+
 	/// Check that target halted
 	{
 		update_status(p_target);
@@ -1845,8 +1900,8 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 
 	/// Define opcode for load item to register
 	uint32_t const store_OP =
-		size == 4 ?   RV_SW(p_data_reg->number, p_addr_reg->number, 0) :
-		size == 2 ?   RV_SH(p_data_reg->number, p_addr_reg->number, 0) :
+		size == 4 ? RV_SW(p_data_reg->number, p_addr_reg->number, 0) :
+		size == 2 ? RV_SH(p_data_reg->number, p_addr_reg->number, 0) :
 		/*size == 1*/ RV_SB(p_data_reg->number, p_addr_reg->number, 0);
 
 	/// Setup exec operations mode
