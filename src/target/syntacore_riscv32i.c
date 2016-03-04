@@ -452,10 +452,13 @@ DAP_CTRL_REG_set_force(target const* const restrict p_target, uint8_t const set_
 	p_arch->last_DAP_ctrl = 0xFFu;
 
 	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-	LOG_DEBUG("drscan %s %d %#03x --> %#03x", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
 	// enforce jtag_execute_queue() to get status
 	if (error_code__update(p_target, jtag_execute_queue()) != ERROR_OK) {
 		LOG_ERROR("JTAG error %d", error_code__get(p_target));
+	}
+	LOG_DEBUG("drscan %s %d %#03x --> %#03x", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
+	if ((status & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
+		LOG_ERROR("TAP status %#03x", (uint32_t)status);
 	}
 	return status;
 }
@@ -599,11 +602,13 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 	}
 #endif
 
-	uint8_t const status = DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
-	if ((status & DAP_OPSTATUS_MASK) == DAP_OPSTATUS_OK) {
-		/// Update cache of DAP control
-		p_arch->last_DAP_ctrl = set_dap_unit_group;
-	} else {
+	for (int i = 0; i < 5; ++i) {
+		uint8_t const status = DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
+		if ((status & DAP_OPSTATUS_MASK) == DAP_OPSTATUS_OK) {
+			/// Update cache of DAP control
+			p_arch->last_DAP_ctrl = set_dap_unit_group;
+			break;
+		}
 		LOG_ERROR("TAP status %#03x", (uint32_t)status);
 		unlock(p_target);
 #if 0
