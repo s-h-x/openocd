@@ -23,6 +23,8 @@
 #define VERIFY_HART_REGTRANS_WRITE 1
 #define VERIFY_CORE_REGTRANS_WRITE 1
 
+#define NORMAL_DEBUG_ENABLE_MASK (BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT))
+
 #define LOCAL_CONCAT(x,y) x##y
 // #define STATIC_ASSERT(e) typedef char LOCAL_CONCAT(___my_static_assert,__LINE__)[1 - 2 * !(e)]
 #define STATIC_ASSERT(e) {enum {___my_static_assert = 1 / (!!(e)) };}
@@ -353,7 +355,6 @@ error_code__clear(target const* const restrict p_target)
 }
 ///@}
 
-
 static void
 IR_select_force(target const* const restrict p_target, enum TAP_IR_e const new_instr)
 {
@@ -425,7 +426,6 @@ DBG_STATUS_get(target const* const restrict p_target)
 	}
 	return result;
 }
-
 
 /// set unit/group
 static uint8_t
@@ -900,12 +900,6 @@ reg_x_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	return reg_x_store(p_reg);
 }
 
-static reg_arch_type const reg_x_accessors =
-{
-	.get = reg_x_get,
-	.set = reg_x_set,
-};
-
 static int
 reg_x0_get(reg* const restrict p_reg)
 {
@@ -924,12 +918,6 @@ reg_x0_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	reg_validate(p_reg);
 	return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 }
-
-static reg_arch_type const reg_x0_accessors =
-{
-	.get = reg_x0_get,
-	.set = reg_x0_set,
-};
 
 static reg*
 prepare_temporary_GP_register(target const* const restrict p_target, int const after_reg)
@@ -1113,12 +1101,6 @@ reg_pc_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	return error_code__clear(p_target);
 }
 
-static reg_arch_type const reg_pc_accessors =
-{
-	.get = reg_pc_get,
-	.set = reg_pc_set,
-};
-
 static int
 reg_f_get(reg* const restrict p_reg)
 {
@@ -1247,6 +1229,207 @@ reg_f_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	return error_code__clear(p_target);
 }
 
+static reg_cache*
+reg_cache__create(char const* name, reg const regs_templates[], size_t const num_regs, void* const p_arch_info)
+{
+	reg* const p_dst_array = calloc(num_regs, sizeof(reg));
+	reg* p_dst_iter = &p_dst_array[0];
+	reg const* p_src_iter = &regs_templates[0];
+	for (size_t i = 0; i < num_regs; ++i) {
+		*p_dst_iter = *p_src_iter;
+		p_dst_iter->value = calloc(1, NUM_BITS_TO_SIZE(p_src_iter->size));
+		p_dst_iter->arch_info = p_arch_info;
+
+		++p_src_iter;
+		++p_dst_iter;
+	}
+	reg_cache const the_reg_cache = {
+		.name = name,
+		.reg_list = p_dst_array,
+		.num_regs = num_regs,
+	};
+
+	reg_cache* const p_obj = calloc(1, sizeof(reg_cache));
+	assert(p_obj);
+	*p_obj = the_reg_cache;
+	return p_obj;
+}
+
+static enum target_debug_reason
+read_debug_cause(target* const restrict p_target)
+{
+	uint32_t const value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_CAUSE);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return DBG_REASON_UNDEFINED;
+	}
+	if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_ENFORCE_BIT)) {
+		return DBG_REASON_DBGRQ;
+	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SINGLE_STEP_BIT)) {
+		return DBG_REASON_SINGLESTEP;
+	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SW_BRKPT_BIT)) {
+		return DBG_REASON_BREAKPOINT;
+	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_RST_BREAK_BIT)) {
+		return DBG_REASON_DBGRQ;
+	} else {
+		return DBG_REASON_UNDEFINED;
+	}
+}
+
+static void
+update_debug_reason(target* const restrict p_target)
+{
+	p_target->debug_reason = read_debug_cause(p_target);
+}
+
+static void
+set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
+{
+	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, set_value);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return;
+	}
+
+#if VERIFY_HART_REGTRANS_WRITE
+	uint32_t const get_value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return;
+	}
+	if (get_value != set_value) {
+		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value %#010x, but re-read value is %#010x", set_value, get_value);
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+		return;
+	}
+#endif
+}
+
+static int
+common_resume(target* const restrict p_target, uint32_t const dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
+{
+	assert(p_target);
+	/// @todo update state
+	if (p_target->state != TARGET_HALTED) {
+		LOG_ERROR("Target not halted");
+		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	if (!current) {
+		/// @todo multiple caches
+		reg_cache* const p_reg_cache = p_target->reg_cache;
+		reg* const p_pc = &p_reg_cache->reg_list[32];
+		uint8_t buf[sizeof address];
+		buf_set_u32(buf, 0, XLEN, address);
+		error_code__update(p_target, reg_pc_set(p_pc, buf));
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+		assert(is_reg_saved(p_pc));
+	}
+#if 0
+	// upload reg values into HW
+	regs_commit(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+#endif
+	regs_invalidate(p_target);
+	set_DEMODE_ENBL(p_target, dmode_enabled);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+
+	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+	// update state
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+
+	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
+
+	return error_code__clear(p_target);
+}
+
+static int
+set_reset_state(target* const restrict p_target, bool const active)
+{
+	assert(p_target);
+	DAP_CTRL_REG_set(p_target, DBGC_UNIT_ID_CORE, DBGC_FGRP_CORE_REGTRANS);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+
+	uint32_t const get_old_value1 = core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+	/// @todo replace literals
+	static uint32_t const bit_mask = BIT_NUM_TO_MASK(DBGC_CORE_CDCR_HART0_RST_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDCR_RST_BIT);
+
+	uint32_t const set_value = (get_old_value1 & ~bit_mask) | (active ? bit_mask : 0u);
+	core_REGTRANS_write(p_target, DBGC_CORE_REGS_DBG_CTRL, set_value);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+
+#if VERIFY_CORE_REGTRANS_WRITE
+	{
+		// double check
+		uint32_t const get_new_value2 = core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__clear(p_target);
+		}
+		if ((get_new_value2 & bit_mask) != (set_value & bit_mask)) {
+			LOG_ERROR("Fail to verify reset state: set %#0x, but get %#0x", set_value, get_new_value2);
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+			return error_code__clear(p_target);
+		}
+	}
+#endif
+
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__clear(p_target);
+	}
+	if (active) {
+		if (p_target->state != TARGET_RESET) {
+			/// issue error if we are still running
+			LOG_ERROR("RV is not resetting after reset assert");
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+		}
+	} else {
+		if (p_target->state == TARGET_RESET) {
+			LOG_ERROR("RV is stiil in reset after reset deassert");
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+		}
+	}
+	return error_code__clear(p_target);
+}
+
+static reg_arch_type const reg_x0_accessors =
+{
+	.get = reg_x0_get,
+	.set = reg_x0_set,
+};
+
+static reg_arch_type const reg_x_accessors =
+{
+	.get = reg_x_get,
+	.set = reg_x_set,
+};
+
+static reg_arch_type const reg_pc_accessors =
+{
+	.get = reg_pc_get,
+	.set = reg_pc_set,
+};
+
 static reg_arch_type const reg_f_accessors =
 {
 	.get = reg_f_get,
@@ -1358,32 +1541,6 @@ static reg const reg_def_array[] = {
 	{.name = "f31", .number = 64, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors},
 };
 
-static reg_cache*
-reg_cache__create(char const* name, reg const regs_templates[], size_t const num_regs, void* const p_arch_info)
-{
-	reg* const p_dst_array = calloc(num_regs, sizeof(reg));
-	reg* p_dst_iter = &p_dst_array[0];
-	reg const* p_src_iter = &regs_templates[0];
-	for (size_t i = 0; i < num_regs; ++i) {
-		*p_dst_iter = *p_src_iter;
-		p_dst_iter->value = calloc(1, NUM_BITS_TO_SIZE(p_src_iter->size));
-		p_dst_iter->arch_info = p_arch_info;
-
-		++p_src_iter;
-		++p_dst_iter;
-	}
-	reg_cache const the_reg_cache = {
-		.name = name,
-		.reg_list = p_dst_array,
-		.num_regs = num_regs,
-	};
-
-	reg_cache* const p_obj = calloc(1, sizeof(reg_cache));
-	assert(p_obj);
-	*p_obj = the_reg_cache;
-	return p_obj;
-}
-
 static int
 this_init_target(struct command_context *cmd_ctx, target* const restrict p_target)
 {
@@ -1425,130 +1582,6 @@ static int
 this_target_create(target* const restrict p_target, struct Jim_Interp *interp)
 {
 	return ERROR_OK;
-}
-
-#if 0
-static void
-regs_commit(target const* const restrict p_target)
-{
-	assert(p_target);
-	/// @todo multiple caches
-	reg_cache const* const p_reg_cache = p_target->reg_cache;
-	assert(p_reg_cache);
-
-	// pc number == 32
-	assert(32 < p_reg_cache->num_regs);
-	reg* const restrict p_pc = &p_reg_cache->reg_list[32];
-
-	/// If pc is dirty find first dirty GP register (except zero register)
-	reg* const restrict p_tmp_reg = p_pc->dirty ? prepare_temporary_GP_register(p_target, 0) : &p_reg_cache->reg_list[0];
-
-	exec__setup(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return;
-	}
-	/// From last GP register down to first dirty register (or down to zero register)
-	int advance_pc_counter = 0;
-	for (reg* p_reg = &p_reg_cache->reg_list[31]; p_reg != p_tmp_reg; --p_reg) {
-		if (!p_reg->dirty) {
-			continue;
-		}
-		/// store dirty registers to HW
-		exec__set_csr_data(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
-		if (error_code__get(p_target) != ERROR_OK) {
-			return;
-		}
-		exec__step(p_target, RV_CSRRW(p_reg->number, DBG_SCRATCH, zero));
-		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
-		if (error_code__get(p_target) != ERROR_OK) {
-			return;
-		}
-		/// mark it's values non-dirty
-		p_reg->dirty = false;
-	}
-	if (advance_pc_counter) {
-		/// Correct pc back after instructions
-		assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-		exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
-		advance_pc_counter = 0;
-		if (error_code__get(p_target) != ERROR_OK) {
-			return;
-		}
-	}
-
-	if (p_tmp_reg == &p_reg_cache->reg_list[0]) {
-		/// If first dirty register is zero register, then all already saved
-		assert(!p_pc->dirty);
-		return;
-	}
-	/// else
-	exec__set_csr_data(p_target, buf_get_u32(p_pc->value, 0, p_pc->size));
-	if (error_code__get(p_target) != ERROR_OK) {
-		return;
-	}
-	/// set temporary register value to restoring pc value
-	exec__step(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, zero));
-	advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return;
-	}
-
-	assert(p_pc->dirty);
-	assert(p_tmp_reg->dirty);
-	/// and exec JARL to set pc
-	exec__step(p_target, RV_JALR(zero, p_tmp_reg->number, 0));
-	advance_pc_counter = 0;
-	if (error_code__get(p_target) != ERROR_OK) {
-		return;
-	}
-	/// OK pc restored
-	p_pc->dirty = false;
-
-	/// Restoring temporary register value
-	exec__set_csr_data(p_target, buf_get_u32(p_tmp_reg->value, 0, p_tmp_reg->size));
-	if (error_code__get(p_target) != ERROR_OK) {
-		return;
-	}
-	exec__step(p_target, RV_CSRRW(p_tmp_reg->number, DBG_SCRATCH, zero));
-	advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return;
-	}
-	/// and correct pc back
-	exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
-	advance_pc_counter = 0;
-	if (error_code__get(p_target) != ERROR_OK) {
-		return;
-	}
-	p_tmp_reg->dirty = false;
-	assert(advance_pc_counter == 0);
-}
-#endif
-
-static enum target_debug_reason
-read_debug_cause(target* const restrict p_target)
-{
-	uint32_t const value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_CAUSE);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return DBG_REASON_UNDEFINED;
-	}
-	if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_ENFORCE_BIT)) {
-		return DBG_REASON_DBGRQ;
-	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SINGLE_STEP_BIT)) {
-		return DBG_REASON_SINGLESTEP;
-	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SW_BRKPT_BIT)) {
-		return DBG_REASON_BREAKPOINT;
-	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_RST_BREAK_BIT)) {
-		return DBG_REASON_DBGRQ;
-	} else {
-		return DBG_REASON_UNDEFINED;
-	}
-}
-
-static void
-update_debug_reason(target* const restrict p_target)
-{
-	p_target->debug_reason = read_debug_cause(p_target);
 }
 
 static int
@@ -1646,87 +1679,11 @@ this_halt(target* const restrict p_target)
 	return error_code__clear(p_target);
 }
 
-static void
-set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
-{
-	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DMODE_ENBL, set_value);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return;
-	}
-
-#if VERIFY_HART_REGTRANS_WRITE
-	uint32_t const get_value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return;
-	}
-	if (get_value != set_value) {
-		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value %#010x, but re-read value is %#010x", set_value, get_value);
-		error_code__update(p_target, ERROR_TARGET_FAILURE);
-		return;
-	}
-#endif
-}
-
-static int
-common_resume(target* const restrict p_target, uint32_t const dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
-{
-	assert(p_target);
-	/// @todo update state
-	if (p_target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		return ERROR_TARGET_NOT_HALTED;
-	}
-
-	if (!current) {
-		/// @todo multiple caches
-		reg_cache* const p_reg_cache = p_target->reg_cache;
-		reg* const p_pc = &p_reg_cache->reg_list[32];
-		uint8_t buf[sizeof address];
-		buf_set_u32(buf, 0, XLEN, address);
-		error_code__update(p_target, reg_pc_set(p_pc, buf));
-		if (error_code__get(p_target) != ERROR_OK) {
-			return error_code__clear(p_target);
-		}
-		assert(is_reg_saved(p_pc));
-	}
-#if 0
-	// upload reg values into HW
-	regs_commit(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-#endif
-	regs_invalidate(p_target);
-	set_DEMODE_ENBL(p_target, dmode_enabled);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-
-	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-	// update state
-	update_status(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-
-	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
-
-	return error_code__clear(p_target);
-}
-
 static int
 this_resume(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	assert(p_target);
-	/// @todo Verify halt
-	uint32_t const dmode_enabled = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT);
+	uint32_t const dmode_enabled = NORMAL_DEBUG_ENABLE_MASK;
 	return common_resume(p_target, dmode_enabled, current, address, handle_breakpoints, debug_execution);
 }
 
@@ -1734,69 +1691,8 @@ static int
 this_step(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints)
 {
 	assert(p_target);
-	/// @todo Verify halt
-#if 1
-	uint32_t const dmode_enabled = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
-#else
-	uint32_t const set_value = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
-#endif
+	uint32_t const dmode_enabled = (NORMAL_DEBUG_ENABLE_MASK) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
 	return common_resume(p_target, dmode_enabled, current, address, handle_breakpoints, false);
-}
-
-static int
-set_reset_state(target* const restrict p_target, bool const active)
-{
-	assert(p_target);
-	DAP_CTRL_REG_set(p_target, DBGC_UNIT_ID_CORE, DBGC_FGRP_CORE_REGTRANS);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-
-	uint32_t const get_old_value1 = core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-	/// @todo replace literals
-	static uint32_t const bit_mask = BIT_NUM_TO_MASK(DBGC_CORE_CDCR_HART0_RST_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDCR_RST_BIT);
-
-	uint32_t const set_value = (get_old_value1 & ~bit_mask) | (active ? bit_mask : 0u);
-	core_REGTRANS_write(p_target, DBGC_CORE_REGS_DBG_CTRL, set_value);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-
-#if VERIFY_CORE_REGTRANS_WRITE
-	{
-		// double check
-		uint32_t const get_new_value2 = core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
-		if (error_code__get(p_target) != ERROR_OK) {
-			return error_code__clear(p_target);
-		}
-		if ((get_new_value2 & bit_mask) != (set_value & bit_mask)) {
-			LOG_ERROR("Fail to verify reset state: set %#0x, but get %#0x", set_value, get_new_value2);
-			error_code__update(p_target, ERROR_TARGET_FAILURE);
-			return error_code__clear(p_target);
-		}
-	}
-#endif
-
-	update_status(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__clear(p_target);
-	}
-	if (active) {
-		if (p_target->state != TARGET_RESET) {
-			/// issue error if we are still running
-			LOG_ERROR("RV is not resetting after reset assert");
-			error_code__update(p_target, ERROR_TARGET_FAILURE);
-		}
-	} else {
-		if (p_target->state == TARGET_RESET) {
-			LOG_ERROR("RV is stiil in reset after reset deassert");
-			error_code__update(p_target, ERROR_TARGET_FAILURE);
-		}
-	}
-	return error_code__clear(p_target);
 }
 
 static int
@@ -1811,7 +1707,6 @@ this_deassert_reset(target* const restrict p_target)
 	return set_reset_state(p_target, false);
 }
 
-
 static int
 this_soft_reset_halt(target* const restrict p_target)
 {
@@ -1819,8 +1714,7 @@ this_soft_reset_halt(target* const restrict p_target)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
-	uint32_t const dmode_enabled = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT);
-	set_DEMODE_ENBL(p_target, dmode_enabled);
+	set_DEMODE_ENBL(p_target, NORMAL_DEBUG_ENABLE_MASK);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
@@ -2049,8 +1943,7 @@ static int
 this_examine(target* const restrict p_target)
 {
 	if (!target_was_examined(p_target)) {
-		uint32_t const dmode_enabled = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT);
-		set_DEMODE_ENBL(p_target, dmode_enabled);
+		set_DEMODE_ENBL(p_target, NORMAL_DEBUG_ENABLE_MASK);
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__clear(p_target);
 		}
