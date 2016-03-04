@@ -615,18 +615,15 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 		if ((status & DAP_OPSTATUS_MASK) == DAP_OPSTATUS_OK) {
 			/// Update cache of DAP control
 			p_arch->last_DAP_ctrl = set_dap_unit_group;
-			break;
+#if VERIFY_DAP_CONTROL
+			DAP_CTRL_REG_verify(p_target, set_dap_unit_group);
+#endif
+			return;
 		}
 		LOG_ERROR("TAP status %#03x", (uint32_t)status);
 		unlock(p_target);
-#if 0
-		error_code__update(p_target, ERROR_TARGET_FAILURE);
-		return;
-#endif
 	}
-#if VERIFY_DAP_CONTROL
-	DAP_CTRL_REG_verify(p_target, set_dap_unit_group);
-#endif
+	error_code__update(p_target, ERROR_TARGET_FAILURE);
 }
 
 static inline int
