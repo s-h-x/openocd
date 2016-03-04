@@ -18,6 +18,7 @@
 
 #define IR_SELECT_USING_CACHE 0
 #define DAP_CONTROL_USING_CACHE 0
+#define USE_PC_FROM_PC_SAMPLE 1
 #define VERIFY_DAP_CONTROL 1
 #define VERIFY_HART_REGTRANS_WRITE 1
 #define VERIFY_CORE_REGTRANS_WRITE 1
@@ -425,113 +426,66 @@ DBG_STATUS_get(target const* const restrict p_target)
 	return result;
 }
 
-static void
-DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e const dap_unit, uint8_t const dap_group)
-{
-	assert(p_target);
-	assert(
-		(
-		(
-		(dap_unit == DBGC_UNIT_ID_HART_0 && 0 == p_target->coreid) ||
-		(dap_unit == DBGC_UNIT_ID_HART_1 && 1 == p_target->coreid)
-		) && (dap_group == DBGC_FGRP_HART_REGTRANS || dap_group == DBGC_FGRP_HART_DBGCMD)
-		) ||
-		(dap_unit == DBGC_UNIT_ID_CORE && dap_group == DBGC_FGRP_HART_REGTRANS)
-		);
 
-	uint8_t const set_dap_unit_group =
-		MAKE_FIELD(
-		MAKE_FIELD(dap_unit, TAP_LEN_DAP_CTRL_FGROUP, TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1) |
-		MAKE_FIELD(dap_group, 0, TAP_LEN_DAP_CTRL_FGROUP - 1),
-		0,
-		TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1);
+/// set unit/group
+static uint8_t
+DAP_CTRL_REG_set_force(target const* const restrict p_target, uint8_t const set_dap_unit_group)
+{
+	IR_select(p_target, TAP_INSTR_DAP_CTRL);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return 0xF8u;
+	}
+	// clear status bits
+	uint8_t status = 0;
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof status);
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof set_dap_unit_group);
+	scan_field const field =
+	{
+		.num_bits = TAP_LEN_DAP_CTRL,
+		.out_value = &set_dap_unit_group,
+		.in_value = &status,
+	};
 
 	This_Arch* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
-#if DAP_CONTROL_USING_CACHE
-	if (p_arch->last_DAP_ctrl == set_dap_unit_group) {
-		LOG_DEBUG("DAP_CTRL_REG of %s already %#03x", p_target->cmd_name, set_dap_unit_group);
-		return;
-	}
-#endif
+	/// set invalid cache
+	p_arch->last_DAP_ctrl = 0xFFu;
 
-	/// set unit/group
-	{
-		IR_select(p_target, TAP_INSTR_DAP_CTRL);
-		if (error_code__get(p_target) != ERROR_OK) {
-			return;
-		}
-		// clear status bits
-		uint8_t status = 0;
-		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof status);
-		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof set_dap_unit_group);
-		scan_field const field =
-		{
-			.num_bits = TAP_LEN_DAP_CTRL,
-			.out_value = &set_dap_unit_group,
-			.in_value = &status,
-		};
-		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-		// enforce jtag_execute_queue() to get status
-		if (error_code__update(p_target, jtag_execute_queue()) != ERROR_OK) {
-			LOG_ERROR("JTAG error %d", error_code__get(p_target));
-			return;
-		}
-		/// Update cache of DAP control
-		p_arch->last_DAP_ctrl = set_dap_unit_group;
-		LOG_DEBUG("drscan %s %d %#03x --> %#03x", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
-		if ((status & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
-			LOG_ERROR("TAP status %#03x", (uint32_t)status);
-#if 0
-			error_code__update(p_target, ERROR_TARGET_FAILURE);
-			return;
-#endif
-		}
+	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
+	LOG_DEBUG("drscan %s %d %#03x --> %#03x", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
+	// enforce jtag_execute_queue() to get status
+	if (error_code__update(p_target, jtag_execute_queue()) != ERROR_OK) {
+		LOG_ERROR("JTAG error %d", error_code__get(p_target));
 	}
-
-#if VERIFY_DAP_CONTROL
-	/// verify unit/group
-	{
-		IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
-		if (error_code__get(p_target) != ERROR_OK) {
-			return;
-		}
-		uint8_t get_dap_unit_group = 0;
-		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof get_dap_unit_group);
-		scan_field const field =
-		{
-			.num_bits = TAP_LEN_DAP_CTRL,
-			.in_value = &get_dap_unit_group,
-		};
-		// enforce jtag_execute_queue() to get get_dap_unit_group
-		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-		if (error_code__update(p_target, jtag_execute_queue()) != ERROR_OK) {
-			LOG_ERROR("JTAG error %d", error_code__get(p_target));
-			return;
-		}
-		LOG_DEBUG("drscan %s %d %#03x --> %#03x", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
-		if (get_dap_unit_group != set_dap_unit_group) {
-			LOG_ERROR("Unit/Group verification error: set %#0x, but get %#0x!", set_dap_unit_group, get_dap_unit_group);
-			error_code__update(p_target, ERROR_TARGET_FAILURE);
-			return;
-		}
-	}
-#endif
+	return status;
 }
 
-static inline int
-HART_status_bits_to_target_state(target const* const restrict p_target, uint8_t const status)
+/// verify unit/group
+static void
+DAP_CTRL_REG_verify(target const* const restrict p_target, uint8_t const set_dap_unit_group)
 {
+	IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
 	if (error_code__get(p_target) != ERROR_OK) {
-		return TARGET_UNKNOWN;
-	} else if (status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT)) {
-		return TARGET_UNKNOWN;
-	} else if (status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_RST_BIT)) {
-		return TARGET_RESET;
-	} else if (status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_DMODE_BIT)) {
-		return TARGET_HALTED;
-	} else {
-		return TARGET_RUNNING;
+		return;
+	}
+	uint8_t get_dap_unit_group = 0;
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof get_dap_unit_group);
+	scan_field const field =
+	{
+		.num_bits = TAP_LEN_DAP_CTRL,
+		.in_value = &get_dap_unit_group,
+	};
+	// enforce jtag_execute_queue() to get get_dap_unit_group
+	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
+	if (error_code__update(p_target, jtag_execute_queue()) != ERROR_OK) {
+		LOG_ERROR("JTAG error %d", error_code__get(p_target));
+		return;
+	}
+	LOG_DEBUG("drscan %s %d %#03x --> %#03x", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
+	if (get_dap_unit_group != set_dap_unit_group) {
+		LOG_ERROR("Unit/Group verification error: set %#0x, but get %#0x!", set_dap_unit_group, get_dap_unit_group);
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+		return;
 	}
 }
 
@@ -590,75 +544,92 @@ DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, ui
 	return DBG_DATA;
 }
 
-static void
-unlock(target* const restrict p_target)
-{
-	LOG_WARNING("Try to unlock!");
-	IR_select(p_target, TAP_INSTR_DAP_CTRL);
-	uint8_t const set_dap_unit_group = 0x1;
-	uint8_t status = 0;
-	scan_field const field =
-	{
-		.num_bits = TAP_LEN_DAP_CTRL,
-		.out_value = &set_dap_unit_group,
-		.in_value = &status,
-	};
-	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-	// enforce jtag_execute_queue() to get status
-	error_code__update(p_target, jtag_execute_queue());
-	if (error_code__get(p_target) != ERROR_OK) {
-		LOG_ERROR("JTAG error %d", error_code__get(p_target));
-	}
-	/// Update cache of DAP control
-	This_Arch* p_arch = p_target->arch_info;
-	p_arch->last_DAP_ctrl = set_dap_unit_group;
-
-	IR_select(p_target, TAP_INSTR_DAP_CMD);
-	// Output fields
-	uint8_t const dap_opcode = DBGC_DAP_OPCODE_DBGCMD_UNLOCK;
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE) == sizeof dap_opcode);
-
-	uint32_t const dap_opcode_ext = 0xFEEDBEEFu;
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE_EXT) == sizeof dap_opcode_ext);
-
-	scan_field const fields[2] =
-	{
-		[0] = {
-			.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,
-			.out_value = (uint8_t const*)&dap_opcode_ext,
-		},
-		[1] =
-			{
-				.num_bits = TAP_LEN_DAP_CMD_OPCODE,
-				.out_value = &dap_opcode,
-			},
-	};
-
-	assert(p_target->tap);
-	jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
-	// enforse jtag_execute_queue() to get values
-	error_code__update(p_target, jtag_execute_queue());
-}
-
-static void
-update_status(target* const restrict p_target)
-{
-	assert(p_target);
-	/// Only 1 HART available
-	assert(p_target->coreid == 0);
-	uint32_t const core_status = DBG_STATUS_get(p_target);
-	if (0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) {
-		unlock(p_target);
-	}
-	uint8_t const HART_status = (core_status >> p_target->coreid) & 0xFFu;
-	p_target->state = HART_status_bits_to_target_state(p_target, HART_status);
-}
-
 static inline uint8_t
 REGTRANS_scan_type(bool const write, uint8_t const index)
 {
 	assert((index & !LOW_BITS_MASK(3)) == 0);
 	return (write ? BIT_NUM_TO_MASK(3) : 0) | index;
+}
+
+static void
+unlock(target const* const restrict p_target)
+{
+	LOG_WARNING("!!! Try to unlock !!!!");
+	int const old_err_code = error_code__clear(p_target);
+	uint8_t const set_dap_unit_group = 0x1;
+	IR_select_force(p_target, TAP_INSTR_DAP_CTRL);
+	error_code__clear(p_target);
+	DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
+	error_code__clear(p_target);
+	IR_select_force(p_target, TAP_INSTR_DAP_CMD);
+	error_code__clear(p_target);
+	(void)DAP_CMD_scan(p_target, REGTRANS_scan_type(true, DBGC_DAP_OPCODE_DBGCMD_UNLOCK), 0xFEEDBEEFu);
+	error_code__clear(p_target);
+	error_code__update(p_target, old_err_code);
+	LOG_WARNING("!!! End of unlock !!!!");
+}
+
+static void
+DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e const dap_unit, uint8_t const dap_group)
+{
+	assert(p_target);
+	assert(
+		(
+		(
+		(dap_unit == DBGC_UNIT_ID_HART_0 && 0 == p_target->coreid) ||
+		(dap_unit == DBGC_UNIT_ID_HART_1 && 1 == p_target->coreid)
+		) && (dap_group == DBGC_FGRP_HART_REGTRANS || dap_group == DBGC_FGRP_HART_DBGCMD)
+		) ||
+		(dap_unit == DBGC_UNIT_ID_CORE && dap_group == DBGC_FGRP_HART_REGTRANS)
+		);
+
+	uint8_t const set_dap_unit_group =
+		MAKE_FIELD(
+		MAKE_FIELD(dap_unit, TAP_LEN_DAP_CTRL_FGROUP, TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1) |
+		MAKE_FIELD(dap_group, 0, TAP_LEN_DAP_CTRL_FGROUP - 1),
+		0,
+		TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1);
+
+	This_Arch* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+#if DAP_CONTROL_USING_CACHE
+	if (p_arch->last_DAP_ctrl == set_dap_unit_group) {
+		LOG_DEBUG("DAP_CTRL_REG of %s already %#03x", p_target->cmd_name, set_dap_unit_group);
+		return;
+	}
+#endif
+
+	uint8_t const status = DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
+	if ((status & DAP_OPSTATUS_MASK) == DAP_OPSTATUS_OK) {
+		/// Update cache of DAP control
+		p_arch->last_DAP_ctrl = set_dap_unit_group;
+	} else {
+		LOG_ERROR("TAP status %#03x", (uint32_t)status);
+		unlock(p_target);
+#if 0
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+		return;
+#endif
+	}
+#if VERIFY_DAP_CONTROL
+	DAP_CTRL_REG_verify(p_target, set_dap_unit_group);
+#endif
+}
+
+static inline int
+HART_status_bits_to_target_state(target const* const restrict p_target, uint8_t const status)
+{
+	if (error_code__get(p_target) != ERROR_OK) {
+		return TARGET_UNKNOWN;
+	} else if (status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT)) {
+		return TARGET_UNKNOWN;
+	} else if (status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_RST_BIT)) {
+		return TARGET_RESET;
+	} else if (status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_DMODE_BIT)) {
+		return TARGET_HALTED;
+	} else {
+		return TARGET_RUNNING;
+	}
 }
 
 static void
@@ -711,6 +682,23 @@ core_REGTRANS_read(target const* const restrict p_target, enum type_dbgc_regbloc
 	return REGTRANS_read(p_target, DBGC_UNIT_ID_CORE, DBGC_FGRP_CORE_REGTRANS, index);
 }
 /// @}
+
+static void
+update_status(target* const restrict p_target)
+{
+	assert(p_target);
+	/// Only 1 HART available
+	assert(p_target->coreid == 0);
+	uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
+	LOG_DEBUG("pc_sample = %#010x", pc_sample);
+
+	uint32_t const core_status = DBG_STATUS_get(p_target);
+	if (0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) {
+		unlock(p_target);
+	}
+	uint8_t const HART_status = (core_status >> p_target->coreid) & 0xFFu;
+	p_target->state = HART_status_bits_to_target_state(p_target, HART_status);
+}
 
 static inline void
 exec__setup(target const* const restrict p_target)
@@ -988,7 +976,16 @@ reg_pc_get(reg* const restrict p_reg)
 	/// Find temporary GP register
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
-
+#if USE_PC_FROM_PC_SAMPLE
+	uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
+	LOG_DEBUG("Updating cache from register %s <-- %#010x", p_reg->name, pc_sample);
+	if (error_code__get(p_target) == ERROR_OK) {
+		buf_set_u32(p_reg->value, 0, p_reg->size, pc_sample);
+		reg_validate(p_reg);
+	} else {
+		reg_invalidate(p_reg);
+	}
+#else
 	update_status(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
@@ -1023,6 +1020,8 @@ reg_pc_get(reg* const restrict p_reg)
 						// update cached value
 						buf_set_u32(p_reg->value, 0, p_reg->size, value);
 						reg_validate(p_reg);
+						uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
+						LOG_DEBUG("pc_sample = %#010x", pc_sample);
 					}
 				}
 			}
@@ -1037,6 +1036,7 @@ reg_pc_get(reg* const restrict p_reg)
 		error_code__update(p_target, new_err_code);
 		assert(is_reg_saved(p_wrk_reg));
 	}
+#endif
 	return error_code__clear(p_target);
 }
 
