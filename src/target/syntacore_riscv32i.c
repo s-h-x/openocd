@@ -352,19 +352,10 @@ error_code__clear(target const* const restrict p_target)
 }
 ///@}
 
-/// TAPs methods
-/// @{
+
 static void
-IR_select(target const* const restrict p_target, enum TAP_IR_e const new_instr)
+IR_select_force(target const* const restrict p_target, enum TAP_IR_e const new_instr)
 {
-	assert(p_target);
-	assert(p_target->tap);
-#if IR_SELECT_USING_CACHE
-	if (buf_get_u32(p_target->tap->cur_instr, 0u, p_target->tap->ir_length) == new_instr) {
-		LOG_DEBUG("IR %s resently selected %d", p_target->cmd_name, new_instr);
-		return;
-	}
-#endif
 	assert(p_target->tap->ir_length == TAP_IR_LEN);
 	uint8_t out_buffer[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {};
 	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_IR_LEN) == 1u);
@@ -381,6 +372,22 @@ IR_select(target const* const restrict p_target, enum TAP_IR_e const new_instr)
 	if (error_code__update(p_target, jtag_execute_queue()) != ERROR_OK) {
 		LOG_ERROR("Error %d", error_code__get(p_target));
 	}
+}
+
+/// TAPs methods
+/// @{
+static void
+IR_select(target const* const restrict p_target, enum TAP_IR_e const new_instr)
+{
+	assert(p_target);
+	assert(p_target->tap);
+#if IR_SELECT_USING_CACHE
+	if (buf_get_u32(p_target->tap->cur_instr, 0u, p_target->tap->ir_length) == new_instr) {
+		LOG_DEBUG("IR %s resently selected %d", p_target->cmd_name, new_instr);
+		return;
+	}
+#endif
+	IR_select_force(p_target, new_instr);
 }
 
 static uint32_t
