@@ -16,17 +16,11 @@
 #include <limits.h>
 #include <memory.h>
 
-#define IR_SELECT_ALWAYS 0
-#define SET_DAP_CONTROL_ALWAYS 0
+#define IR_SELECT_USING_CACHE 1
+#define DAP_CONTROL_USING_CACHE 1
+#define VERIFY_DAP_CONTROL 0
 #define VERIFY_HART_REGTRANS_WRITE 0
 #define VERIFY_CORE_REGTRANS_WRITE 0
-#define VERIFY_DAP_CONTROL 0
-
-#define XLEN 32
-#define ILEN 32
-#define FLEN 32
-#define REG_PC_NUMBER 32
-#define TOTAL_NUMBER_OF_REGS (32 + 1 + 32)
 
 #define LOCAL_CONCAT(x,y) x##y
 // #define STATIC_ASSERT(e) typedef char LOCAL_CONCAT(___my_static_assert,__LINE__)[1 - 2 * !(e)]
@@ -109,10 +103,22 @@ typedef uint32_t instr_type;
 #define RV_FMV_X_S(rd, rs1) RV_INSTR_R_TYPE(0x70u, 0u, rs1, 0u, rd, 0x53u)
 #define RV_FMV_S_X(rd, rs1) RV_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd, 0x53u)
 
-#define DBG_SCRATCH (0x788)
-
 #define DAP_OPSTATUS_MASK (BIT_NUM_TO_MASK(DAP_OPSTATUS_EXCEPT) | BIT_NUM_TO_MASK(DAP_OPSTATUS_ERROR) | BIT_NUM_TO_MASK(DAP_OPSTATUS_LOCK) | BIT_NUM_TO_MASK(DAP_OPSTATUS_READY))
 #define DAP_OPSTATUS_OK (BIT_NUM_TO_MASK(DAP_OPSTATUS_READY))
+
+enum
+{
+	XLEN = 32u,
+	ILEN = 32u,
+	FLEN = 32u,
+	REG_PC_NUMBER = 32u,
+	TOTAL_NUMBER_OF_REGS = 32 + 1 + 32,
+};
+
+enum
+{
+	CSR_DBG_SCRATCH = 0x788u
+};
 
 enum TAP_IR_e
 {
@@ -142,24 +148,7 @@ enum TAP_DR_LEN_e
 	TAP_LEN_BYPASS = 1,  ///< mandatory
 };
 
-enum type_dbgc_unit_id_e
-{
-	DBGC_UNIT_ID_HART_0 = 0,
-	DBGC_UNIT_ID_HART_1 = 1,
-	DBGC_UNIT_ID_CORE = 3,
-};
-
-enum type_dbgc_hart_fgroup_e
-{
-	DBGC_FGRP_HART_REGTRANS = 0,
-	DBGC_FGRP_HART_DBGCMD = 1,
-};
-
-enum type_dbgc_core_fgroup_e
-{
-	DBGC_FGRP_CORE_REGTRANS = 0,
-};
-
+/// @see TAP_INSTR_DBG_STATUS
 enum type_dbgc_core_dbg_sts_reg_bits_e
 {
 	DBGC_CORE_CDSR_HART0_DMODE_BIT = 0,
@@ -169,14 +158,8 @@ enum type_dbgc_core_dbg_sts_reg_bits_e
 	DBGC_CORE_CDSR_READY_BIT = 31,
 };
 
-enum type_dbgc_dap_cmd_opcode_dbgcmd_e
-{
-	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL = 0,
-	DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC = 1,
-	DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR = 2,
-	DBGC_DAP_OPCODE_DBGCMD_UNLOCK = 3,
-};
-
+/// @see TAP_INSTR_DAP_CMD
+/// @see TAP_INSTR_DAP_CTRL
 enum DAP_OPSTATUS_BITS_e
 {
 	DAP_OPSTATUS_EXCEPT = 0,
@@ -185,12 +168,44 @@ enum DAP_OPSTATUS_BITS_e
 	DAP_OPSTATUS_READY = 3,
 };
 
+/// Units IDs
+enum type_dbgc_unit_id_e
+{
+	DBGC_UNIT_ID_HART_0 = 0,
+	DBGC_UNIT_ID_HART_1 = 1,
+	DBGC_UNIT_ID_CORE = 3,
+};
+
+/// Functional groups for HART units
+///@{
+enum type_dbgc_hart_fgroup_e
+{
+	/// @see type_dbgc_regblock_hart_e
+	DBGC_FGRP_HART_REGTRANS = 0,
+
+	/// @see type_dbgc_dap_cmd_opcode_dbgcmd_e
+	DBGC_FGRP_HART_DBGCMD = 1,
+};
+
+/// @see DBGC_FGRP_HART_REGTRANS
 enum type_dbgc_regblock_hart_e
 {
+	/// Hart Debug Control Register (HART_DBG_CTRL, HDCR)
+	/// @see type_dbgc_hart_dbg_ctrl_reg_bits_e
 	DBGC_HART_REGS_DBG_CTRL = 0,
-	DBGC_HART_REGS_DBG_STS = 1,
-	DBGC_HART_REGS_DMODE_ENBL = 2,
+
+	/// Hart Debug Status Register (HART_DBG_STS, HDSR) 
+	/// @see type_dbgc_hart_dbg_sts_reg_bits_e
+	DBGC_HART_REGS_DBG_STS = 1,  
+
+	/// Hart Debug Mode Enable Register (HART_DMODE_ENBL, HDMER) 
+	/// @see type_dbgc_hart_dmode_enbl_reg_bits_e
+	DBGC_HART_REGS_DMODE_ENBL = 2,  
+
+	/// Hart Debug Mode Cause Register (HART_DMODE_CAUSE, HDMCR) 
+	/// @see type_dbgc_hart_dmode_cause_reg_bits_e
 	DBGC_HART_REGS_DMODE_CAUSE = 3,
+
 	DBGC_HART_REGS_CORE_INSTR = 4,
 	DBGC_HART_REGS_DBG_DATA = 5,
 	DBGC_HART_REGS_PC_SAMPLE = 6,
@@ -203,6 +218,7 @@ enum type_dbgc_hart_dbg_ctrl_reg_bits_e
 	DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT = 6,
 };
 
+/// @see DBGC_HART_REGS_DBG_STS
 enum type_dbgc_hart_dbg_sts_reg_bits_e
 {
 	DBGC_HART_HDSR_DMODE_BIT = 0,
@@ -216,32 +232,17 @@ enum type_dbgc_hart_dbg_sts_reg_bits_e
 	DBGC_HART_HDSR_LOCK_STKY_BIT = 31
 };
 
-enum type_dbgc_regblock_core_e
+/// Hart Debug Mode Enable Register (HART_DMODE_ENBL, HDMER)
+/// @see DBGC_HART_REGS_DMODE_ENBL
+enum type_dbgc_hart_dmode_enbl_reg_bits_e
 {
-	DBGC_CORE_REGS_DEBUG_ID = 0,
-	DBGC_CORE_REGS_DBG_CTRL = 1,
-	DBGC_CORE_REGS_DBG_STS = 2,
-	DBGC_CORE_REGS_DBG_CMD = 3,
-};
-
-/// @see type_dbgc_dap_cmd_opcode_dbgctrl_ext_s
-enum type_dbgc_dap_cmd_opcode_dbgctrl_ext_e
-{
-	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_HALT = 0,
-	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME = 1,
-	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS = 2,
-};
-
-/// Core Debug Control Register (CORE_DBG_CTRL, CDCR)
-enum type_dbgc_core_dbg_ctrl_reg_bits_e
-{
-	DBGC_CORE_CDCR_HART0_RST_BIT = 0,
-	DBGC_CORE_CDCR_HART1_RST_BIT = 8,
-	DBGC_CORE_CDCR_RST_BIT = 24,
-	DBGC_CORE_CDCR_IRQ_DSBL_BIT = 25,
+	DBGC_HART_HDMER_SW_BRKPT_BIT = 3,
+	DBGC_HART_HDMER_SINGLE_STEP_BIT = 29,
+	DBGC_HART_HDMER_RST_BREAK_BIT = 30,
 };
 
 /// Hart Debug Mode Cause Register (HART_DMODE_CAUSE, HDMCR)
+/// @see DBGC_HART_REGS_DMODE_CAUSE
 enum type_dbgc_hart_dmode_cause_reg_bits_e
 {
 	DBGC_HART_HDMCR_SW_BRKPT_BIT = 3,
@@ -250,14 +251,57 @@ enum type_dbgc_hart_dmode_cause_reg_bits_e
 	DBGC_HART_HDMCR_ENFORCE_BIT = 31
 };
 
-/// Hart Debug Mode Enable Register (HART_DMODE_ENBL, HDMER)
-enum type_dbgc_hart_dmode_enbl_reg_bits_e
+/// @see DBGC_FGRP_HART_DBGCMD
+enum type_dbgc_dap_cmd_opcode_dbgcmd_e
 {
-	DBGC_HART_HDMER_SW_BRKPT_BIT = DBGC_HART_HDMCR_SW_BRKPT_BIT,
-	DBGC_HART_HDMER_SINGLE_STEP_BIT = DBGC_HART_HDMCR_SINGLE_STEP_BIT,
-	DBGC_HART_HDMER_RST_BREAK_BIT = DBGC_HART_HDMCR_RST_BREAK_BIT,
+	/// @see type_dbgc_dap_cmd_opcode_dbgctrl_ext_e
+	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL = 0,
+	DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC = 1,
+	DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR = 2,
+	DBGC_DAP_OPCODE_DBGCMD_UNLOCK = 3,
 };
 
+/// @see DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL
+/// @see type_dbgc_dap_cmd_opcode_dbgctrl_ext_s
+enum type_dbgc_dap_cmd_opcode_dbgctrl_ext_e
+{
+	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_HALT = 0,
+	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME = 1,
+	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS = 2,
+};
+
+///@}
+
+/// Functional groups for CORE units
+///@{
+enum type_dbgc_core_fgroup_e
+{
+	/// @see type_dbgc_regblock_core_e
+	DBGC_FGRP_CORE_REGTRANS = 0,
+};
+
+/// @see DBGC_FGRP_CORE_REGTRANS
+enum type_dbgc_regblock_core_e
+{
+	DBGC_CORE_REGS_DEBUG_ID = 0,
+
+	/// @see type_dbgc_core_dbg_ctrl_reg_bits_e
+	DBGC_CORE_REGS_DBG_CTRL = 1,
+	DBGC_CORE_REGS_DBG_STS = 2,
+	DBGC_CORE_REGS_DBG_CMD = 3,
+};
+
+/// Core Debug Control Register (CORE_DBG_CTRL, CDCR)
+/// @see DBGC_CORE_REGS_DBG_CTRL
+enum type_dbgc_core_dbg_ctrl_reg_bits_e
+{
+	DBGC_CORE_CDCR_HART0_RST_BIT = 0,
+	DBGC_CORE_CDCR_HART1_RST_BIT = 8,
+	DBGC_CORE_CDCR_RST_BIT = 24,
+	DBGC_CORE_CDCR_IRQ_DSBL_BIT = 25,
+};
+
+///@}
 
 typedef struct reg_cache reg_cache;
 typedef struct reg_arch_type reg_arch_type;
@@ -315,7 +359,7 @@ IR_select(target const* const restrict p_target, enum TAP_IR_e const new_instr)
 {
 	assert(p_target);
 	assert(p_target->tap);
-#if !(IR_SELECT_ALWAYS)
+#if IR_SELECT_USING_CACHE
 	if (buf_get_u32(p_target->tap->cur_instr, 0u, p_target->tap->ir_length) == new_instr) {
 		LOG_DEBUG("IR %s resently selected %d", p_target->cmd_name, new_instr);
 		return;
@@ -398,7 +442,7 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 
 	This_Arch* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
-#if !(SET_DAP_CONTROL_ALWAYS)
+#if DAP_CONTROL_USING_CACHE
 	if (p_arch->last_DAP_ctrl == set_dap_unit_group) {
 		LOG_DEBUG("DAP_CTRL_REG of %s already %#03x", p_target->cmd_name, set_dap_unit_group);
 		return;
@@ -436,8 +480,8 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return;
 #endif
-		}
 	}
+}
 
 #if VERIFY_DAP_CONTROL
 	/// verify unit/group
@@ -730,14 +774,14 @@ reg_x_get(reg* const restrict p_reg)
 		return error_code__clear(p_target);
 	}
 	int advance_pc_counter = 0;
-	// Save p_reg->number register to DBG_SCRATCH CSR
-	exec__step(p_target, RV_CSRRW(zero, DBG_SCRATCH, p_reg->number));
+	// Save p_reg->number register to CSR_DBG_SCRATCH CSR
+	exec__step(p_target, RV_CSRRW(zero, CSR_DBG_SCRATCH, p_reg->number));
 	advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
 
-	// Exec jump back to previous instruction and get saved into DBG_SCRATCH CSR value
+	// Exec jump back to previous instruction and get saved into CSR_DBG_SCRATCH CSR value
 	uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
 	advance_pc_counter = 0;
 	if (error_code__get(p_target) != ERROR_OK) {
@@ -787,7 +831,7 @@ reg_x_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
-	exec__step(p_target, RV_CSRRW(p_reg->number, DBG_SCRATCH, zero));
+	exec__step(p_target, RV_CSRRW(p_reg->number, CSR_DBG_SCRATCH, zero));
 	advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
@@ -922,8 +966,8 @@ reg_pc_get(reg* const restrict p_reg)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
-	/// and store temporary register to DBG_SCRATCH CSR.
-	exec__step(p_target, RV_CSRRW(zero, DBG_SCRATCH, p_wrk_reg->number));
+	/// and store temporary register to CSR_DBG_SCRATCH CSR.
+	exec__step(p_target, RV_CSRRW(zero, CSR_DBG_SCRATCH, p_wrk_reg->number));
 	advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
@@ -994,7 +1038,7 @@ reg_pc_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 		return error_code__clear(p_target);
 	}
 	// set temporary register value to restoring pc value
-	exec__step(p_target, RV_CSRRW(p_wrk_reg->number, DBG_SCRATCH, zero));
+	exec__step(p_target, RV_CSRRW(p_wrk_reg->number, CSR_DBG_SCRATCH, zero));
 	advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
@@ -1064,8 +1108,8 @@ reg_f_get(reg* const restrict p_reg)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
-	/// and store temporary register to DBG_SCRATCH CSR.
-	exec__step(p_target, RV_CSRRW(zero, DBG_SCRATCH, p_wrk_reg->number));
+	/// and store temporary register to CSR_DBG_SCRATCH CSR.
+	exec__step(p_target, RV_CSRRW(zero, CSR_DBG_SCRATCH, p_wrk_reg->number));
 	advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
@@ -1137,7 +1181,7 @@ reg_f_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 		return error_code__clear(p_target);
 	}
 	// set temporary register value to restoring pc value
-	exec__step(p_target, RV_CSRRW(p_wrk_reg->number, DBG_SCRATCH, zero));
+	exec__step(p_target, RV_CSRRW(p_wrk_reg->number, CSR_DBG_SCRATCH, zero));
 	advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
@@ -1457,7 +1501,7 @@ regs_commit(target const* const restrict p_target)
 	}
 	p_tmp_reg->dirty = false;
 	assert(advance_pc_counter == 0);
-}
+	}
 #endif
 
 static enum target_debug_reason
@@ -1598,7 +1642,7 @@ set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
 		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value %#010x, but re-read value is %#010x", set_value, get_value);
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return;
-}
+	}
 #endif
 }
 
@@ -1654,7 +1698,7 @@ common_resume(target* const restrict p_target, uint32_t const dmode_enabled, int
 	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
 
 	return error_code__clear(p_target);
-}
+		}
 
 static int
 this_resume(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
@@ -1712,7 +1756,7 @@ set_reset_state(target* const restrict p_target, bool const active)
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return error_code__clear(p_target);
 		}
-}
+	}
 #endif
 
 	update_status(p_target);
@@ -1821,7 +1865,7 @@ this_read_memory(target* const restrict p_target, uint32_t address, uint32_t con
 		}
 
 		/// Load address to work register
-		exec__step(p_target, RV_CSRRW(p_wrk_reg->number, DBG_SCRATCH, zero));
+		exec__step(p_target, RV_CSRRW(p_wrk_reg->number, CSR_DBG_SCRATCH, zero));
 		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__clear(p_target);
@@ -1835,7 +1879,7 @@ this_read_memory(target* const restrict p_target, uint32_t address, uint32_t con
 		}
 
 		/// Exec store work register to csr
-		exec__step(p_target, RV_CSRRW(zero, DBG_SCRATCH, p_wrk_reg->number));
+		exec__step(p_target, RV_CSRRW(zero, CSR_DBG_SCRATCH, p_wrk_reg->number));
 		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 
 		/// get data from csr and jump back to correct pc
@@ -1920,7 +1964,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 		}
 
 		/// Load address to work register
-		exec__step(p_target, RV_CSRRW(p_addr_reg->number, DBG_SCRATCH, zero));
+		exec__step(p_target, RV_CSRRW(p_addr_reg->number, CSR_DBG_SCRATCH, zero));
 		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__clear(p_target);
@@ -1933,7 +1977,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 		}
 
 		/// Load data to work register
-		exec__step(p_target, RV_CSRRW(p_data_reg->number, DBG_SCRATCH, zero));
+		exec__step(p_target, RV_CSRRW(p_data_reg->number, CSR_DBG_SCRATCH, zero));
 		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__clear(p_target);
