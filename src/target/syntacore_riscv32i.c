@@ -1966,7 +1966,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 	assert(p_addr_reg);
 	reg* const p_data_reg = prepare_temporary_GP_register(p_target, p_addr_reg->number);
 	assert(p_data_reg);
-	assert(p_addr_reg->number != p_addr_reg->number);
+	assert(p_addr_reg->number != p_data_reg->number);
 
 	{
 		/// Define opcode for load item to register
