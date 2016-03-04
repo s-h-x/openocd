@@ -196,11 +196,11 @@ enum type_dbgc_regblock_hart_e
 
 	/// Hart Debug Status Register (HART_DBG_STS, HDSR) 
 	/// @see type_dbgc_hart_dbg_sts_reg_bits_e
-	DBGC_HART_REGS_DBG_STS = 1,  
+	DBGC_HART_REGS_DBG_STS = 1,
 
 	/// Hart Debug Mode Enable Register (HART_DMODE_ENBL, HDMER) 
 	/// @see type_dbgc_hart_dmode_enbl_reg_bits_e
-	DBGC_HART_REGS_DMODE_ENBL = 2,  
+	DBGC_HART_REGS_DMODE_ENBL = 2,
 
 	/// Hart Debug Mode Cause Register (HART_DMODE_CAUSE, HDMCR) 
 	/// @see type_dbgc_hart_dmode_cause_reg_bits_e
@@ -479,8 +479,8 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return;
 #endif
+		}
 	}
-}
 
 #if VERIFY_DAP_CONTROL
 	/// verify unit/group
@@ -887,7 +887,7 @@ reg_x_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	if ( p_reg->valid && (buf_get_u32(p_reg->value, 0, XLEN) == value) ) {
 		// skip same value
 		return error_code__clear(p_target);
-}
+	}
 #endif
 	buf_set_u32(p_reg->value, 0, XLEN, value);
 
@@ -1505,7 +1505,7 @@ regs_commit(target const* const restrict p_target)
 	}
 	p_tmp_reg->dirty = false;
 	assert(advance_pc_counter == 0);
-	}
+}
 #endif
 
 static enum target_debug_reason
@@ -1702,7 +1702,7 @@ common_resume(target* const restrict p_target, uint32_t const dmode_enabled, int
 	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
 
 	return error_code__clear(p_target);
-		}
+}
 
 static int
 this_resume(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
