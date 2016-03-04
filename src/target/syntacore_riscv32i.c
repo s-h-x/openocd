@@ -560,11 +560,19 @@ unlock(target const* const restrict p_target)
 	LOG_WARNING("!!! Try to unlock !!!!");
 	int const old_err_code = error_code__clear(p_target);
 	uint8_t const set_dap_unit_group = 0x1;
+
+#if IR_SELECT_USING_CACHE
 	IR_select_force(p_target, TAP_INSTR_DAP_CTRL);
+#endif
+
 	error_code__clear(p_target);
 	DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
 	error_code__clear(p_target);
+
+#if IR_SELECT_USING_CACHE
 	IR_select_force(p_target, TAP_INSTR_DAP_CMD);
+#endif
+
 	error_code__clear(p_target);
 	(void)DAP_CMD_scan(p_target, REGTRANS_scan_type(true, DBGC_DAP_OPCODE_DBGCMD_UNLOCK), 0xFEEDBEEFu);
 	error_code__clear(p_target);
