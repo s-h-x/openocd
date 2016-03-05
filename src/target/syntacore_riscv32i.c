@@ -574,7 +574,7 @@ unlock(target const* const restrict p_target)
 #endif
 
 	error_code__clear(p_target);
-	(void)DAP_CMD_scan(p_target, REGTRANS_scan_type(true, DBGC_DAP_OPCODE_DBGCMD_UNLOCK), 0xFEEDBEEFu);
+	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_UNLOCK, 0xFEEDBEEFu);
 	error_code__clear(p_target);
 	error_code__update(p_target, old_err_code);
 	LOG_WARNING("!!! End of unlock !!!!");
