@@ -156,7 +156,14 @@ enum type_dbgc_core_dbg_sts_reg_bits_e
 {
 	DBGC_CORE_CDSR_HART0_DMODE_BIT = 0,
 	DBGC_CORE_CDSR_HART0_RST_BIT = 1,
+	DBGC_CORE_CDSR_HART0_RST_STKY_BIT = 2,
 	DBGC_CORE_CDSR_HART0_ERR_BIT = 3,
+	DBGC_CORE_CDSR_HART0_ERR_STKY_BIT = 4,
+	DBGC_CORE_CDSR_ERR_BIT = 16,
+	DBGC_CORE_CDSR_ERR_STKY_BIT = 17,
+	DBGC_CORE_CDSR_ERR_HWCORE_BIT = 18,
+	DBGC_CORE_CDSR_ERR_FSMBUSY_BIT = 19,
+	DBGC_CORE_CDSR_ERR_DAP_OPCODE_BIT = 20,
 	DBGC_CORE_CDSR_LOCK_BIT = 30,
 	DBGC_CORE_CDSR_READY_BIT = 31,
 };
@@ -641,7 +648,7 @@ unlock(target const* const restrict p_target)
 	error_code__return_and_clear(p_target);
 	uint32_t const context = DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_UNLOCK, 0xBEEFFEEDu);
 	LOG_WARNING("Lock context: 0x%08X", context);
-	
+
 	error_code__return_and_clear(p_target);
 	uint32_t const core_status = DBG_STATUS_get(p_target);
 	if ((error_code__return_and_clear(p_target) == ERROR_OK) && ((core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) == 0)) {
@@ -684,17 +691,25 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 	}
 #endif
 
-	for (int i = 0; i < 5; ++i) {
-		uint8_t const status = DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
-		if ((status & (BIT_NUM_TO_MASK(DAP_OPSTATUS_LOCK) | BIT_NUM_TO_MASK(DAP_OPSTATUS_READY))) == BIT_NUM_TO_MASK(DAP_OPSTATUS_READY)) {
-			/// Update cache of DAP control
-			p_arch->last_DAP_ctrl = set_dap_unit_group;
-			DAP_CTRL_REG_verify(p_target, set_dap_unit_group);
-			return;
-		}
-		unlock(p_target);
+	int const old_err_code = error_code__return_and_clear(p_target);
+	uint8_t const status = DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
+	if ((status & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
+		LOG_WARNING("DAP_CTRL_REG status 0x%1X!", status);
 	}
-	error_code__update(p_target, ERROR_TARGET_FAILURE);
+
+	error_code__return_and_clear(p_target);
+	DAP_CTRL_REG_verify(p_target, set_dap_unit_group);
+	if (error_code__get(p_target) == ERROR_OK) {
+		p_arch->last_DAP_ctrl = set_dap_unit_group;
+	} else {
+		p_arch->last_DAP_ctrl = 0xFFu;
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+	}
+	{
+		int const new_err_code = error_code__return_and_clear(p_target);
+		error_code__update(p_target, old_err_code);
+		error_code__update(p_target, new_err_code);
+	}
 }
 
 static inline uint8_t
@@ -754,21 +769,27 @@ core_REGTRANS_read(target const* const restrict p_target, enum type_dbgc_regbloc
 static inline void
 exec__setup(target const* const restrict p_target)
 {
-	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
+	if (error_code__get(p_target) == ERROR_OK) {
+		DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
+	}
 }
 
 static inline void
 exec__set_csr_data(target const* const restrict p_target, uint32_t const csr_data)
 {
-	DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR, csr_data);
+	if (error_code__get(p_target) == ERROR_OK) {
+		DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR, csr_data);
+	}
 }
 
 static inline uint32_t
 exec__step(target const* const restrict p_target, uint32_t instruction)
 {
+	if (error_code__get(p_target) != ERROR_OK) {
+		return 0xBADC0DE9u;
+	}
 	return DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC, instruction);
 }
-
 /// @}
 
 static inline int
@@ -787,20 +808,41 @@ HART_status_bits_to_target_state(target const* const restrict p_target, uint8_t 
 	}
 }
 
+void
+HART0_clear_sticky(target* const restrict p_target)
+{
+	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return;
+	}
+
+	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
+}
+
 static void
 update_status(target* const restrict p_target)
 {
 	assert(p_target);
+	uint32_t core_status = DBG_STATUS_get(p_target);
+	if (0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) {
+		unlock(p_target);
+		error_code__return_and_clear(p_target);
+		core_status = DBG_STATUS_get(p_target);
+	}
+	assert(!(core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)));
+	if (core_status &BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_STKY_BIT)) {
+		HART0_clear_sticky(p_target);
+		error_code__return_and_clear(p_target);
+		core_status = DBG_STATUS_get(p_target);
+	}
+	if (core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_STKY_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_STKY_BIT))) {
+		error_code__return_and_clear(p_target);
+		core_REGTRANS_write(p_target, DBGC_CORE_REGS_DBG_STS, 0xFFFFFFFF);
+		error_code__return_and_clear(p_target);
+		core_status = DBG_STATUS_get(p_target);
+	}
 	/// Only 1 HART available
 	assert(p_target->coreid == 0);
-	uint32_t core_status;
-	int limit = 5;
-	while (0 != ((core_status = DBG_STATUS_get(p_target)) & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) {
-		unlock(p_target);
-		if (!(0 < --limit)) {
-			break;
-		}
-	}
 	uint8_t const HART_status = (core_status >> p_target->coreid) & 0xFFu;
 	p_target->state = HART_status_bits_to_target_state(p_target, HART_status);
 	uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
@@ -971,7 +1013,7 @@ reg_x_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	if ( p_reg->valid && (buf_get_u32(p_reg->value, 0, XLEN) == value) ) {
 		// skip same value
 		return error_code__clear(p_target);
-	}
+}
 #endif
 	buf_set_u32(p_reg->value, 0, XLEN, value);
 
@@ -1377,7 +1419,7 @@ set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
 		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value 0x%08X, but re-read value is 0x%08X", set_value, get_value);
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return;
-	}
+}
 #endif
 }
 
@@ -1469,7 +1511,7 @@ set_reset_state(target* const restrict p_target, bool const active)
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return error_code__return_and_clear(p_target);
 		}
-	}
+}
 #endif
 
 	update_status(p_target);
