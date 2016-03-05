@@ -793,15 +793,23 @@ exec__step(target const* const restrict p_target, uint32_t instruction)
 /// @}
 
 static inline int
-HART_status_bits_to_target_state(target const* const restrict p_target, uint8_t const status)
+HART_status_bits_to_target_state(target const* const restrict p_target, uint32_t const status)
 {
+	static uint32_t const err_bits =
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_BIT) |
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_BIT) |
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_HWTHREAD_BIT) |
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_DAP_OPCODE_BIT) |
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_DBGCMD_NACK_BIT) |
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_LOCK_STKY_BIT);
+
 	if (error_code__get(p_target) != ERROR_OK) {
 		return TARGET_UNKNOWN;
-	} else if (status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT)) {
+	} else if (status & err_bits) {
 		return TARGET_UNKNOWN;
-	} else if (status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_RST_BIT)) {
+	} else if (status & BIT_NUM_TO_MASK(DBGC_HART_HDSR_RST_BIT)) {
 		return TARGET_RESET;
-	} else if (status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_DMODE_BIT)) {
+	} else if (status & BIT_NUM_TO_MASK(DBGC_HART_HDSR_DMODE_BIT)) {
 		return TARGET_HALTED;
 	} else {
 		return TARGET_RUNNING;
@@ -849,7 +857,7 @@ update_status(target* const restrict p_target)
 	}
 	/// Only 1 HART available
 	assert(p_target->coreid == 0);
-	uint8_t const HART_status = (core_status >> p_target->coreid) & 0xFFu;
+	uint32_t const HART_status = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DBG_STS);
 	enum target_state const new_state = HART_status_bits_to_target_state(p_target, HART_status);
 	enum target_state const old_state = p_target->state;
 	if (new_state != old_state) {
@@ -1036,16 +1044,16 @@ reg_x_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	LOG_DEBUG("Updating register %s <-- 0x%08X", p_reg->name, value);
 
 #if 0
-	if ( p_reg->valid && (buf_get_u32(p_reg->value, 0, XLEN) == value) ) {
+	if (p_reg->valid && (buf_get_u32(p_reg->value, 0, XLEN) == value)) {
 		// skip same value
 		return error_code__clear(p_target);
-}
+	}
 #endif
 	buf_set_u32(p_reg->value, 0, XLEN, value);
 
 	/// store dirty register data to HW
 	return reg_x_store(p_reg);
-}
+	}
 
 static int
 reg_x0_get(reg* const restrict p_reg)
@@ -1536,8 +1544,8 @@ set_reset_state(target* const restrict p_target, bool const active)
 			LOG_ERROR("Fail to verify write: set 0x%08X, but get 0x%08X", set_value, get_new_value2);
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return error_code__return_and_clear(p_target);
+		}
 	}
-}
 #endif
 
 	update_status(p_target);
@@ -1557,7 +1565,7 @@ set_reset_state(target* const restrict p_target, bool const active)
 		}
 	}
 	return error_code__return_and_clear(p_target);
-}
+	}
 
 static reg_arch_type const reg_x0_accessors =
 {
