@@ -825,21 +825,27 @@ update_status(target* const restrict p_target)
 	assert(p_target);
 	uint32_t core_status = DBG_STATUS_get(p_target);
 	if (0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) {
+		LOG_WARNING("Lock detected: 0x%08X", core_status);
 		unlock(p_target);
 		error_code__return_and_clear(p_target);
 		core_status = DBG_STATUS_get(p_target);
+		LOG_WARNING("Lock  fixed: 0x%08X", core_status);
 	}
 	assert(!(core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)));
 	if (core_status &BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_STKY_BIT)) {
+		LOG_WARNING("Hart errors detected: 0x%08X", core_status);
 		HART0_clear_sticky(p_target);
 		error_code__return_and_clear(p_target);
 		core_status = DBG_STATUS_get(p_target);
+		LOG_WARNING("Hart errors fixed: 0x%08X", core_status);
 	}
 	if (core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_STKY_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_STKY_BIT))) {
+		LOG_WARNING("Core errors detected: 0x%08X", core_status);
 		error_code__return_and_clear(p_target);
 		core_REGTRANS_write(p_target, DBGC_CORE_REGS_DBG_STS, 0xFFFFFFFF);
 		error_code__return_and_clear(p_target);
 		core_status = DBG_STATUS_get(p_target);
+		LOG_WARNING("Core errors fixed: 0x%08X", core_status);
 	}
 	/// Only 1 HART available
 	assert(p_target->coreid == 0);
@@ -1419,7 +1425,7 @@ set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
 		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value 0x%08X, but re-read value is 0x%08X", set_value, get_value);
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return;
-}
+	}
 #endif
 }
 
@@ -1510,7 +1516,7 @@ set_reset_state(target* const restrict p_target, bool const active)
 			LOG_ERROR("Fail to verify write: set 0x%08X, but get 0x%08X", set_value, get_new_value2);
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return error_code__return_and_clear(p_target);
-		}
+	}
 }
 #endif
 
