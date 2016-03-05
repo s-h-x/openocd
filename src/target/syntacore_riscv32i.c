@@ -106,7 +106,7 @@ typedef uint32_t instr_type;
 #define RV_FMV_X_S(rd, rs1) RV_INSTR_R_TYPE(0x70u, 0u, rs1, 0u, rd, 0x53u)
 #define RV_FMV_S_X(rd, rs1) RV_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd, 0x53u)
 
-#define DAP_OPSTATUS_MASK (BIT_NUM_TO_MASK(DAP_OPSTATUS_EXCEPT) | BIT_NUM_TO_MASK(DAP_OPSTATUS_ERROR) | BIT_NUM_TO_MASK(DAP_OPSTATUS_LOCK) | BIT_NUM_TO_MASK(DAP_OPSTATUS_READY))
+#define DAP_OPSTATUS_MASK (BIT_NUM_TO_MASK(DAP_OPSTATUS_ERROR) | BIT_NUM_TO_MASK(DAP_OPSTATUS_LOCK) | BIT_NUM_TO_MASK(DAP_OPSTATUS_READY))
 #define DAP_OPSTATUS_OK (BIT_NUM_TO_MASK(DAP_OPSTATUS_READY))
 
 enum
@@ -850,7 +850,27 @@ update_status(target* const restrict p_target)
 	/// Only 1 HART available
 	assert(p_target->coreid == 0);
 	uint8_t const HART_status = (core_status >> p_target->coreid) & 0xFFu;
-	p_target->state = HART_status_bits_to_target_state(p_target, HART_status);
+	enum target_state const new_state = HART_status_bits_to_target_state(p_target, HART_status);
+	enum target_state const old_state = p_target->state;
+	if (new_state != old_state) {
+		p_target->state = new_state;
+		switch (new_state) {
+		case TARGET_HALTED:
+			LOG_DEBUG("TARGET_EVENT_HALTED");
+			target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
+			break;
+		case TARGET_RESET:
+			LOG_DEBUG("TARGET_EVENT_RESET_ASSERT");
+			target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
+			break;
+		case TARGET_RUNNING:
+			LOG_DEBUG("TARGET_EVENT_RESUMED");
+			target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
+		case TARGET_UNKNOWN:
+		default:
+			break;
+		}
+	}
 	uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
 	LOG_DEBUG("pc_sample = 0x%08X", pc_sample);
 }
@@ -1714,6 +1734,11 @@ this_target_create(target* const restrict p_target, struct Jim_Interp *interp)
 static int
 this_examine(target* const restrict p_target)
 {
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__return_and_clear(p_target);
+	}
+
 	assert(p_target);
 	if (!target_was_examined(p_target)) {
 		LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE_get(p_target), DBG_ID_get(p_target), BLD_ID_get(p_target));
@@ -1724,11 +1749,6 @@ this_examine(target* const restrict p_target)
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__return_and_clear(p_target);
 		}
-	}
-
-	update_status(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__return_and_clear(p_target);
 	}
 
 	target_set_examined(p_target);
@@ -1743,20 +1763,6 @@ this_poll(target* const restrict p_target)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__return_and_clear(p_target);
 	}
-
-	switch (p_target->state) {
-	case TARGET_HALTED:
-		target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
-		break;
-	case TARGET_RESET:
-		target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
-		break;
-	case TARGET_RUNNING:
-	case TARGET_UNKNOWN:
-	default:
-		break;
-	}
-
 	return error_code__return_and_clear(p_target);
 }
 
