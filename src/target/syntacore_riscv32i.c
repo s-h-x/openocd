@@ -291,7 +291,9 @@ enum type_dbgc_regblock_core_e
 	/// @see type_dbgc_core_dbg_ctrl_reg_bits_e
 	DBGC_CORE_REGS_DBG_CTRL = 1,
 	DBGC_CORE_REGS_DBG_STS = 2,
+#if 0
 	DBGC_CORE_REGS_DBG_CMD = 3,
+#endif
 };
 
 /// Core Debug Control Register (CORE_DBG_CTRL, CDCR)
@@ -338,6 +340,7 @@ error_code__update(target const* const restrict p_target, int const a_error_code
 	This_Arch* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
 	if (ERROR_OK == error_code__get(p_target) && ERROR_OK != a_error_code) {
+		LOG_DEBUG("Set error code: %d", a_error_code);
 		p_arch->error_code = a_error_code;
 	}
 	return error_code__get(p_target);
@@ -418,11 +421,10 @@ DBG_STATUS_get(target const* const restrict p_target)
 
 	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DBG_STATUS) <= sizeof(uint32_t));
 	uint32_t const result = buf_get_u32(result_buffer, 0, TAP_LEN_DBG_STATUS);
-	LOG_DEBUG("drscan %s %d 0 --> %#010x", p_target->cmd_name, field.num_bits, result);
+	LOG_DEBUG("drscan %s %d 0 ; # %8X", p_target->cmd_name, field.num_bits, result);
 
 	if ((result & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) != (uint32_t)BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) {
 		LOG_WARNING("TAP_INSTR_DBG_STATUS is %x!", result);
-		error_code__update(p_target, ERROR_TARGET_FAILURE);
 	}
 	return result;
 }
@@ -456,9 +458,9 @@ DAP_CTRL_REG_set_force(target const* const restrict p_target, uint8_t const set_
 	if (error_code__update(p_target, jtag_execute_queue()) != ERROR_OK) {
 		LOG_ERROR("JTAG error %d", error_code__get(p_target));
 	}
-	LOG_DEBUG("drscan %s %d %#03x --> %#03x", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
+	LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
 	if ((status & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
-		LOG_ERROR("TAP status %#03x", (uint32_t)status);
+		LOG_WARNING("TAP status 0x%1X", (uint32_t)status);
 	}
 	return status;
 }
@@ -484,9 +486,9 @@ DAP_CTRL_REG_verify(target const* const restrict p_target, uint8_t const set_dap
 		LOG_ERROR("JTAG error %d", error_code__get(p_target));
 		return;
 	}
-	LOG_DEBUG("drscan %s %d %#03x --> %#03x", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
+	LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
 	if (get_dap_unit_group != set_dap_unit_group) {
-		LOG_ERROR("Unit/Group verification error: set %#0x, but get %#0x!", set_dap_unit_group, get_dap_unit_group);
+		LOG_ERROR("Unit/Group verification error: set 0x%1X, but get 0x%1X!", set_dap_unit_group, get_dap_unit_group);
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return;
 	}
@@ -538,10 +540,10 @@ DAP_CMD_scan(target const* const restrict p_target, uint8_t const DAP_OPCODE, ui
 		return DBG_DATA;
 	}
 
-	LOG_DEBUG("drscan %s %d %#010x %d %#03x --> %#010x %#03x", p_target->cmd_name, fields[0].num_bits, dap_opcode_ext, fields[1].num_bits, dap_opcode, DBG_DATA, DAP_OPSTATUS);
+	LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X ; # %08X %1X", p_target->cmd_name, fields[0].num_bits, dap_opcode_ext, fields[1].num_bits, dap_opcode, DBG_DATA, DAP_OPSTATUS);
 
 	if ((DAP_OPSTATUS & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
-		LOG_ERROR("DAP_OPSTATUS == %#0x", (uint32_t)DAP_OPSTATUS);
+		LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 	}
 	return DBG_DATA;
@@ -551,33 +553,45 @@ static inline uint8_t
 REGTRANS_scan_type(bool const write, uint8_t const index)
 {
 	assert((index & !LOW_BITS_MASK(3)) == 0);
-	return (write ? BIT_NUM_TO_MASK(3) : 0) | index;
+	return MAKE_FIELD(!!write, 3, 3) | MAKE_FIELD(index, 0, 2);
 }
 
-static void
+static uint32_t
 unlock(target const* const restrict p_target)
 {
-	LOG_WARNING("!!! Try to unlock !!!!");
-	int const old_err_code = error_code__clear(p_target);
-	uint8_t const set_dap_unit_group = 0x1;
+	LOG_WARNING("Unlock !!!!");
+	static uint8_t const set_dap_unit_group = MAKE_FIELD(DBGC_UNIT_ID_HART_0, 2, 3) | MAKE_FIELD(DBGC_FGRP_HART_DBGCMD, 0, 1);
 
+	error_code__clear(p_target);
 #if IR_SELECT_USING_CACHE
 	IR_select_force(p_target, TAP_INSTR_DAP_CTRL);
 #endif
 
 	error_code__clear(p_target);
 	DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
-	error_code__clear(p_target);
 
+	error_code__clear(p_target);
 #if IR_SELECT_USING_CACHE
 	IR_select_force(p_target, TAP_INSTR_DAP_CMD);
 #endif
 
 	error_code__clear(p_target);
 	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_UNLOCK, 0xFEEDBEEFu);
+
 	error_code__clear(p_target);
-	error_code__update(p_target, old_err_code);
-	LOG_WARNING("!!! End of unlock !!!!");
+	uint32_t const context = DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_UNLOCK, 0xBEEFFEEDu);
+	LOG_WARNING("Lock context: 0x%08X", context);
+	
+	error_code__clear(p_target);
+	uint32_t const core_status = DBG_STATUS_get(p_target);
+	if ((error_code__clear(p_target) == ERROR_OK) && ((core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) == 0)) {
+		LOG_DEBUG("Unlock succsess");
+		return context;
+	}
+
+	error_code__update(p_target, ERROR_TARGET_FAILURE);
+	LOG_ERROR("Still locked!!!!");
+	return context;
 }
 
 static void
@@ -605,14 +619,14 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 	assert(p_arch);
 #if DAP_CONTROL_USING_CACHE
 	if (p_arch->last_DAP_ctrl == set_dap_unit_group) {
-		LOG_DEBUG("DAP_CTRL_REG of %s already %#03x", p_target->cmd_name, set_dap_unit_group);
+		LOG_DEBUG("DAP_CTRL_REG of %s already 0x%1X", p_target->cmd_name, set_dap_unit_group);
 		return;
 	}
 #endif
 
 	for (int i = 0; i < 5; ++i) {
 		uint8_t const status = DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
-		if ((status & DAP_OPSTATUS_MASK) == DAP_OPSTATUS_OK) {
+		if ((status & (BIT_NUM_TO_MASK(DAP_OPSTATUS_LOCK) | BIT_NUM_TO_MASK(DAP_OPSTATUS_READY))) == BIT_NUM_TO_MASK(DAP_OPSTATUS_READY)) {
 			/// Update cache of DAP control
 			p_arch->last_DAP_ctrl = set_dap_unit_group;
 #if VERIFY_DAP_CONTROL
@@ -620,7 +634,6 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 #endif
 			return;
 		}
-		LOG_ERROR("TAP status %#03x", (uint32_t)status);
 		unlock(p_target);
 	}
 	error_code__update(p_target, ERROR_TARGET_FAILURE);
@@ -699,15 +712,18 @@ update_status(target* const restrict p_target)
 	assert(p_target);
 	/// Only 1 HART available
 	assert(p_target->coreid == 0);
-	uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-	LOG_DEBUG("pc_sample = %#010x", pc_sample);
-
-	uint32_t const core_status = DBG_STATUS_get(p_target);
-	if (0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) {
+	uint32_t core_status;
+	int limit = 5;
+	while (0 != ((core_status = DBG_STATUS_get(p_target)) & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) {
 		unlock(p_target);
+		if (!(0 < --limit)) {
+			break;
+		}
 	}
 	uint8_t const HART_status = (core_status >> p_target->coreid) & 0xFFu;
 	p_target->state = HART_status_bits_to_target_state(p_target, HART_status);
+	uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
+	LOG_DEBUG("pc_sample = 0x%08X", pc_sample);
 }
 
 static inline void
@@ -829,7 +845,7 @@ reg_x_get(reg* const restrict p_reg)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__clear(p_target);
 	}
-	LOG_DEBUG("Updating cache from register %s <-- %#010x", p_reg->name, value);
+	LOG_DEBUG("Updating cache from register %s <-- 0x%08X", p_reg->name, value);
 
 	/// update cache value
 	buf_set_u32(p_reg->value, 0, XLEN, value);
@@ -886,7 +902,7 @@ reg_x_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	}
 
 	uint32_t const value = buf_get_u32(buf, 0, XLEN);
-	LOG_DEBUG("Updating register %s <-- %#010x", p_reg->name, value);
+	LOG_DEBUG("Updating register %s <-- 0x%08X", p_reg->name, value);
 
 #if 0
 	if ( p_reg->valid && (buf_get_u32(p_reg->value, 0, XLEN) == value) ) {
@@ -976,7 +992,7 @@ reg_pc_get(reg* const restrict p_reg)
 	assert(p_target);
 #if USE_PC_FROM_PC_SAMPLE
 	uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-	LOG_DEBUG("Updating cache from register %s <-- %#010x", p_reg->name, pc_sample);
+	LOG_DEBUG("Updating cache from register %s <-- 0x%08X", p_reg->name, pc_sample);
 	if (error_code__get(p_target) == ERROR_OK) {
 		buf_set_u32(p_reg->value, 0, p_reg->size, pc_sample);
 		reg_validate(p_reg);
@@ -1014,12 +1030,12 @@ reg_pc_get(reg* const restrict p_reg)
 					advance_pc_counter = 0;
 					if (error_code__get(p_target) == ERROR_OK) {
 						assert(advance_pc_counter == 0);
-						LOG_DEBUG("Updating cache from register %s <-- %#010x", p_reg->name, value);
+						LOG_DEBUG("Updating cache from register %s <-- 0x%08x", p_reg->name, value);
 						// update cached value
 						buf_set_u32(p_reg->value, 0, p_reg->size, value);
 						reg_validate(p_reg);
 						uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-						LOG_DEBUG("pc_sample = %#010x", pc_sample);
+						LOG_DEBUG("pc_sample = 0x%08X", pc_sample);
 					}
 				}
 			}
@@ -1067,7 +1083,7 @@ reg_pc_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 		uint32_t const value = buf_get_u32(buf, 0, p_reg->size);
 		buf_set_u32(p_reg->value, 0, p_reg->size, value);
 		reg_invalidate(p_reg);
-		LOG_DEBUG("Updating register %s <-- %#010x", p_reg->name, value);
+		LOG_DEBUG("Updating register %s <-- 0x%08X", p_reg->name, value);
 
 		// Update to HW
 		exec__setup(p_target);
@@ -1143,7 +1159,7 @@ reg_f_get(reg* const restrict p_reg)
 					advance_pc_counter = 0;
 					if (error_code__get(p_target) == ERROR_OK) {
 						assert(advance_pc_counter == 0);
-						LOG_DEBUG("Updating cache from register %s <-- %#010x", p_reg->name, value);
+						LOG_DEBUG("Updating cache from register %s <-- 0x%08X", p_reg->name, value);
 						// update cached value
 						buf_set_u32(p_reg->value, 0, p_reg->size, value);
 						reg_validate(p_reg);
@@ -1194,7 +1210,7 @@ reg_f_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 		int advance_pc_counter = 0;
 		if (error_code__get(p_target) == ERROR_OK) {
 			uint32_t const value = buf_get_u32(buf, 0, p_reg->size);
-			LOG_DEBUG("Updating register %s <-- %#010x", p_reg->name, value);
+			LOG_DEBUG("Updating register %s <-- 0x%08X", p_reg->name, value);
 
 			buf_set_u32(p_reg->value, 0, p_reg->size, value);
 			reg_invalidate(p_reg);
@@ -1295,7 +1311,7 @@ set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
 		return;
 	}
 	if (get_value != set_value) {
-		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value %#010x, but re-read value is %#010x", set_value, get_value);
+		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value 0x%08X, but re-read value is 0x%08X", set_value, get_value);
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return;
 	}
@@ -1386,7 +1402,7 @@ set_reset_state(target* const restrict p_target, bool const active)
 			return error_code__clear(p_target);
 		}
 		if ((get_new_value2 & bit_mask) != (set_value & bit_mask)) {
-			LOG_ERROR("Fail to verify reset state: set %#0x, but get %#0x", set_value, get_new_value2);
+			LOG_ERROR("Fail to verify write: set 0x%08X, but get 0x%08X", set_value, get_new_value2);
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return error_code__clear(p_target);
 		}
@@ -1726,7 +1742,7 @@ this_soft_reset_halt(target* const restrict p_target)
 static int
 this_read_memory(target* const restrict p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* restrict buffer)
 {
-	LOG_DEBUG("Read_memory at %#010x, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
+	LOG_DEBUG("Read_memory at 0x%08X, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
 	/// Check for size
 	if (!(size == 1 || size == 2 || size == 4)) {
 		LOG_ERROR("Invalid item size %d", size);
@@ -1736,7 +1752,7 @@ this_read_memory(target* const restrict p_target, uint32_t address, uint32_t con
 
 	/// Check for alignment
 	if (address % size != 0) {
-		LOG_ERROR("Unaligned access at %#010x, for item size %d", address, size);
+		LOG_ERROR("Unaligned access at 0x%08X, for item size %d", address, size);
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__clear(p_target);
 	}
@@ -1828,7 +1844,7 @@ this_read_memory(target* const restrict p_target, uint32_t address, uint32_t con
 static int
 this_write_memory(target* const restrict p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* restrict buffer)
 {
-	LOG_DEBUG("Write_memory at %#010x, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
+	LOG_DEBUG("Write_memory at 0x%08X, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
 	/// Check for size
 	if (!(size == 1 || size == 2 || size == 4)) {
 		LOG_ERROR("Invalid item size %d", size);
@@ -1838,7 +1854,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 
 	/// Check for alignment
 	if (address % size != 0) {
-		LOG_ERROR("Unaligned access at %#010x, for item size %d", address, size);
+		LOG_ERROR("Unaligned access at 0x%08X, for item size %d", address, size);
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__clear(p_target);
 	}
