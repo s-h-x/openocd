@@ -827,6 +827,32 @@ HART0_clear_sticky(target* const restrict p_target)
 	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
 }
 
+static enum target_debug_reason
+read_debug_cause(target* const restrict p_target)
+{
+	uint32_t const value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_CAUSE);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return DBG_REASON_UNDEFINED;
+	}
+	if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_ENFORCE_BIT)) {
+		return DBG_REASON_DBGRQ;
+	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SINGLE_STEP_BIT)) {
+		return DBG_REASON_SINGLESTEP;
+	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SW_BRKPT_BIT)) {
+		return DBG_REASON_BREAKPOINT;
+	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_RST_BREAK_BIT)) {
+		return DBG_REASON_DBGRQ;
+	} else {
+		return DBG_REASON_UNDEFINED;
+	}
+}
+
+static void
+update_debug_reason(target* const restrict p_target)
+{
+	p_target->debug_reason = read_debug_cause(p_target);
+}
+
 static void
 update_status(target* const restrict p_target)
 {
@@ -864,14 +890,17 @@ update_status(target* const restrict p_target)
 		p_target->state = new_state;
 		switch (new_state) {
 		case TARGET_HALTED:
+			update_debug_reason(p_target);
 			LOG_DEBUG("TARGET_EVENT_HALTED");
 			target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
 			break;
 		case TARGET_RESET:
+			update_debug_reason(p_target);
 			LOG_DEBUG("TARGET_EVENT_RESET_ASSERT");
 			target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
 			break;
 		case TARGET_RUNNING:
+			p_target->debug_reason = DBG_REASON_NOTHALTED;
 			LOG_DEBUG("TARGET_EVENT_RESUMED");
 			target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
 		case TARGET_UNKNOWN:
@@ -1053,7 +1082,7 @@ reg_x_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 
 	/// store dirty register data to HW
 	return reg_x_store(p_reg);
-	}
+}
 
 static int
 reg_x0_get(reg* const restrict p_reg)
@@ -1410,32 +1439,6 @@ reg_cache__create(char const* name, reg const regs_templates[], size_t const num
 	return p_obj;
 }
 
-static enum target_debug_reason
-read_debug_cause(target* const restrict p_target)
-{
-	uint32_t const value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_CAUSE);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return DBG_REASON_UNDEFINED;
-	}
-	if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_ENFORCE_BIT)) {
-		return DBG_REASON_DBGRQ;
-	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SINGLE_STEP_BIT)) {
-		return DBG_REASON_SINGLESTEP;
-	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SW_BRKPT_BIT)) {
-		return DBG_REASON_BREAKPOINT;
-	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_RST_BREAK_BIT)) {
-		return DBG_REASON_DBGRQ;
-	} else {
-		return DBG_REASON_UNDEFINED;
-	}
-}
-
-static void
-update_debug_reason(target* const restrict p_target)
-{
-	p_target->debug_reason = read_debug_cause(p_target);
-}
-
 static void
 set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
 {
@@ -1458,10 +1461,10 @@ set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
 }
 
 static int
-common_resume(target* const restrict p_target, uint32_t const dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
+common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	assert(p_target);
-	/// @todo update state
+	update_status(p_target);
 	if (p_target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
@@ -1487,6 +1490,11 @@ common_resume(target* const restrict p_target, uint32_t const dmode_enabled, int
 	}
 #endif
 	regs_invalidate(p_target);
+	if (handle_breakpoints) {
+		dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
+	} else {
+		dmode_enabled &= !BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
+	}
 	set_DEMODE_ENBL(p_target, dmode_enabled);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__return_and_clear(p_target);
@@ -1500,13 +1508,15 @@ common_resume(target* const restrict p_target, uint32_t const dmode_enabled, int
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__return_and_clear(p_target);
 	}
+
+	p_target->debug_reason = DBG_REASON_NOTHALTED;
+	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
+
 	// update state
 	update_status(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__return_and_clear(p_target);
 	}
-
-	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
 
 	return error_code__return_and_clear(p_target);
 }
@@ -1778,18 +1788,6 @@ static int
 this_arch_state(target* const restrict p_target)
 {
 	update_status(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__return_and_clear(p_target);
-	}
-
-	switch (p_target->state) {
-	case TARGET_HALTED:
-		update_debug_reason(p_target);
-		break;
-	default:
-		break;
-	}
-
 	return error_code__return_and_clear(p_target);
 }
 
@@ -1797,9 +1795,8 @@ static int
 this_halt(target* const restrict p_target)
 {
 	assert(p_target);
+	// May be already halted?
 	{
-		// May be already halted?
-		// Update state
 		update_status(p_target);
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__return_and_clear(p_target);
@@ -1811,8 +1808,8 @@ this_halt(target* const restrict p_target)
 		}
 	}
 
+	// Try to halt
 	{
-		// Try to halt
 		DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__return_and_clear(p_target);
@@ -1824,12 +1821,9 @@ this_halt(target* const restrict p_target)
 		}
 	}
 
-	{
-		// update state
-		update_status(p_target);
-		if (error_code__get(p_target) != ERROR_OK) {
-			return error_code__return_and_clear(p_target);
-		}
+	update_status(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__return_and_clear(p_target);
 	}
 
 	// Verify that in debug mode
@@ -1840,8 +1834,6 @@ this_halt(target* const restrict p_target)
 		return error_code__return_and_clear(p_target);
 	}
 
-	// OK, halted
-	update_debug_reason(p_target);
 	return error_code__return_and_clear(p_target);
 }
 
