@@ -23,12 +23,13 @@
 #define VERIFY_HART_REGTRANS_WRITE 0
 #define VERIFY_CORE_REGTRANS_WRITE 0
 
-#define NORMAL_DEBUG_ENABLE_MASK (BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_BREAK_BIT))
+#define EXPECTED_IDCODE (0xC0DEDEB1u)
+#define EXPECTED_DBG_ID (0xDB030600u)
+#define NORMAL_DEBUG_ENABLE_MASK (BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_EXIT_BRK_BIT))
 
-#define LOCAL_CONCAT(x,y) x##y
-// #define STATIC_ASSERT(e) typedef char LOCAL_CONCAT(___my_static_assert,__LINE__)[1 - 2 * !(e)]
 #define STATIC_ASSERT(e) {enum {___my_static_assert = 1 / (!!(e)) };}
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
+
 #define BIT_NUM_TO_MASK(bit_num) (1u << (bit_num))
 #define LOW_BITS_MASK(n) (~(~0 << (n)))
 #define NUM_BITS_TO_SIZE(num_bits) ( ( (size_t)(num_bits) + (8 - 1) ) / 8 )
@@ -240,6 +241,8 @@ enum type_dbgc_hart_dbg_sts_reg_bits_e
 	DBGC_HART_HDSR_ERR_HWTHREAD_BIT = 17,
 	DBGC_HART_HDSR_ERR_DAP_OPCODE_BIT = 18,
 	DBGC_HART_HDSR_ERR_DBGCMD_NACK_BIT = 19,
+	DBGC_HART_HDSR_ERR_ILLEG_DBG_CONTEXT_BIT = 20,
+	DBGC_HART_HDSR_ERR_UNEXP_RESET_BIT = 21,
 	DBGC_HART_HDSR_LOCK_STKY_BIT = 31
 };
 
@@ -248,8 +251,12 @@ enum type_dbgc_hart_dbg_sts_reg_bits_e
 enum type_dbgc_hart_dmode_enbl_reg_bits_e
 {
 	DBGC_HART_HDMER_SW_BRKPT_BIT = 3,
-	DBGC_HART_HDMER_SINGLE_STEP_BIT = 29,
-	DBGC_HART_HDMER_RST_BREAK_BIT = 30,
+	DBGC_HART_HDMER_SINGLE_STEP_BIT = 28,
+#if 0
+	// Not implemented, Reserved for future use
+	DBGC_HART_HDMER_RST_ENTR_BRK_BIT = 29,
+#endif
+	DBGC_HART_HDMER_RST_EXIT_BRK_BIT = 30,
 };
 
 /// Hart Debug Mode Cause Register (HART_DMODE_CAUSE, HDMCR)
@@ -1770,7 +1777,11 @@ this_examine(target* const restrict p_target)
 
 	assert(p_target);
 	if (!target_was_examined(p_target)) {
-		LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE_get(p_target), DBG_ID_get(p_target), BLD_ID_get(p_target));
+		uint32_t const IDCODE = IDCODE_get(p_target);
+		uint32_t const DBG_ID = DBG_ID_get(p_target);
+		LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE, DBG_ID, BLD_ID_get(p_target));
+		assert(IDCODE == EXPECTED_IDCODE);
+		assert(DBG_ID == EXPECTED_DBG_ID);
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__get_and_clear(p_target);
 		}
