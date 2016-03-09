@@ -24,7 +24,7 @@
 #define VERIFY_CORE_REGTRANS_WRITE 0
 
 #define EXPECTED_IDCODE (0xC0DEDEB1u)
-#define EXPECTED_DBG_ID (0xDB030600u)
+#define EXPECTED_DBG_ID (0xDB030900u)
 #define NORMAL_DEBUG_ENABLE_MASK (BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_EXIT_BRK_BIT))
 
 #define STATIC_ASSERT(e) {enum {___my_static_assert = 1 / (!!(e)) };}
@@ -706,6 +706,7 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 		LOG_DEBUG("DAP_CTRL_REG of %s already 0x%1X", p_target->cmd_name, set_dap_unit_group);
 		return;
 	}
+	LOG_DEBUG("DAP_CTRL_REG of %s reset to 0x%1X", p_target->cmd_name, set_dap_unit_group);
 #endif
 	/// Invalidate last_DAP_ctrl
 	p_arch->last_DAP_ctrl = 0xFFu;
@@ -1488,10 +1489,10 @@ common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
+	/// @todo multiple caches
+	reg_cache* const p_reg_cache = p_target->reg_cache;
+	reg* const p_pc = &p_reg_cache->reg_list[32];
 	if (!current) {
-		/// @todo multiple caches
-		reg_cache* const p_reg_cache = p_target->reg_cache;
-		reg* const p_pc = &p_reg_cache->reg_list[32];
 		uint8_t buf[sizeof address];
 		buf_set_u32(buf, 0, XLEN, address);
 		error_code__update(p_target, reg_pc_set(p_pc, buf));
@@ -1500,6 +1501,40 @@ common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const
 		}
 		assert(is_reg_saved(p_pc));
 	}
+	if (handle_breakpoints) {
+		dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
+
+		// Find breakpoint for current instruction
+		error_code__update(p_target, reg_pc_get(p_pc));
+		uint32_t const pc = buf_get_u32(p_pc->value, 0, XLEN);
+		struct breakpoint* p_next_bkp = p_target->breakpoints;
+		for (; p_next_bkp; p_next_bkp = p_next_bkp->next) {
+			if (p_next_bkp->set && (p_next_bkp->address == pc)) {
+				break;
+			}
+		}
+
+		if (p_next_bkp) {
+			// If next instruction is replaced by breakpoint, then execute saved instruction
+			uint32_t const instruction = buf_get_u32(p_next_bkp->orig_instr, 0, ILEN);
+			exec__setup(p_target);
+			exec__step(p_target, instruction);
+			// If HART in single step mode
+			if (dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT)) {
+				// then single step already done
+				regs_invalidate(p_target);
+				set_DEMODE_ENBL(p_target, dmode_enabled);
+				p_target->debug_reason = DBG_REASON_SINGLESTEP;
+				target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
+				// update state
+				update_status(p_target);
+				return error_code__get_and_clear(p_target);
+			}
+		}
+	} else {
+		dmode_enabled &= !BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
+	}
+
 #if 0
 	// upload reg values into HW
 	regs_commit(p_target);
@@ -1508,11 +1543,6 @@ common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const
 	}
 #endif
 	regs_invalidate(p_target);
-	if (handle_breakpoints) {
-		dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
-	} else {
-		dmode_enabled &= !BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
-	}
 	set_DEMODE_ENBL(p_target, dmode_enabled);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__get_and_clear(p_target);
