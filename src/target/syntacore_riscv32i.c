@@ -22,9 +22,13 @@
 #define VERIFY_DAP_CONTROL 0
 #define VERIFY_HART_REGTRANS_WRITE 0
 #define VERIFY_CORE_REGTRANS_WRITE 0
+#define RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION 1
 
 #define EXPECTED_IDCODE (0xC0DEDEB1u)
 #define EXPECTED_DBG_ID (0xDB030900u)
+#define DBG_ID_VERSION_MASK (0xFFFF0000u)
+#define DBG_ID_SUBVERSION_MASK (0x0000FF00u)
+
 #define NORMAL_DEBUG_ENABLE_MASK (BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_EXIT_BRK_BIT))
 
 #define STATIC_ASSERT(e) {enum {___my_static_assert = 1 / (!!(e)) };}
@@ -865,7 +869,11 @@ read_debug_cause(target* const restrict p_target)
 static void
 update_debug_reason(target* const restrict p_target)
 {
-	p_target->debug_reason = read_debug_cause(p_target);
+	enum target_debug_reason const debug_reason = read_debug_cause(p_target);
+	if (debug_reason != p_target->debug_reason) {
+		LOG_DEBUG("New debug reason: 0x%08X", (uint32_t)debug_reason);
+		p_target->debug_reason = debug_reason;
+	}
 }
 
 static void
@@ -922,6 +930,7 @@ update_status(target* const restrict p_target)
 			target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
 			break;
 		case TARGET_RUNNING:
+			LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_NOTHALTED);
 			p_target->debug_reason = DBG_REASON_NOTHALTED;
 			LOG_DEBUG("TARGET_EVENT_RESUMED");
 			target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
@@ -1504,33 +1513,41 @@ common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const
 	if (handle_breakpoints) {
 		dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 
-		// Find breakpoint for current instruction
-		error_code__update(p_target, reg_pc_get(p_pc));
-		uint32_t const pc = buf_get_u32(p_pc->value, 0, XLEN);
-		struct breakpoint* p_next_bkp = p_target->breakpoints;
-		for (; p_next_bkp; p_next_bkp = p_next_bkp->next) {
-			if (p_next_bkp->set && (p_next_bkp->address == pc)) {
-				break;
+#if RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION
+		if (current) {
+			// Find breakpoint for current instruction
+			error_code__update(p_target, reg_pc_get(p_pc));
+			uint32_t const pc = buf_get_u32(p_pc->value, 0, XLEN);
+			struct breakpoint* p_next_bkp = p_target->breakpoints;
+			for (; p_next_bkp; p_next_bkp = p_next_bkp->next) {
+				if (p_next_bkp->set && (p_next_bkp->address == pc)) {
+					break;
+				}
 			}
-		}
 
-		if (p_next_bkp) {
-			// If next instruction is replaced by breakpoint, then execute saved instruction
-			uint32_t const instruction = buf_get_u32(p_next_bkp->orig_instr, 0, ILEN);
-			exec__setup(p_target);
-			exec__step(p_target, instruction);
-			// If HART in single step mode
-			if (dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT)) {
-				// then single step already done
-				regs_invalidate(p_target);
-				set_DEMODE_ENBL(p_target, dmode_enabled);
-				p_target->debug_reason = DBG_REASON_SINGLESTEP;
-				target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
-				// update state
-				update_status(p_target);
-				return error_code__get_and_clear(p_target);
+			if (p_next_bkp) {
+				// If next instruction is replaced by breakpoint, then execute saved instruction
+				uint32_t const instruction = buf_get_u32(p_next_bkp->orig_instr, 0, ILEN);
+				exec__setup(p_target);
+				exec__step(p_target, instruction);
+				// If HART in single step mode
+				if (dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT)) {
+					// then single step already done
+					regs_invalidate(p_target);
+					set_DEMODE_ENBL(p_target, dmode_enabled);
+#if 0
+					target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
+#endif
+					update_status(p_target);
+#if 1
+					LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_SINGLESTEP);
+					p_target->debug_reason = DBG_REASON_SINGLESTEP;
+#endif
+					return error_code__get_and_clear(p_target);
+				}
 			}
 		}
+#endif
 	} else {
 		dmode_enabled &= !BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 	}
@@ -1557,6 +1574,7 @@ common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const
 		return error_code__get_and_clear(p_target);
 	}
 
+	LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_NOTHALTED);
 	p_target->debug_reason = DBG_REASON_NOTHALTED;
 	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
 
@@ -1811,7 +1829,8 @@ this_examine(target* const restrict p_target)
 		uint32_t const DBG_ID = DBG_ID_get(p_target);
 		LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE, DBG_ID, BLD_ID_get(p_target));
 		assert(IDCODE == EXPECTED_IDCODE);
-		assert(DBG_ID == EXPECTED_DBG_ID);
+		assert((DBG_ID & DBG_ID_VERSION_MASK) == (DBG_ID_VERSION_MASK & EXPECTED_DBG_ID));
+		assert((DBG_ID & DBG_ID_SUBVERSION_MASK) >= (EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK));
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__get_and_clear(p_target);
 		}
