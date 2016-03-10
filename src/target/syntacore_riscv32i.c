@@ -1042,7 +1042,7 @@ update_status(target* const restrict p_target)
 /// GP registers accessors
 ///@{
 static inline void
-reg_validate(reg* const restrict p_reg)
+reg__validate(reg* const restrict p_reg)
 {
 	assert(p_reg);
 	p_reg->valid = true;
@@ -1050,7 +1050,7 @@ reg_validate(reg* const restrict p_reg)
 }
 
 static inline void
-reg_invalidate(reg* const restrict p_reg)
+reg__invalidate(reg* const restrict p_reg)
 {
 	assert(p_reg);
 	assert(!p_reg->dirty);
@@ -1058,37 +1058,34 @@ reg_invalidate(reg* const restrict p_reg)
 }
 
 static inline bool
-reg_check(reg const* const restrict p_reg)
+reg__check(reg const* const restrict p_reg)
 {
 	return !(!p_reg->valid && p_reg->dirty);
 }
 
 static inline bool
-is_reg_saved(reg* const restrict p_reg)
+reg__is_saved(reg* const restrict p_reg)
 {
 	assert(p_reg);
 	return p_reg->valid && !p_reg->dirty;
 }
 
 static void
-regs_invalidate(target const* const restrict p_target)
+reg_cache__invalidate(reg_cache const* const restrict p_reg_cache)
 {
-	assert(p_target);
-	/// @todo multiple caches
-	reg_cache const* const p_reg_cache = p_target->reg_cache;
 	assert(p_reg_cache);
 	assert(p_reg_cache->num_regs == TOTAL_NUMBER_OF_REGS);
 	for (size_t i = 0; i < p_reg_cache->num_regs; ++i) {
-		assert(reg_check(&p_reg_cache->reg_list[i]));
-		reg_invalidate(&p_reg_cache->reg_list[i]);
+		assert(reg__check(&p_reg_cache->reg_list[i]));
+		reg__invalidate(&p_reg_cache->reg_list[i]);
 	}
 }
 
 static void
-reg_x_operation_conditions_check(reg const* const restrict p_reg)
+reg_x__operation_conditions_check(reg const* const restrict p_reg)
 {
 	assert(p_reg);
-	assert(reg_check(p_reg));
+	assert(reg__check(p_reg));
 	target* p_target = p_reg->arch_info;
 	assert(p_target);
 	if (!(zero < p_reg->number && p_reg->number < REG_PC_NUMBER)) {
@@ -1107,10 +1104,10 @@ reg_x_operation_conditions_check(reg const* const restrict p_reg)
 }
 
 static int
-reg_x_get(reg* const restrict p_reg)
+reg_x__get(reg* const restrict p_reg)
 {
 	assert(p_reg);
-	reg_x_operation_conditions_check(p_reg);
+	reg_x__operation_conditions_check(p_reg);
 	target* p_target = p_reg->arch_info;
 	assert(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
@@ -1149,12 +1146,12 @@ reg_x_get(reg* const restrict p_reg)
 	/// update cache value
 	assert(p_reg->value);
 	buf_set_u32(p_reg->value, 0, XLEN, value);
-	reg_validate(p_reg);
+	reg__validate(p_reg);
 	return error_code__get_and_clear(p_target);
 }
 
 static int
-reg_x_store(reg* const restrict p_reg)
+reg_x__store(reg* const restrict p_reg)
 {
 	assert(p_reg);
 	target* p_target = p_reg->arch_info;
@@ -1176,7 +1173,7 @@ reg_x_store(reg* const restrict p_reg)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__get_and_clear(p_target);
 	}
-	reg_validate(p_reg);
+	reg__validate(p_reg);
 
 	if (advance_pc_counter != 0) {
 		/// Correct pc back after each instruction
@@ -1188,16 +1185,16 @@ reg_x_store(reg* const restrict p_reg)
 		}
 	}
 	assert(advance_pc_counter == 0);
-	assert(reg_check(p_reg));
+	assert(reg__check(p_reg));
 	return error_code__get_and_clear(p_target);
 }
 
 static int
-reg_x_set(reg* const restrict p_reg, uint8_t* const restrict buf)
+reg_x__set(reg* const restrict p_reg, uint8_t* const restrict buf)
 {
 	assert(p_reg);
 	assert(buf);
-	reg_x_operation_conditions_check(p_reg);
+	reg_x__operation_conditions_check(p_reg);
 	target* p_target = p_reg->arch_info;
 	assert(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
@@ -1217,28 +1214,28 @@ reg_x_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	buf_set_u32(p_reg->value, 0, XLEN, value);
 
 	/// store dirty register data to HW
-	return reg_x_store(p_reg);
+	return reg_x__store(p_reg);
 }
 
 static int
-reg_x0_get(reg* const restrict p_reg)
+reg_x0__get(reg* const restrict p_reg)
 {
 	assert(p_reg);
 	assert(p_reg->value);
 	memset(p_reg->value, 0, NUM_BITS_TO_SIZE(p_reg->size));
-	reg_validate(p_reg);
+	reg__validate(p_reg);
 	return ERROR_OK;
 }
 
 static int
-reg_x0_set(reg* const restrict p_reg, uint8_t* const restrict buf)
+reg_x0__set(reg* const restrict p_reg, uint8_t* const restrict buf)
 {
 	assert(p_reg);
 	assert(buf);
 	LOG_ERROR("Try to write to read-only register");
 	assert(p_reg->value);
 	memset(p_reg->value, 0, NUM_BITS_TO_SIZE(p_reg->size));
-	reg_validate(p_reg);
+	reg__validate(p_reg);
 	return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 }
 
@@ -1254,7 +1251,7 @@ prepare_temporary_GP_register(target const* const restrict p_target, int const a
 	reg* p_valid = NULL;
 	reg* p_dirty = NULL;
 	for (size_t i = after_reg + 1; i < REG_PC_NUMBER; ++i) {
-		assert(reg_check(&p_reg_list[i]));
+		assert(reg__check(&p_reg_list[i]));
 		if (p_reg_list[i].valid) {
 			if (p_reg_list[i].dirty) {
 				p_dirty = &p_reg_list[i];
@@ -1270,7 +1267,7 @@ prepare_temporary_GP_register(target const* const restrict p_target, int const a
 		if (!p_valid) {
 			assert(after_reg + 1 < REG_PC_NUMBER);
 			p_valid = &p_reg_list[after_reg + 1];
-			if (error_code__update(p_target, reg_x_get(p_valid)) != ERROR_OK) {
+			if (error_code__update(p_target, reg_x__get(p_valid)) != ERROR_OK) {
 				return NULL;
 			}
 		}
@@ -1288,11 +1285,11 @@ prepare_temporary_GP_register(target const* const restrict p_target, int const a
 
 /// Update pc cache from HW (if non-cached)
 static int
-reg_pc_get(reg* const restrict p_reg)
+reg_pc__get(reg* const restrict p_reg)
 {
 	assert(p_reg);
 	assert(p_reg->number == REG_PC_NUMBER);
-	assert(reg_check(p_reg));
+	assert(reg__check(p_reg));
 
 	/// Find temporary GP register
 	target* const p_target = p_reg->arch_info;
@@ -1303,9 +1300,9 @@ reg_pc_get(reg* const restrict p_reg)
 	if (error_code__get(p_target) == ERROR_OK) {
 		assert(p_reg->value);
 		buf_set_u32(p_reg->value, 0, p_reg->size, pc_sample);
-		reg_validate(p_reg);
+		reg__validate(p_reg);
 	} else {
-		reg_invalidate(p_reg);
+		reg__invalidate(p_reg);
 	}
 #else
 	update_status(p_target);
@@ -1342,7 +1339,7 @@ reg_pc_get(reg* const restrict p_reg)
 						// update cached value
 						assert(p_reg->value);
 						buf_set_u32(p_reg->value, 0, p_reg->size, value);
-						reg_validate(p_reg);
+						reg__validate(p_reg);
 						uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
 						LOG_DEBUG("pc_sample = 0x%08X", pc_sample);
 					}
@@ -1354,20 +1351,20 @@ reg_pc_get(reg* const restrict p_reg)
 	// restore temporary register
 	{
 		int const old_err_code = error_code__get_and_clear(p_target);
-		error_code__update(p_target, reg_x_store(p_wrk_reg));
+		error_code__update(p_target, reg_x__store(p_wrk_reg));
 		error_code__prepend(p_target, old_err_code);
-		assert(is_reg_saved(p_wrk_reg));
+		assert(reg__is_saved(p_wrk_reg));
 	}
 #endif
 	return error_code__get_and_clear(p_target);
 }
 
 static int
-reg_pc_set(reg* const restrict p_reg, uint8_t* const restrict buf)
+reg_pc__set(reg* const restrict p_reg, uint8_t* const restrict buf)
 {
 	assert(p_reg);
 	assert(p_reg->number == REG_PC_NUMBER);
-	assert(reg_check(p_reg));
+	assert(reg__check(p_reg));
 	if (!p_reg->valid) {
 		LOG_DEBUG("force rewriting of pc register before read");
 	}
@@ -1391,7 +1388,7 @@ reg_pc_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 		uint32_t const value = buf_get_u32(buf, 0, p_reg->size);
 		assert(p_reg->value);
 		buf_set_u32(p_reg->value, 0, p_reg->size, value);
-		reg_invalidate(p_reg);
+		reg__invalidate(p_reg);
 		LOG_DEBUG("Updating register %s <-- 0x%08X", p_reg->name, value);
 
 		// Update to HW
@@ -1410,7 +1407,7 @@ reg_pc_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 					(void)exec__step(p_target, RV_JALR(zero, p_wrk_reg->number, 0));
 					advance_pc_counter = 0;
 					/// OK pc stored
-					reg_validate(p_reg);
+					reg__validate(p_reg);
 				}
 			}
 		}
@@ -1419,19 +1416,19 @@ reg_pc_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	// restore temporary register
 	{
 		int const old_err_code = error_code__get_and_clear(p_target);
-		error_code__update(p_target, reg_x_store(p_wrk_reg));
+		error_code__update(p_target, reg_x__store(p_wrk_reg));
 		error_code__prepend(p_target, old_err_code);
-		assert(is_reg_saved(p_wrk_reg));
+		assert(reg__is_saved(p_wrk_reg));
 	}
 	return error_code__get_and_clear(p_target);
 }
 
 static int
-reg_f_get(reg* const restrict p_reg)
+reg_f__get(reg* const restrict p_reg)
 {
 	assert(p_reg);
 	assert(REG_PC_NUMBER < p_reg->number && p_reg->number < TOTAL_NUMBER_OF_REGS);
-	assert(reg_check(p_reg));
+	assert(reg__check(p_reg));
 
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
@@ -1472,7 +1469,7 @@ reg_f_get(reg* const restrict p_reg)
 						// update cached value
 						assert(p_reg->value);
 						buf_set_u32(p_reg->value, 0, p_reg->size, value);
-						reg_validate(p_reg);
+						reg__validate(p_reg);
 					}
 				}
 			}
@@ -1482,19 +1479,19 @@ reg_f_get(reg* const restrict p_reg)
 	// restore temporary register
 	{
 		int const old_err_code = error_code__get_and_clear(p_target);
-		error_code__update(p_target, reg_x_store(p_wrk_reg));
+		error_code__update(p_target, reg_x__store(p_wrk_reg));
 		error_code__prepend(p_target, old_err_code);
-		assert(is_reg_saved(p_wrk_reg));
+		assert(reg__is_saved(p_wrk_reg));
 	}
 	return error_code__get_and_clear(p_target);
 }
 
 static int
-reg_f_set(reg* const restrict p_reg, uint8_t* const restrict buf)
+reg_f__set(reg* const restrict p_reg, uint8_t* const restrict buf)
 {
 	assert(p_reg);
 	assert(REG_PC_NUMBER < p_reg->number && p_reg->number < TOTAL_NUMBER_OF_REGS);
-	assert(reg_check(p_reg));
+	assert(reg__check(p_reg));
 
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
@@ -1523,7 +1520,7 @@ reg_f_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 
 			assert(p_reg->value);
 			buf_set_u32(p_reg->value, 0, p_reg->size, value);
-			reg_invalidate(p_reg);
+			reg__invalidate(p_reg);
 
 			assert(p_reg->value);
 			exec__set_csr_data(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
@@ -1540,7 +1537,7 @@ reg_f_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 						/// Correct pc by jump 2 instructions back and get previous command result.
 						(void)exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
 						advance_pc_counter = 0;
-						reg_validate(p_reg);
+						reg__validate(p_reg);
 					}
 				}
 			}
@@ -1549,9 +1546,9 @@ reg_f_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 
 	// restore temporary register
 	int const old_err_code = error_code__get_and_clear(p_target);
-	error_code__update(p_target, reg_x_store(p_wrk_reg));
+	error_code__update(p_target, reg_x__store(p_wrk_reg));
 	error_code__prepend(p_target, old_err_code);
-	assert(is_reg_saved(p_wrk_reg));
+	assert(reg__is_saved(p_wrk_reg));
 	return error_code__get_and_clear(p_target);
 }
 
@@ -1607,7 +1604,7 @@ set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
 }
 
 static int
-common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
+resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	assert(p_target);
 	update_status(p_target);
@@ -1622,11 +1619,11 @@ common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const
 	if (!current) {
 		uint8_t buf[sizeof address];
 		buf_set_u32(buf, 0, XLEN, address);
-		error_code__update(p_target, reg_pc_set(p_pc, buf));
+		error_code__update(p_target, reg_pc__set(p_pc, buf));
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__get_and_clear(p_target);
 		}
-		assert(is_reg_saved(p_pc));
+		assert(reg__is_saved(p_pc));
 	}
 	if (handle_breakpoints) {
 		dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
@@ -1634,7 +1631,7 @@ common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const
 #if RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION
 		if (current) {
 			// Find breakpoint for current instruction
-			error_code__update(p_target, reg_pc_get(p_pc));
+			error_code__update(p_target, reg_pc__get(p_pc));
 			assert(p_pc->value);
 			uint32_t const pc = buf_get_u32(p_pc->value, 0, XLEN);
 			struct breakpoint* p_next_bkp = p_target->breakpoints;
@@ -1652,7 +1649,8 @@ common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const
 				// If HART in single step mode
 				if (dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT)) {
 					// then single step already done
-					regs_invalidate(p_target);
+					/// @todo multiple caches
+					reg_cache__invalidate(p_reg_cache);
 					set_DEMODE_ENBL(p_target, dmode_enabled);
 #if 0
 					target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
@@ -1671,7 +1669,8 @@ common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const
 		dmode_enabled &= !BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 	}
 
-	regs_invalidate(p_target);
+	/// @todo multiple caches
+	reg_cache__invalidate(p_reg_cache);
 	set_DEMODE_ENBL(p_target, dmode_enabled);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__get_and_clear(p_target);
@@ -1700,7 +1699,7 @@ common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const
 }
 
 static int
-set_reset_state(target* const restrict p_target, bool const active)
+reset__set(target* const restrict p_target, bool const active)
 {
 	assert(p_target);
 	DAP_CTRL_REG_set(p_target, DBGC_UNIT_ID_CORE, DBGC_FGRP_CORE_REGTRANS);
@@ -1757,29 +1756,29 @@ set_reset_state(target* const restrict p_target, bool const active)
 
 static reg_arch_type const reg_x0_accessors =
 {
-	.get = reg_x0_get,
-	.set = reg_x0_set,
+	.get = reg_x0__get,
+	.set = reg_x0__set,
 };
 
 static reg_arch_type const reg_x_accessors =
 {
-	.get = reg_x_get,
-	.set = reg_x_set,
+	.get = reg_x__get,
+	.set = reg_x__set,
 };
 
 static reg_arch_type const reg_pc_accessors =
 {
-	.get = reg_pc_get,
-	.set = reg_pc_set,
+	.get = reg_pc__get,
+	.set = reg_pc__set,
 };
 
 static reg_arch_type const reg_f_accessors =
 {
-	.get = reg_f_get,
-	.set = reg_f_set,
+	.get = reg_f__get,
+	.set = reg_f__set,
 };
 
-static reg const reg_def_array[] = {
+static reg const def_regs_array[] = {
 	// Hard-wired zero
 	{.name = "x0", .number = 0, .caller_save = false, .dirty = false, .valid = true, .exist = true, .size = XLEN, .type = &reg_x0_accessors},
 
@@ -1888,7 +1887,7 @@ static int
 this_init_target(struct command_context *cmd_ctx, target* const restrict p_target)
 {
 	assert(p_target);
-	p_target->reg_cache = reg_cache__create("rv32i", reg_def_array, ARRAY_LEN(reg_def_array), p_target);
+	p_target->reg_cache = reg_cache__create("rv32i", def_regs_array, ARRAY_LEN(def_regs_array), p_target);
 	This_Arch the_arch = {
 		.error_code = ERROR_OK,
 		.last_DAP_ctrl = 0xFF,
@@ -2031,7 +2030,7 @@ this_resume(target* const restrict p_target, int const current, uint32_t const a
 {
 	assert(p_target);
 	uint32_t const dmode_enabled = NORMAL_DEBUG_ENABLE_MASK;
-	return common_resume(p_target, dmode_enabled, current, address, handle_breakpoints, debug_execution);
+	return resume_common(p_target, dmode_enabled, current, address, handle_breakpoints, debug_execution);
 }
 
 static int
@@ -2039,7 +2038,7 @@ this_step(target* const restrict p_target, int const current, uint32_t const add
 {
 	assert(p_target);
 	uint32_t const dmode_enabled = (NORMAL_DEBUG_ENABLE_MASK) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
-	return common_resume(p_target, dmode_enabled, current, address, handle_breakpoints, false);
+	return resume_common(p_target, dmode_enabled, current, address, handle_breakpoints, false);
 }
 
 static int
@@ -2047,7 +2046,7 @@ this_assert_reset(target* const restrict p_target)
 {
 	LOG_DEBUG("Reset control");
 	assert(p_target);
-	return set_reset_state(p_target, true);
+	return reset__set(p_target, true);
 }
 
 static int
@@ -2055,7 +2054,7 @@ this_deassert_reset(target* const restrict p_target)
 {
 	LOG_DEBUG("Reset control");
 	assert(p_target);
-	return set_reset_state(p_target, false);
+	return reset__set(p_target, false);
 }
 
 static int
@@ -2063,7 +2062,7 @@ this_soft_reset_halt(target* const restrict p_target)
 {
 	LOG_DEBUG("Soft reset called");
 	assert(p_target);
-	set_reset_state(p_target, true);
+	reset__set(p_target, true);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__get_and_clear(p_target);
 	}
@@ -2071,7 +2070,7 @@ this_soft_reset_halt(target* const restrict p_target)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__get_and_clear(p_target);
 	}
-	set_reset_state(p_target, false);
+	reset__set(p_target, false);
 
 	return error_code__get_and_clear(p_target);
 }
@@ -2172,9 +2171,9 @@ this_read_memory(target* const restrict p_target, uint32_t address, uint32_t con
 	/// restore temporary register
 	{
 		int const old_err_code = error_code__get_and_clear(p_target);
-		error_code__update(p_target, reg_x_store(p_wrk_reg));
+		error_code__update(p_target, reg_x__store(p_wrk_reg));
 		error_code__prepend(p_target, old_err_code);
-		assert(is_reg_saved(p_wrk_reg));
+		assert(reg__is_saved(p_wrk_reg));
 	}
 	return error_code__get_and_clear(p_target);
 }
@@ -2294,13 +2293,13 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 		assert(pc_sample_2 == pc_sample_1);
 #endif
 		int const old_err_code = error_code__get_and_clear(p_target);
-		int const new_err_code_1 = reg_x_store(p_data_reg);
-		int const new_err_code_2 = reg_x_store(p_addr_reg);
+		int const new_err_code_1 = reg_x__store(p_data_reg);
+		int const new_err_code_2 = reg_x__store(p_addr_reg);
 		error_code__update(p_target, old_err_code);
 		error_code__update(p_target, new_err_code_1);
 		error_code__update(p_target, new_err_code_2);
-		assert(is_reg_saved(p_data_reg));
-		assert(is_reg_saved(p_addr_reg));
+		assert(reg__is_saved(p_data_reg));
+		assert(reg__is_saved(p_addr_reg));
 	}
 	return error_code__get_and_clear(p_target);
 }
