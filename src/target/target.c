@@ -3223,7 +3223,7 @@ COMMAND_HANDLER(handle_load_image_command)
 
 COMMAND_HANDLER(handle_dump_image_command)
 {
-	struct fileio fileio;
+	struct fileio *fileio;
 	uint8_t *buffer;
 	int retval, retvaltemp;
 	uint32_t address, size;
@@ -3256,7 +3256,7 @@ COMMAND_HANDLER(handle_dump_image_command)
 		if (retval != ERROR_OK)
 			break;
 
-		retval = fileio_write(&fileio, this_run_size, buffer, &size_written);
+		retval = fileio_write(fileio, this_run_size, buffer, &size_written);
 		if (retval != ERROR_OK)
 			break;
 
@@ -3268,7 +3268,7 @@ COMMAND_HANDLER(handle_dump_image_command)
 
 	if ((ERROR_OK == retval) && (duration_measure(&bench) == ERROR_OK)) {
 		size_t filesize;
-		retval = fileio_size(&fileio, &filesize);
+		retval = fileio_size(fileio, &filesize);
 		if (retval != ERROR_OK)
 			return retval;
 		command_print(CMD_CTX,
@@ -3276,7 +3276,7 @@ COMMAND_HANDLER(handle_dump_image_command)
 				duration_elapsed(&bench), duration_kbps(&bench, filesize));
 	}
 
-	retvaltemp = fileio_close(&fileio);
+	retvaltemp = fileio_close(fileio);
 	if (retvaltemp != ERROR_OK)
 		return retvaltemp;
 
@@ -5188,7 +5188,6 @@ static int target_create(Jim_GetOptInfo *goi)
 	Jim_Obj *new_cmd;
 	Jim_Cmd *cmd;
 	const char *cp;
-	char *cp2;
 	int e;
 	int x;
 	struct target *target;
@@ -5213,10 +5212,9 @@ static int target_create(Jim_GetOptInfo *goi)
 	}
 
 	/* TYPE */
-	e = Jim_GetOpt_String(goi, &cp2, NULL);
+	e = Jim_GetOpt_String(goi, &cp, NULL);
 	if (e != JIM_OK)
 		return e;
-	cp = cp2;
 	struct transport *tr = get_current_transport();
 	if (tr->override_target) {
 		e = tr->override_target(&cp);

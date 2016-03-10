@@ -1275,7 +1275,6 @@ static int cfi_intel_write_block(struct flash_bank *bank, const uint8_t *buffer,
 		LOG_WARNING("No working area available, can't do block memory writes");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
-	;
 
 	/* write algorithm code to working area */
 	retval = target_write_buffer(target, write_algorithm->address,
@@ -1297,7 +1296,6 @@ static int cfi_intel_write_block(struct flash_bank *bank, const uint8_t *buffer,
 			goto cleanup;
 		}
 	}
-	;
 
 	/* setup algo registers */
 	init_reg_param(&reg_params[0], "r0", 32, PARAM_OUT);
@@ -1540,7 +1538,6 @@ static int cfi_spansion_write_block_mips(struct flash_bank *bank, const uint8_t 
 			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 		}
 	}
-	;
 
 	init_reg_param(&reg_params[0], "r4", 32, PARAM_OUT);
 	init_reg_param(&reg_params[1], "r5", 32, PARAM_OUT);
@@ -1920,7 +1917,6 @@ static int cfi_spansion_write_block(struct flash_bank *bank, const uint8_t *buff
 			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 		}
 	}
-	;
 
 	init_reg_param(&reg_params[0], "r0", 32, PARAM_OUT);
 	init_reg_param(&reg_params[1], "r1", 32, PARAM_OUT);
@@ -2002,7 +1998,9 @@ static int cfi_intel_write_word(struct flash_bank *bank, uint8_t *word, uint32_t
 
 	uint8_t status;
 	retval = cfi_intel_wait_status_busy(bank, cfi_info->word_write_timeout, &status);
-	if (retval != 0x80) {
+	if (retval != ERROR_OK)
+		return retval;
+	if (status != 0x80) {
 		retval = cfi_send_command(bank, 0xff, flash_address(bank, 0, 0x0));
 		if (retval != ERROR_OK)
 			return retval;
