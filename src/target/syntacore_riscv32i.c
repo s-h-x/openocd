@@ -39,7 +39,7 @@ Syntacore RISC-V target
 /// If first instruction in normal resume replaced by breakpoint opcode,
 /// then emulate first step by execution of stored opcode with debug facilities
 #define RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION 1
-
+#define USE_PC_ADVMT_DSBL_BIT 0
 /// TAP IDCODE expected
 #define EXPECTED_IDCODE (0xC0DEDEB1u)
 
@@ -2168,33 +2168,31 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 	assert(p_data_reg);
 	assert(p_addr_reg->number != p_data_reg->number);
 
-	{
-		/// Define opcode for load item to register
-		uint32_t const store_OP =
-			size == 4 ? RV_SW(p_data_reg->number, p_addr_reg->number, 0) :
-			size == 2 ? RV_SH(p_data_reg->number, p_addr_reg->number, 0) :
-			/*size == 1*/ RV_SB(p_data_reg->number, p_addr_reg->number, 0);
+	/// Define opcode for load item to register
+	uint32_t const store_OP =
+		size == 4 ? RV_SW(p_data_reg->number, p_addr_reg->number, 0) :
+		size == 2 ? RV_SH(p_data_reg->number, p_addr_reg->number, 0) :
+		/*size == 1*/ RV_SB(p_data_reg->number, p_addr_reg->number, 0);
 
-		/// Setup exec operations mode
-		exec__setup(p_target);
-		int advance_pc_counter = 0;
+#if USE_PC_ADVMT_DSBL_BIT
+	uint32_t const pc_sample_1 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
+	int const instr_step = 0;
+	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
+#else
+	int const instr_step = NUM_BITS_TO_SIZE(ILEN);
+#endif
+	/// Setup exec operations mode
+	exec__setup(p_target);
+	int advance_pc_counter = 0;
+	if (error_code__get(p_target) == ERROR_OK) {
+		/// For count number of items do loop
+		/// Set address to CSR
+		exec__set_csr_data(p_target, address);
 		if (error_code__get(p_target) == ERROR_OK) {
-
-			/// For count number of items do loop
-			while (count--) {
-				/// Set address to CSR
-				exec__set_csr_data(p_target, address);
-				if (error_code__get(p_target) != ERROR_OK) {
-					break;
-				}
-
-				/// Load address to work register
-				(void)exec__step(p_target, RV_CSRRW(p_addr_reg->number, CSR_DBG_SCRATCH, zero));
-				advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
-				if (error_code__get(p_target) != ERROR_OK) {
-					break;
-				}
-
+			/// Load address to work register
+			(void)exec__step(p_target, RV_CSRRW(p_addr_reg->number, CSR_DBG_SCRATCH, zero));
+			advance_pc_counter += instr_step;
+			while ((error_code__get(p_target) == ERROR_OK) && count--) {
 				/// Set data to CSR
 				exec__set_csr_data(p_target, buf_get_u32(buffer, 0, 8 * size));
 				if (error_code__get(p_target) != ERROR_OK) {
@@ -2203,25 +2201,32 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 
 				/// Load data to work register
 				(void)exec__step(p_target, RV_CSRRW(p_data_reg->number, CSR_DBG_SCRATCH, zero));
-				advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+				advance_pc_counter += instr_step;
 				if (error_code__get(p_target) != ERROR_OK) {
 					break;
 				}
 
 				/// Exec store item from register to memory
 				(void)exec__step(p_target, store_OP);
-				advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+				advance_pc_counter += instr_step;
 				if (error_code__get(p_target) != ERROR_OK) {
 					break;
 				}
 
-				/// jump back to correct pc
-				(void)exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
-				advance_pc_counter = 0;
+				(void)exec__step(p_target, RV_ADDI(p_addr_reg->number, p_addr_reg->number, size));
+				advance_pc_counter += instr_step;
 				if (error_code__get(p_target) != ERROR_OK) {
 					break;
 				}
 
+				if (advance_pc_counter != 0) {
+					/// jump back to correct pc
+					(void)exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+					advance_pc_counter = 0;
+					if (error_code__get(p_target) != ERROR_OK) {
+						break;
+					}
+				}
 				/// advance src/dst pointers
 				address += size;
 				buffer += size;
@@ -2233,6 +2238,11 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 
 	/// restore temporary registers
 	{
+#if USE_PC_ADVMT_DSBL_BIT
+		HART_REGTRANS_write(p_target, DBGC_HART_REGS_DBG_CTRL, 0u);
+		uint32_t const pc_sample_2 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
+		assert(pc_sample_2 == pc_sample_1);
+#endif
 		int const old_err_code = error_code__get_and_clear(p_target);
 		int const new_err_code_1 = reg_x_store(p_data_reg);
 		int const new_err_code_2 = reg_x_store(p_addr_reg);
