@@ -1,3 +1,11 @@
+/**
+@file
+
+Syntacore RISC-V target
+
+@author Pavel S. Smirnov
+@copyright Syntacore
+*/
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -16,81 +24,95 @@
 #include <limits.h>
 #include <memory.h>
 
+/// Don't make irscan if IR uis the same
 #define IR_SELECT_USING_CACHE 1
+/// Don't write DAP_CONTROL if it is the same 
 #define DAP_CONTROL_USING_CACHE 1
-#define USE_PC_FROM_PC_SAMPLE 1
+/// Verify value of DAP_CONTROL after write
 #define VERIFY_DAP_CONTROL 0
+/// Using PC_SAMPLE register instead AUIPC/CSRRW chain of instruction 
+#define USE_PC_FROM_PC_SAMPLE 1
+/// Verify values of HART REGTRANS after write
 #define VERIFY_HART_REGTRANS_WRITE 0
+/// Verify values of CORE REGTRANS after write
 #define VERIFY_CORE_REGTRANS_WRITE 0
+/// If first instruction in normal resume replaced by breakpoint opcode,
+/// then emulate first step by execution of stored opcode with debug facilities
 #define RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION 1
 
+/// TAP IDCODE expected
 #define EXPECTED_IDCODE (0xC0DEDEB1u)
+
+/// Lowest required DBG_ID
 #define EXPECTED_DBG_ID        (0x00800000u)
+/// Mask of DBG_ID version.
+/// Required and provided masked values should be equal.
 #define DBG_ID_VERSION_MASK    (0xFFFFFF00u)
+/// Mask of DBG_ID subversion.
+/// Required value should be less or equal to provided subversion.
 #define DBG_ID_SUBVERSION_MASK (0x000000FFu)
 
-#define NORMAL_DEBUG_ENABLE_MASK (BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_EXIT_BRK_BIT))
-
+/// Utility macros
+///@{
 #define STATIC_ASSERT(e) {enum {___my_static_assert = 1 / (!!(e)) };}
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
 
 #define BIT_NUM_TO_MASK(bit_num) (1u << (bit_num))
 #define LOW_BITS_MASK(n) (~(~0 << (n)))
 #define NUM_BITS_TO_SIZE(num_bits) ( ( (size_t)(num_bits) + (8 - 1) ) / 8 )
+///@}
 
-#define zero 0u
-#define sp 14u
-
-typedef uint32_t instr_type;
 #define EXTRACT_FIELD(bits, first_bit, last_bit) (((bits) >> (first_bit)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit)))
-#define MAKE_FIELD(bits, first_bit, last_bit)     (((instr_type)(bits) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
+#define MAKE_TYPE_FIELD(TYPE, bits, first_bit, last_bit)     ((((TYPE)(bits)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
 
 #define RV_INSTR_R_TYPE(func7, rs2, rs1, func3, rd, opcode) ( \
-    MAKE_FIELD((func7), 25, 31) | \
-    MAKE_FIELD((rs2),   20, 24) | \
-    MAKE_FIELD((rs1),   15, 19) | \
-    MAKE_FIELD((func3), 12, 14) | \
-    MAKE_FIELD((rd),     7, 11) | \
-    MAKE_FIELD((opcode), 0,  6))
+    MAKE_TYPE_FIELD(instr_type, (func7), 25, 31) | \
+    MAKE_TYPE_FIELD(instr_type, (rs2),   20, 24) | \
+    MAKE_TYPE_FIELD(instr_type, (rs1),   15, 19) | \
+    MAKE_TYPE_FIELD(instr_type, (func3), 12, 14) | \
+    MAKE_TYPE_FIELD(instr_type, (rd),     7, 11) | \
+    MAKE_TYPE_FIELD(instr_type, (opcode), 0,  6))
 
 #define RV_INSTR_I_TYPE(imm, rs1, func3, rd, opcode) ( \
-    MAKE_FIELD((imm),   20, 31) | \
-    MAKE_FIELD((rs1),   15, 19) | \
-    MAKE_FIELD((func3), 12, 14) | \
-    MAKE_FIELD((rd),     7, 11) | \
-    MAKE_FIELD((opcode), 0,  6))
+    MAKE_TYPE_FIELD(instr_type, (imm),   20, 31) | \
+    MAKE_TYPE_FIELD(instr_type, (rs1),   15, 19) | \
+    MAKE_TYPE_FIELD(instr_type, (func3), 12, 14) | \
+    MAKE_TYPE_FIELD(instr_type, (rd),     7, 11) | \
+    MAKE_TYPE_FIELD(instr_type, (opcode), 0,  6))
 
 #define RV_INSTR_S_TYPE(imm, rs2, rs1, func3, opcode) ( \
-    MAKE_FIELD(EXTRACT_FIELD((imm), 5, 11), 25, 31) | \
-    MAKE_FIELD((rs2),                                20, 24) | \
-    MAKE_FIELD((rs1),                                15, 19) | \
-    MAKE_FIELD((func3),                              12, 14) | \
-    MAKE_FIELD(EXTRACT_FIELD((imm), 0,  4),  7, 11) | \
-    MAKE_FIELD((opcode),                              0,  6))
+    MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD((imm), 5, 11), 25, 31) | \
+    MAKE_TYPE_FIELD(instr_type, (rs2),                                20, 24) | \
+    MAKE_TYPE_FIELD(instr_type, (rs1),                                15, 19) | \
+    MAKE_TYPE_FIELD(instr_type, (func3),                              12, 14) | \
+    MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD((imm), 0,  4),  7, 11) | \
+    MAKE_TYPE_FIELD(instr_type, (opcode),                              0,  6))
 
 #define RV_INSTR_SB_TYPE(imm, rs2, rs1, func3, opcode) ( \
-    MAKE_FIELD(EXTRACT_FIELD((imm), 12, 12), 31, 31) | \
-    MAKE_FIELD(EXTRACT_FIELD((imm),  5, 10), 25, 30) | \
-    MAKE_FIELD((rs2),                                 20, 24) | \
-    MAKE_FIELD((rs1),                                 15, 19) | \
-    MAKE_FIELD((func3),                               12, 14) | \
-    MAKE_FIELD(EXTRACT_FIELD((imm),  1,  4),  8, 11) | \
-    MAKE_FIELD(EXTRACT_FIELD((imm), 11, 11),  7,  7) | \
-    MAKE_FIELD((opcode),                               0,  6))
+    MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD((imm), 12, 12), 31, 31) | \
+    MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD((imm),  5, 10), 25, 30) | \
+    MAKE_TYPE_FIELD(instr_type, (rs2),                                 20, 24) | \
+    MAKE_TYPE_FIELD(instr_type, (rs1),                                 15, 19) | \
+    MAKE_TYPE_FIELD(instr_type, (func3),                               12, 14) | \
+    MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD((imm),  1,  4),  8, 11) | \
+    MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD((imm), 11, 11),  7,  7) | \
+    MAKE_TYPE_FIELD(instr_type, (opcode),                               0,  6))
 
 #define RV_INSTR_U_TYPE(imm, rd, opcode) ( \
-    MAKE_FIELD(EXTRACT_FIELD((imm), 12, 31), 12, 31) | \
-    MAKE_FIELD((rd),                                   7, 11) | \
-    MAKE_FIELD((opcode),                               0,  6))
+    MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD((imm), 12, 31), 12, 31) | \
+    MAKE_TYPE_FIELD(instr_type, (rd),                                   7, 11) | \
+    MAKE_TYPE_FIELD(instr_type, (opcode),                               0,  6))
 
 #define RV_INSTR_UJ_TYPE(imm, rd, opcode) ( \
-    MAKE_FIELD(EXTRACT_FIELD((imm), 20, 20), 31, 31) | \
-    MAKE_FIELD(EXTRACT_FIELD((imm),  1, 10), 21, 30) | \
-    MAKE_FIELD(EXTRACT_FIELD((imm), 11, 11), 20, 20) | \
-    MAKE_FIELD(EXTRACT_FIELD((imm), 12, 19), 12, 19) | \
-    MAKE_FIELD((rd),                                   7, 11) | \
-    MAKE_FIELD((opcode),                               0,  6))
+    MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD((imm), 20, 20), 31, 31) | \
+    MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD((imm),  1, 10), 21, 30) | \
+    MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD((imm), 11, 11), 20, 20) | \
+    MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD((imm), 12, 19), 12, 19) | \
+    MAKE_TYPE_FIELD(instr_type, (rd),                                   7, 11) | \
+    MAKE_TYPE_FIELD(instr_type, (opcode),                               0,  6))
 
+/// RISC-V opcodes
+///@{
 #define RV_ADD(rd, rs1, rs2) RV_INSTR_R_TYPE(0u, rs2, rs1, 0u, rd, 0x33u)
 #define RV_ADDI(rd, rs1, imm) RV_INSTR_I_TYPE(imm, rs1, 0, rd, 0x13)
 #define RV_NOP() RV_ADDI(zero, zero, 0u)
@@ -110,24 +132,37 @@ typedef uint32_t instr_type;
 #define RV_JALR(rd, rs1, imm) RV_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x67u)
 #define RV_FMV_X_S(rd, rs1) RV_INSTR_R_TYPE(0x70u, 0u, rs1, 0u, rd, 0x53u)
 #define RV_FMV_S_X(rd, rs1) RV_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd, 0x53u)
+///@]
 
-#define DAP_OPSTATUS_MASK (BIT_NUM_TO_MASK(DAP_OPSTATUS_ERROR) | BIT_NUM_TO_MASK(DAP_OPSTATUS_LOCK) | BIT_NUM_TO_MASK(DAP_OPSTATUS_READY))
-#define DAP_OPSTATUS_OK (BIT_NUM_TO_MASK(DAP_OPSTATUS_READY))
-
+/// RISC-V GP registers id
 enum
 {
-	XLEN = 32u,
-	ILEN = 32u,
-	FLEN = 32u,
+	zero = 0u,
+	sp = 14u,
 	REG_PC_NUMBER = 32u,
 	TOTAL_NUMBER_OF_REGS = 32 + 1 + 32,
 };
 
+/// Type of instruction
+typedef uint32_t instr_type;
+
 enum
 {
+	/// Size of RISC-V GP registers in bits
+	XLEN = 32u,
+	/// Size of RISC-V FP registers in bits
+	FLEN = 32u,
+	/// Size of RISC-V instruction
+	ILEN = 32u,
+};
+
+enum
+{
+	/// Debug CSR number
 	CSR_DBG_SCRATCH = 0x788u
 };
 
+/// IR id
 enum TAP_IR_e
 {
 	TAP_INSTR_DBG_ID = 3,
@@ -184,6 +219,12 @@ enum DAP_OPSTATUS_BITS_e
 	DAP_OPSTATUS_READY = 3,
 };
 
+enum
+{
+	DAP_OPSTATUS_MASK = BIT_NUM_TO_MASK(DAP_OPSTATUS_ERROR) | BIT_NUM_TO_MASK(DAP_OPSTATUS_LOCK) | BIT_NUM_TO_MASK(DAP_OPSTATUS_READY),
+	DAP_OPSTATUS_OK = BIT_NUM_TO_MASK(DAP_OPSTATUS_READY),
+};
+
 /// Units IDs
 enum type_dbgc_unit_id_e
 {
@@ -222,31 +263,48 @@ enum type_dbgc_regblock_hart_e
 	/// @see type_dbgc_hart_dmode_cause_reg_bits_e
 	DBGC_HART_REGS_DMODE_CAUSE = 3,
 
+	/// Debugger emitting instruction register
+	/// @see DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC
 	DBGC_HART_REGS_CORE_INSTR = 4,
+	/// Debugger data to debug CSR register
+	/// @see CSR_DBG_SCRATCH
 	DBGC_HART_REGS_DBG_DATA = 5,
+	/// PC value, available in any state
 	DBGC_HART_REGS_PC_SAMPLE = 6,
 };
 
 /// @see DBGC_HART_REGS_DBG_CTRL
 enum type_dbgc_hart_dbg_ctrl_reg_bits_e
 {
+	/// HART reset bit
+	/// @warning not used now
 	DBGC_HART_HDCR_RST_BIT = 0,
+	/// Disable pc change for instructions emitting from debugger
 	DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT = 6,
 };
 
 /// @see DBGC_HART_REGS_DBG_STS
 enum type_dbgc_hart_dbg_sts_reg_bits_e
 {
+	/// Show halt state
 	DBGC_HART_HDSR_DMODE_BIT = 0,
+	/// Show current reset asserting state
 	DBGC_HART_HDSR_RST_BIT = 1,
+	/// Show that was reset
 	DBGC_HART_HDSR_RST_STKY_BIT = 2,
+	/// Show exception state (SW breakpoint too)
 	DBGC_HART_HDSR_EXCEPT_BIT = 3,
+	/// Show common error
 	DBGC_HART_HDSR_ERR_BIT = 16,
+	/// Show HW thread error
 	DBGC_HART_HDSR_ERR_HWTHREAD_BIT = 17,
+	/// Show error due to bad DAP opcode
 	DBGC_HART_HDSR_ERR_DAP_OPCODE_BIT = 18,
 	DBGC_HART_HDSR_ERR_DBGCMD_NACK_BIT = 19,
 	DBGC_HART_HDSR_ERR_ILLEG_DBG_CONTEXT_BIT = 20,
 	DBGC_HART_HDSR_ERR_UNEXP_RESET_BIT = 21,
+	/// Show debug controller lock after error state
+	/// Only unlock procedure available
 	DBGC_HART_HDSR_LOCK_STKY_BIT = 31
 };
 
@@ -254,22 +312,34 @@ enum type_dbgc_hart_dbg_sts_reg_bits_e
 /// @see DBGC_HART_REGS_DMODE_ENBL
 enum type_dbgc_hart_dmode_enbl_reg_bits_e
 {
+	/// Enable HALT on SW breakpoint exception
 	DBGC_HART_HDMER_SW_BRKPT_BIT = 3,
+	/// Enable HALT after single step
 	DBGC_HART_HDMER_SINGLE_STEP_BIT = 28,
 #if 0
 	// Not implemented, Reserved for future use
 	DBGC_HART_HDMER_RST_ENTR_BRK_BIT = 29,
 #endif
+	/// Enable HALT after reset
 	DBGC_HART_HDMER_RST_EXIT_BRK_BIT = 30,
+};
+
+enum
+{
+	NORMAL_DEBUG_ENABLE_MASK = BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_EXIT_BRK_BIT)
 };
 
 /// Hart Debug Mode Cause Register (HART_DMODE_CAUSE, HDMCR)
 /// @see DBGC_HART_REGS_DMODE_CAUSE
 enum type_dbgc_hart_dmode_cause_reg_bits_e
 {
+	/// Show halt due to SW breakpoint
 	DBGC_HART_HDMCR_SW_BRKPT_BIT = 3,
+	/// Show halt after single step
 	DBGC_HART_HDMCR_SINGLE_STEP_BIT = 29,
+	/// Show halt after reset
 	DBGC_HART_HDMCR_RST_BREAK_BIT = 30,
+	/// Show forced halt from debug controller
 	DBGC_HART_HDMCR_ENFORCE_BIT = 31
 };
 
@@ -278,8 +348,14 @@ enum type_dbgc_dap_cmd_opcode_dbgcmd_e
 {
 	/// @see type_dbgc_dap_cmd_opcode_dbgctrl_ext_e
 	DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL = 0,
+	/// Debugger emitting instruction register
+	/// @see DBGC_HART_REGS_CORE_INSTR
 	DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC = 1,
+	/// @see DBGC_HART_REGS_DBG_DATA
 	DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR = 2,
+	/// @see DBGC_HART_HDSR_LOCK_STKY_BIT
+	/// @see DBGC_CORE_CDSR_LOCK_BIT
+	/// @see DAP_OPSTATUS_LOCK
 	DBGC_DAP_OPCODE_DBGCMD_UNLOCK = 3,
 };
 
@@ -658,7 +734,7 @@ debug_controller__unlock(target const* const restrict p_target)
 	IR_select_force(p_target, TAP_INSTR_DAP_CTRL);
 #endif
 
-	static uint8_t const set_dap_unit_group = MAKE_FIELD(DBGC_UNIT_ID_HART_0, 2, 3) | MAKE_FIELD(DBGC_FGRP_HART_DBGCMD, 0, 1);
+	static uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_UNIT_ID_HART_0, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_FGRP_HART_DBGCMD, 0, 1);
 	error_code__get_and_clear(p_target);
 	DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
 
@@ -690,16 +766,16 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 	assert(p_target);
 	assert(
 		(
-		((dap_unit == DBGC_UNIT_ID_HART_0 && 0 == p_target->coreid) || (dap_unit == DBGC_UNIT_ID_HART_1 && 1 == p_target->coreid)) && 
+		((dap_unit == DBGC_UNIT_ID_HART_0 && 0 == p_target->coreid) || (dap_unit == DBGC_UNIT_ID_HART_1 && 1 == p_target->coreid)) &&
 		(dap_group == DBGC_FGRP_HART_REGTRANS || dap_group == DBGC_FGRP_HART_DBGCMD)
 		) ||
 		(dap_unit == DBGC_UNIT_ID_CORE && dap_group == DBGC_FGRP_HART_REGTRANS)
 		);
 
 	uint8_t const set_dap_unit_group =
-		MAKE_FIELD(
-		MAKE_FIELD(dap_unit, TAP_LEN_DAP_CTRL_FGROUP, TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1) |
-		MAKE_FIELD(dap_group, 0, TAP_LEN_DAP_CTRL_FGROUP - 1),
+		MAKE_TYPE_FIELD(uint8_t,
+		MAKE_TYPE_FIELD(uint8_t, dap_unit, TAP_LEN_DAP_CTRL_FGROUP, TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1) |
+		MAKE_TYPE_FIELD(uint8_t, dap_group, 0, TAP_LEN_DAP_CTRL_FGROUP - 1),
 		0,
 		TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1);
 
@@ -735,7 +811,7 @@ static inline uint8_t
 REGTRANS_scan_type(bool const write, uint8_t const index)
 {
 	assert((index & !LOW_BITS_MASK(3)) == 0);
-	return MAKE_FIELD(!!write, 3, 3) | MAKE_FIELD(index, 0, 2);
+	return MAKE_TYPE_FIELD(uint8_t, !!write, 3, 3) | MAKE_TYPE_FIELD(uint8_t, index, 0, 2);
 }
 
 static void
@@ -1143,10 +1219,10 @@ prepare_temporary_GP_register(target const* const restrict p_target, int const a
 	assert(p_reg_cache);
 	reg* const p_reg_list = p_reg_cache->reg_list;
 	assert(p_reg_list);
-	assert(p_reg_cache->num_regs >= 32);
+	assert(p_reg_cache->num_regs >= REG_PC_NUMBER);
 	reg* p_valid = NULL;
 	reg* p_dirty = NULL;
-	for (size_t i = after_reg + 1; i < 32; ++i) {
+	for (size_t i = after_reg + 1; i < REG_PC_NUMBER; ++i) {
 		assert(reg_check(&p_reg_list[i]));
 		if (p_reg_list[i].valid) {
 			if (p_reg_list[i].dirty) {
@@ -1161,7 +1237,7 @@ prepare_temporary_GP_register(target const* const restrict p_target, int const a
 
 	if (!p_dirty) {
 		if (!p_valid) {
-			assert(after_reg + 1 < 32);
+			assert(after_reg + 1 < REG_PC_NUMBER);
 			p_valid = &p_reg_list[after_reg + 1];
 			if (error_code__update(p_target, reg_x_get(p_valid)) != ERROR_OK) {
 				return NULL;
@@ -1381,7 +1457,7 @@ static int
 reg_f_set(reg* const restrict p_reg, uint8_t* const restrict buf)
 {
 	assert(p_reg);
-	assert(32 < p_reg->number && p_reg->number < TOTAL_NUMBER_OF_REGS);
+	assert(REG_PC_NUMBER < p_reg->number && p_reg->number < TOTAL_NUMBER_OF_REGS);
 	assert(reg_check(p_reg));
 
 	target* const p_target = p_reg->arch_info;
@@ -1500,7 +1576,7 @@ common_resume(target* const restrict p_target, uint32_t dmode_enabled, int const
 
 	/// @todo multiple caches
 	reg_cache* const p_reg_cache = p_target->reg_cache;
-	reg* const p_pc = &p_reg_cache->reg_list[32];
+	reg* const p_pc = &p_reg_cache->reg_list[REG_PC_NUMBER];
 	if (!current) {
 		uint8_t buf[sizeof address];
 		buf_set_u32(buf, 0, XLEN, address);
@@ -1799,7 +1875,7 @@ this_deinit_target(target* const restrict p_target)
 	reg* reg_list = p_reg_cache->reg_list;
 	assert(reg_list);
 	size_t const num_regs = p_reg_cache->num_regs;
-	assert(num_regs == (32 + 32 + 1));
+	assert(num_regs == TOTAL_NUMBER_OF_REGS);
 	for (size_t i = 0; i < num_regs; ++i) {
 		free(reg_list[i].value);
 	}
@@ -1829,7 +1905,10 @@ this_examine(target* const restrict p_target)
 		uint32_t const DBG_ID = DBG_ID_get(p_target);
 		LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE, DBG_ID, BLD_ID_get(p_target));
 		assert(IDCODE == EXPECTED_IDCODE);
-		assert(((DBG_ID & DBG_ID_VERSION_MASK) == (DBG_ID_VERSION_MASK & EXPECTED_DBG_ID)) && ((DBG_ID & DBG_ID_SUBVERSION_MASK) >= (EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK)));
+		assert((DBG_ID & DBG_ID_VERSION_MASK) == (DBG_ID_VERSION_MASK & EXPECTED_DBG_ID));
+#if EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK
+		assert((DBG_ID & DBG_ID_SUBVERSION_MASK) >= (EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK));
+#endif
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__get_and_clear(p_target);
 		}
