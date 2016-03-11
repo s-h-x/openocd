@@ -1395,15 +1395,15 @@ reg_x__get(reg* const restrict p_reg)
 			return error_code__get_and_clear(p_target);
 		}
 		LOG_DEBUG("Updating cache from register %s <-- 0x%08X", p_reg->name, value);
+		/// update cache value
+		assert(p_reg->value);
+		buf_set_u32(p_reg->value, 0, XLEN, value);
+		reg__validate(p_reg);
 	}
 #if CHECK_PC_UNCHANGED
 	uint32_t const pc_sample_2 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
 	assert(pc_sample_2 == pc_sample_1);
 #endif
-	/// update cache value
-	assert(p_reg->value);
-	buf_set_u32(p_reg->value, 0, XLEN, value);
-	reg__validate(p_reg);
 	return error_code__get_and_clear(p_target);
 }
 
