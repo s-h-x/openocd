@@ -1309,7 +1309,15 @@ reg__invalidate(reg* const restrict p_reg)
 static inline bool
 reg__check(reg const* const restrict p_reg)
 {
-	return p_reg->exist && !(!p_reg->valid && p_reg->dirty);
+	if (!p_reg->exist) {
+		LOG_ERROR("Register %s not available", p_reg->name);
+		return false;
+	} else if (p_reg->dirty && !p_reg->valid) {
+		LOG_ERROR("Register %s dirty but not valid", p_reg->name);
+		return false;
+	} else {
+		return true;
+	}
 }
 
 static inline bool
@@ -1325,8 +1333,11 @@ reg_cache__invalidate(reg_cache const* const restrict p_reg_cache)
 	assert(p_reg_cache);
 	assert(p_reg_cache->num_regs == TOTAL_NUMBER_OF_REGS);
 	for (size_t i = 0; i < p_reg_cache->num_regs; ++i) {
-		assert(reg__check(&p_reg_cache->reg_list[i]));
-		reg__invalidate(&p_reg_cache->reg_list[i]);
+		reg * const p_reg = &p_reg_cache->reg_list[i];
+		if (p_reg->exist) {
+			assert(reg__check(&p_reg_cache->reg_list[i]));
+			reg__invalidate(&p_reg_cache->reg_list[i]);
+		}
 	}
 }
 
