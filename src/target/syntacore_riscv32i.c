@@ -113,25 +113,37 @@ Syntacore RISC-V target
 
 /// RISC-V opcodes
 ///@{
-#define RV_ADD(rd, rs1, rs2) RV_INSTR_R_TYPE(0u, rs2, rs1, 0u, rd, 0x33u)
-#define RV_ADDI(rd, rs1, imm) RV_INSTR_I_TYPE(imm, rs1, 0, rd, 0x13)
-#define RV_NOP() RV_ADDI(zero, zero, 0u)
-#define RV_SBREAK() RV_INSTR_I_TYPE(1u, 0u, 0u, 0u, 0x73u)
-#define RV_LB(rd, base, imm) RV_INSTR_I_TYPE(imm, base, 0u, rd, 3u)
-#define RV_LH(rd, base, imm) RV_INSTR_I_TYPE(imm, base, 1u, rd, 3u)
-#define RV_LW(rd, base, imm) RV_INSTR_I_TYPE(imm, base, 2u, rd, 3u)
-#define RV_LBU(rd, base, imm) RV_INSTR_I_TYPE(imm, base, 4u, rd, 3u)
-#define RV_LHU(rd, base, imm) RV_INSTR_I_TYPE(imm, base, 5u, rd, 3u)
+#define RV_ADD(rd, rs1, rs2)        RV_INSTR_R_TYPE(0x00u, (rs2), (rs1), 0u, (rd), 0x33u)
+#define RV_FMV_X_S(rd, rs1)         RV_INSTR_R_TYPE(0x70u, 0u,    (rs1), 0u, (rd), 0x53u)
+#define RV_FMV_S_X(rd, rs1)         RV_INSTR_R_TYPE(0x78u, 0u,    (rs1), 0u, (rd), 0x53u)
 
-#define RV_SB(rs, base, imm) RV_INSTR_S_TYPE(imm, rs, base, 0u, 0x23)
-#define RV_SH(rs, base, imm) RV_INSTR_S_TYPE(imm, rs, base, 1u, 0x23)
-#define RV_SW(rs, base, imm) RV_INSTR_S_TYPE(imm, rs, base, 2u, 0x23)
-#define RV_AUIPC(rd, imm) RV_INSTR_U_TYPE(imm, rd, 0x17u)
-#define RV_CSRRW(rd, csr, rs1) RV_INSTR_I_TYPE((csr), rs1, 1u, rd, 0x73u)
-#define RV_JAL(rd, imm) RV_INSTR_UJ_TYPE(imm, rd, 0x6Fu)
-#define RV_JALR(rd, rs1, imm) RV_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x67u)
-#define RV_FMV_X_S(rd, rs1) RV_INSTR_R_TYPE(0x70u, 0u, rs1, 0u, rd, 0x53u)
-#define RV_FMV_S_X(rd, rs1) RV_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd, 0x53u)
+#define RV_LB(rd, base, imm)        RV_INSTR_I_TYPE((imm), (base), 0u, (rd), 0x03u)
+#define RV_LH(rd, base, imm)        RV_INSTR_I_TYPE((imm), (base), 1u, (rd), 0x03u)
+#define RV_LW(rd, base, imm)        RV_INSTR_I_TYPE((imm), (base), 2u, (rd), 0x03u)
+#define RV_LBU(rd, base, imm)       RV_INSTR_I_TYPE((imm), (base), 4u, (rd), 0x03u)
+#define RV_LHU(rd, base, imm)       RV_INSTR_I_TYPE((imm), (base), 5u, (rd), 0x03u)
+
+#define RV_ADDI(rd, rs1, imm)       RV_INSTR_I_TYPE((imm), (rs1),  0u, (rd), 0x13u)
+#define RV_JALR(rd, rs1, imm)       RV_INSTR_I_TYPE((imm), (rs1),  0u, (rd), 0x67u)
+
+#define RV_CSRRW(rd, csr, rs1)      RV_INSTR_I_TYPE((csr), (rs1),  1u, (rd), 0x73u)
+#define RV_CSRRS(rd, csr, rs1)      RV_INSTR_I_TYPE((csr), (rs1),  2u, (rd), 0x73u)
+#define RV_CSRRC(rd, csr, rs1)      RV_INSTR_I_TYPE((csr), (rs1),  3u, (rd), 0x73u)
+#define RV_CSRRWI(rd, csr, zimm)    RV_INSTR_I_TYPE((csr), (zimm), 5u, (rd), 0x73u)
+#define RV_CSRRSI(rd, csr, zimm)    RV_INSTR_I_TYPE((csr), (zimm), 6u, (rd), 0x73u)
+#define RV_CSRRCI(rd, csr, zimm)    RV_INSTR_I_TYPE((csr), (zimm), 7u, (rd), 0x73u)
+
+#define RV_SBREAK()                 RV_INSTR_I_TYPE(1u, 0u, 0u, 0u, 0x73u)
+
+#define RV_SB(rs, base, imm)        RV_INSTR_S_TYPE((imm), (rs), (base), 0u, 0x23)
+#define RV_SH(rs, base, imm)        RV_INSTR_S_TYPE((imm), (rs), (base), 1u, 0x23)
+#define RV_SW(rs, base, imm)        RV_INSTR_S_TYPE((imm), (rs), (base), 2u, 0x23)
+
+#define RV_AUIPC(rd, imm)           RV_INSTR_U_TYPE((imm), (rd), 0x17u)
+
+#define RV_JAL(rd, imm)             RV_INSTR_UJ_TYPE((imm), (rd), 0x6Fu)
+
+#define RV_NOP()                    RV_ADDI(zero, zero, 0u)
 ///@]
 
 /// RISC-V GP registers id
@@ -156,10 +168,234 @@ enum
 	ILEN = 32u,
 };
 
-enum
+enum RISCV_CSR
 {
+	/// User Floating-Point CSRs
+	/// privilege: URW
+	/// @addtogroup floating_point_csrs
+	///@{
+	/// Floating-Point Accrued Exceptions.
+	CSR_fflags = 0x001u,
+	/// Floating-Point Dynamic Rounding Mode.
+	CSR_frm = 0x002u,
+	/// Floating-Point Control and Status Register (frm + fflags).
+	CSR_fcsr = 0x003u,
+	///@}
+
+	/// User Counter/Timers
+	/// privilege: URO
+	///@{
+	/// Cycle counter for RDCYCLE instruction
+	CSR_cycle    = 0xC00u,
+	/// Timer for RDTIME instruction
+	CSR_time    = 0xC01u,
+	/// Instructions-retired counter for RDINSTRET instruction
+	CSR_instret  = 0xC02u,
+	/// Upper 32 bits of cycle, RV32I onl
+	CSR_cycleh   = 0xC80u,
+	/// Upper 32 bits of time, RV32I only
+	CSR_timeh    = 0xC81u,
+	///  Upper 32 bits of instret, RV32I only.
+	CSR_instreth = 0xC82u,
+	///@}
+
+	/// Supervisor Trap Setup
+	///@{
+	/// Supervisor status register
+	CSR_sstatus  = 0x100u,
+	/// Supervisor trap handler base address
+	CSR_stvec    = 0x101u,
+	/// Supervisor interrupt-enable register
+	CSR_sie      = 0x104u,
+	/// Wall-clock timer compare val
+	CSR_stimecmp = 0x121u,
+	///@}
+
+	/// Supervisor Timer
+	///@{
+	/// Supervisor wall-clock time register.
+	CSR_stime    = 0xD01u,
+	/// Upper 32 bits of stime, RV32I onl
+	CSR_stimeh   = 0xD81u,
+	///@}
+
+	/// Supervisor Trap Handling
+	///@{
+	/// Scratch register for supervisor trap handlers
+	CSR_sscratch = 0x140u,
+	/// Supervisor exception program counter.
+	CSR_sepc     = 0x141u,
+	/// Supervisor trap cause.
+	CSR_scause   = 0xD42u,
+	/// Supervisor bad address.
+	CSR_sbadaddr = 0xD43u,
+	/// Supervisor interrupt pending
+	CSR_sip      = 0x144u,
+	///@}
+
+	/// Supervisor Protection and Translation
+	///@{
+	/// Page-table base register
+	CSR_sptbr = 0x180u,
+	/// Address-space ID.
+	CSR_sasid = 0x181u,
+	///@}
+
+	/// Supervisor Read/Write Shadow of User Read-Only registers
+	///@{
+	/// Cycle counter for RDCYCLE instruction.
+	CSR_cyclew = 0x900u,
+	/// Timer for RDTIME instruction.
+	CSR_timew = 0x901u,
+	/// Instructions-retired counter for RDINSTRET instruction
+	CSR_instretw = 0x902u,
+	/// Upper 32 bits of cycle, RV32I onl
+	CSR_cyclehw = 0x980u,
+	/// Upper 32 bits of time, RV32I only
+	CSR_timehw = 0x981u,
+	/// Upper 32 bits of instret, RV32I only
+	CSR_instrethw = 0x982u,
+	///@}
+
+	/// Hypervisor Trap Setup
+	///@{
+	/// Hypervisor status regist
+	CSR_hstatus = 0x200u,
+	/// Hypervisor trap handler base address
+	CSR_htvec = 0x201u,
+	/// Hypervisor trap delegation register.
+	CSR_htdeleg = 0x202u,
+	/// Hypervisor wall-clock timer compare value.
+	CSR_htimecmp = 0x221u,
+	///@}
+
+	/// Hypervisor Timer
+	///@{
+	CSR_htime = 0xE01u,
+	CSR_htimeh = 0xE81u,
+	///@}
+
+	/// Hypervisor Trap Handling
+	///@{
+	CSR_hscratch = 0x240u,
+	CSR_hepc = 0x241u,
+	CSR_hcause = 0x242u,
+	CSR_hbadaddr = 0x243u,
+	///@}
+
+	/// Hypervisor Read/Write Shadow of Supervisor Read-Only Registers
+	///@{
+	CSR_stimew = 0xA01u,
+	CSR_stimehw = 0xA81u,
+	///@}
+
+	/// Machine Information Registers
+	/// privilege: MRO
+	///@{
+	/// @brief CPU description
+	CSR_mcpuid   = 0xF00u,
+
+	/// @brief Vendor ID and version number
+	CSR_mimpid   = 0xF01u,
+
+	/// @brief Hardware thread ID
+	CSR_mhartid  = 0xF10u,
+	///@}
+
+	/// Machine Trap Setup
+	/// privilege: MRW
+	///@{
+
+	/// @brief Machine status register
+	///< FS - bits 13:12
+	CSR_mstatus  = 0x300u, 
+
+	/// @brief Machine trap-handler base address
+	CSR_mtvec    = 0x301u,
+	
+	/// @brief Machine trap delegation register
+	CSR_mtdeleg = 0x302u,
+
+	/// @brief Machine interrupt-enable register
+	CSR_mie = 0x304u,
+
+	/// @brief Machine wall-clock timer compare value
+	CSR_mtimecmp = 0x321u,
+	///@}
+
+	/// Machine Timers and Counters
+	/// privilege: MRW
+	///@{
+
+	/// @brief Machine wall-clock time
+	CSR_mtime = 0x701u,
+
+	/// @brief Upper 32 bits of mtime, RV32I only
+	CSR_mtimeh = 0x741u,
+	///@}
+
+	/// Machine Trap Handling
+	/// privilege: MRW
+	///@{
+
+	/// @brief Scratch register for machine trap handlers.
+	CSR_mscratch = 0x340u,
+	/// @brief Machine exception program counter
+	CSR_mepc = 0x341u,
+	/// @brief Machine trap cause
+	CSR_mcause = 0x342u,
+	/// @brief Machine bad address
+	CSR_mbadaddr = 0x343u,
+	/// @brief Machine interrupt pending.
+	CSR_mip = 0x344u,
+	///@}
+
+	/// Machine Protection and Translation
+	/// privilege: MRW
+	///@{
+
+	/// @brief Base register
+	CSR_mbase = 0x380u,
+
+	/// @brief Base register
+	CSR_mbound = 0x381u,
+
+	/// @brief Bound register.
+	CSR_mibase = 0x382u,
+
+	/// @brief Instruction base register.
+	CSR_mibound = 0x383u,
+
+	/// @brief Data base register
+	CSR_mdbase = 0x384u,
+
+	/// @brief Data bound register
+	CSR_mdbound = 0x385u,
+	///@}
+
+	/// Machine Read-Write Shadow of Hypervisor Read-Only Registers
+	/// privilege: MRW
+	///@{
+
+	/// @brief Hypervisor wall-clock timer
+	CSR_htimew = 0xB01u,
+
+	/// @brief Upper 32 bits of hypervisor wall-clock timer, RV32I only.
+	CSR_htimehw = 0xB81u,
+	///@}
+
+	/// Machine Host-Target Interface (Non-Standard Berkeley Extension)
+	/// privilege: MRW
+	///@{
+	/// @brief Output register to host
+	CSR_mtohost   = 0x780u,
+	/// @brief Input register from host.
+	CSR_mfromhost = 0x781u,
+	///@}
+
 	/// Debug CSR number
-	CSR_DBG_SCRATCH = 0x788u
+	/// privilege: MRW
+	CSR_DBG_SCRATCH = 0x788u,
 };
 
 /// IR id
