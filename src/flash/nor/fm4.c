@@ -602,16 +602,15 @@ static int fm4_get_info_command(struct flash_bank *bank, char *buf, int buf_size
 
 static bool fm4_name_match(const char *s, const char *pattern)
 {
-	int i = 0;
-
-	while (s[i]) {
+	while (*s) {
 		/* If the match string is shorter, ignore excess */
-		if (!pattern[i])
+		if (!*pattern)
 			return true;
 		/* Use x as wildcard */
-		if (pattern[i] != 'x' && tolower(s[i]) != tolower(pattern[i]))
+		if (*pattern != 'x' && tolower((unsigned char)(*s)) != tolower((unsigned char)(*pattern)))
 			return false;
-		i++;
+		++s;
+		++pattern;
 	}
 	return true;
 }
