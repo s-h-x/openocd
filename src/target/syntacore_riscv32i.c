@@ -2595,11 +2595,15 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 #if USE_PC_ADVMT_DSBL_BIT && USE_FAST_DR_SCANS
 				{
 					uint8_t DAP_OPSTATUS = DAP_OPSTATUS_OK;
+					uint8_t DAP_OPSTATUS_GOOD = DAP_OPSTATUS_OK;
+					uint8_t DAP_STATUS_MASK = DAP_OPSTATUS_MASK;
 					uint8_t const data_wr_opcode[1] = {DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR};
 					scan_field const data_scan_opcode_field = {
 						.num_bits = TAP_LEN_DAP_CMD_OPCODE,
 						.out_value = data_wr_opcode,
 						.in_value = &DAP_OPSTATUS,
+						.check_value = &DAP_OPSTATUS_GOOD,
+						.check_mask = &DAP_STATUS_MASK,
 					};
 					scan_field const data_scan_fields[2] =
 					{
@@ -2618,8 +2622,10 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 						.num_bits = TAP_LEN_DAP_CMD_OPCODE,
 						.out_value = instr_exec_opcode,
 						.in_value = &DAP_OPSTATUS,
+						.check_value = &DAP_OPSTATUS_GOOD,
+						.check_mask = &DAP_STATUS_MASK,
 					};
-					scan_field const instr_fields[3][2] =
+					scan_field instr_fields[3][2] =
 					{
 						{
 							[0] = {
@@ -2654,10 +2660,10 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 						data_scan_buffer[data_scan_buffer_iterator][0] = data_scan_fields[0];
 						data_scan_buffer[data_scan_buffer_iterator][0].out_value = (uint8_t const*)buffer;
 						data_scan_buffer[data_scan_buffer_iterator][1] = data_scan_fields[1];
-						jtag_add_dr_scan(p_target->tap, ARRAY_LEN(data_scan_fields), data_scan_buffer[data_scan_buffer_iterator], TAP_IDLE);
-						jtag_add_dr_scan(p_target->tap, 2, instr_fields[0], TAP_IDLE);
-						jtag_add_dr_scan(p_target->tap, 2, instr_fields[1], TAP_IDLE);
-						jtag_add_dr_scan(p_target->tap, 2, instr_fields[2], TAP_IDLE);
+						jtag_add_dr_scan_check(p_target->tap, ARRAY_LEN(data_scan_fields), data_scan_buffer[data_scan_buffer_iterator], TAP_IDLE);
+						jtag_add_dr_scan_check(p_target->tap, 2, instr_fields[0], TAP_IDLE);
+						jtag_add_dr_scan_check(p_target->tap, 2, instr_fields[1], TAP_IDLE);
+						jtag_add_dr_scan_check(p_target->tap, 2, instr_fields[2], TAP_IDLE);
 						buffer += size;
 						data_scan_buffer_iterator = (data_scan_buffer_iterator + 1) % data_scan_buffer_size;
 						if (data_scan_buffer_iterator == 0 || count == 0) {
