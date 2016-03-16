@@ -2601,11 +2601,10 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 						.out_value = data_wr_opcode,
 						.in_value = &DAP_OPSTATUS,
 					};
-					scan_field data_scan_fields[2] =
+					scan_field const data_scan_fields[2] =
 					{
 						[0] = {
 							.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,
-							.out_value = buffer,
 						},
 						[1] = data_scan_opcode_field,
 					};
@@ -2644,18 +2643,29 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 							[1] = instr_scan_opcode_field,
 						},
 					};
+					enum
+					{
+						data_scan_buffer_size = 1024u
+					};
+					scan_field data_scan_buffer[data_scan_buffer_size][2];
+					unsigned data_scan_buffer_iterator = 0;
 					while (error_code__get(p_target) == ERROR_OK && count--) {
 						assert(p_target->tap);
-						data_scan_fields[0].out_value = (uint8_t const*)buffer;
-						jtag_add_dr_scan(p_target->tap, ARRAY_LEN(data_scan_fields), data_scan_fields, TAP_IDLE);
+						data_scan_buffer[data_scan_buffer_iterator][0] = data_scan_fields[0];
+						data_scan_buffer[data_scan_buffer_iterator][0].out_value = (uint8_t const*)buffer;
+						data_scan_buffer[data_scan_buffer_iterator][1] = data_scan_fields[1];
+						jtag_add_dr_scan(p_target->tap, ARRAY_LEN(data_scan_fields), data_scan_buffer[data_scan_buffer_iterator], TAP_IDLE);
 						jtag_add_dr_scan(p_target->tap, 2, instr_fields[0], TAP_IDLE);
 						jtag_add_dr_scan(p_target->tap, 2, instr_fields[1], TAP_IDLE);
 						jtag_add_dr_scan(p_target->tap, 2, instr_fields[2], TAP_IDLE);
 						buffer += size;
-						error_code__update(p_target, jtag_execute_queue());
-						if ((DAP_OPSTATUS & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
-							LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
-							error_code__update(p_target, ERROR_TARGET_FAILURE);
+						data_scan_buffer_iterator = (data_scan_buffer_iterator + 1) % data_scan_buffer_size;
+						if (data_scan_buffer_iterator == 0 || count == 0) {
+							error_code__update(p_target, jtag_execute_queue());
+							if ((DAP_OPSTATUS & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
+								LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
+								error_code__update(p_target, ERROR_TARGET_FAILURE);
+							}
 						}
 					}
 				}
