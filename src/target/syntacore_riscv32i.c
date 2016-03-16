@@ -39,7 +39,8 @@ Syntacore RISC-V target
 /// If first instruction in normal resume replaced by breakpoint opcode,
 /// then emulate first step by execution of stored opcode with debug facilities
 #define RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION 1
-#define USE_PC_ADVMT_DSBL_BIT 0
+#define USE_PC_ADVMT_DSBL_BIT 1
+#define USE_FAST_DR_SCANS 1
 #define CHECK_PC_UNCHANGED USE_PC_FROM_PC_SAMPLE
 /// TAP IDCODE expected
 #define EXPECTED_IDCODE (0xC0DEDEB1u)
@@ -187,15 +188,15 @@ enum RISCV_CSR
 	/// privilege: URO
 	///@{
 	/// Cycle counter for RDCYCLE instruction
-	CSR_cycle    = 0xC00u,
+	CSR_cycle = 0xC00u,
 	/// Timer for RDTIME instruction
-	CSR_time    = 0xC01u,
+	CSR_time = 0xC01u,
 	/// Instructions-retired counter for RDINSTRET instruction
-	CSR_instret  = 0xC02u,
+	CSR_instret = 0xC02u,
 	/// Upper 32 bits of cycle, RV32I onl
-	CSR_cycleh   = 0xC80u,
+	CSR_cycleh = 0xC80u,
 	/// Upper 32 bits of time, RV32I only
-	CSR_timeh    = 0xC81u,
+	CSR_timeh = 0xC81u,
 	///  Upper 32 bits of instret, RV32I only.
 	CSR_instreth = 0xC82u,
 	///@}
@@ -203,11 +204,11 @@ enum RISCV_CSR
 	/// Supervisor Trap Setup
 	///@{
 	/// Supervisor status register
-	CSR_sstatus  = 0x100u,
+	CSR_sstatus = 0x100u,
 	/// Supervisor trap handler base address
-	CSR_stvec    = 0x101u,
+	CSR_stvec = 0x101u,
 	/// Supervisor interrupt-enable register
-	CSR_sie      = 0x104u,
+	CSR_sie = 0x104u,
 	/// Wall-clock timer compare val
 	CSR_stimecmp = 0x121u,
 	///@}
@@ -215,9 +216,9 @@ enum RISCV_CSR
 	/// Supervisor Timer
 	///@{
 	/// Supervisor wall-clock time register.
-	CSR_stime    = 0xD01u,
+	CSR_stime = 0xD01u,
 	/// Upper 32 bits of stime, RV32I onl
-	CSR_stimeh   = 0xD81u,
+	CSR_stimeh = 0xD81u,
 	///@}
 
 	/// Supervisor Trap Handling
@@ -225,13 +226,13 @@ enum RISCV_CSR
 	/// Scratch register for supervisor trap handlers
 	CSR_sscratch = 0x140u,
 	/// Supervisor exception program counter.
-	CSR_sepc     = 0x141u,
+	CSR_sepc = 0x141u,
 	/// Supervisor trap cause.
-	CSR_scause   = 0xD42u,
+	CSR_scause = 0xD42u,
 	/// Supervisor bad address.
 	CSR_sbadaddr = 0xD43u,
 	/// Supervisor interrupt pending
-	CSR_sip      = 0x144u,
+	CSR_sip = 0x144u,
 	///@}
 
 	/// Supervisor Protection and Translation
@@ -294,13 +295,13 @@ enum RISCV_CSR
 	/// privilege: MRO
 	///@{
 	/// @brief CPU description
-	CSR_mcpuid   = 0xF00u,
+	CSR_mcpuid = 0xF00u,
 
 	/// @brief Vendor ID and version number
-	CSR_mimpid   = 0xF01u,
+	CSR_mimpid = 0xF01u,
 
 	/// @brief Hardware thread ID
-	CSR_mhartid  = 0xF10u,
+	CSR_mhartid = 0xF10u,
 	///@}
 
 	/// Machine Trap Setup
@@ -309,11 +310,11 @@ enum RISCV_CSR
 
 	/// @brief Machine status register
 	///< FS - bits 13:12
-	CSR_mstatus  = 0x300u, 
+	CSR_mstatus = 0x300u,
 
 	/// @brief Machine trap-handler base address
-	CSR_mtvec    = 0x301u,
-	
+	CSR_mtvec = 0x301u,
+
 	/// @brief Machine trap delegation register
 	CSR_mtdeleg = 0x302u,
 
@@ -389,7 +390,7 @@ enum RISCV_CSR
 	/// privilege: MRW
 	///@{
 	/// @brief Output register to host
-	CSR_mtohost   = 0x780u,
+	CSR_mtohost = 0x780u,
 	/// @brief Input register from host.
 	CSR_mfromhost = 0x781u,
 	///@}
@@ -2540,6 +2541,9 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 		return error_code__get_and_clear(p_target);
 	}
 
+	if (count == 0) {
+		return error_code__get_and_clear(p_target);
+	}
 	/// Check that target halted
 	{
 		update_status(p_target);
@@ -2559,11 +2563,13 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 	assert(p_data_reg);
 	assert(p_addr_reg->number != p_data_reg->number);
 
-	/// Define opcode for load item to register
-	uint32_t const store_OP =
+	// Opcodes
+	uint32_t const OP_data_to_reg = RV_CSRRW(p_data_reg->number, CSR_DBG_SCRATCH, zero);
+	uint32_t const OP_reg_to_mem =
 		size == 4 ? RV_SW(p_data_reg->number, p_addr_reg->number, 0) :
 		size == 2 ? RV_SH(p_data_reg->number, p_addr_reg->number, 0) :
 		/*size == 1*/ RV_SB(p_data_reg->number, p_addr_reg->number, 0);
+	uint32_t const OP_incr_add = RV_ADDI(p_addr_reg->number, p_addr_reg->number, size);
 
 #if CHECK_PC_UNCHANGED
 	uint32_t const pc_sample_1 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
@@ -2586,47 +2592,120 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 				/// Load address to work register
 				(void)exec__step(p_target, RV_CSRRW(p_addr_reg->number, CSR_DBG_SCRATCH, zero));
 				advance_pc_counter += instr_step;
-				while ((error_code__get(p_target) == ERROR_OK) && count--) {
-					/// Set data to CSR
-					exec__set_csr_data(p_target, buf_get_u32(buffer, 0, 8 * size));
-					if (error_code__get(p_target) != ERROR_OK) {
-						break;
+#if USE_PC_ADVMT_DSBL_BIT && USE_FAST_DR_SCANS
+				{
+					uint8_t DAP_OPSTATUS = DAP_OPSTATUS_OK;
+					uint8_t const data_wr_opcode[1] = {DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR};
+					scan_field const data_scan_opcode_field = {
+						.num_bits = TAP_LEN_DAP_CMD_OPCODE,
+						.out_value = data_wr_opcode,
+						.in_value = &DAP_OPSTATUS,
+					};
+					scan_field data_scan_fields[2] =
+					{
+						[0] = {
+							.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,
+							.out_value = buffer,
+						},
+						[1] = data_scan_opcode_field,
+					};
+					uint32_t const instructions[3] = {
+						OP_data_to_reg,
+						OP_reg_to_mem,
+						OP_incr_add,
+					};
+					uint8_t const instr_exec_opcode[1] = {DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC};
+					scan_field const instr_scan_opcode_field = {
+						.num_bits = TAP_LEN_DAP_CMD_OPCODE,
+						.out_value = instr_exec_opcode,
+						.in_value = &DAP_OPSTATUS,
+					};
+					scan_field const instr_fields[3][2] =
+					{
+						{
+							[0] = {
+								.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,
+								.out_value = (uint8_t const*)(&instructions[0]),
+							},
+							[1] = instr_scan_opcode_field,
+						},
+						{
+							[0] = {
+								.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,
+								.out_value = (uint8_t const*)(&instructions[1]),
+							},
+							[1] = instr_scan_opcode_field,
+						},
+						{
+							[0] = {
+								.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,
+								.out_value = (uint8_t const*)(&instructions[2]),
+							},
+							[1] = instr_scan_opcode_field,
+						},
+					};
+					while (error_code__get(p_target) == ERROR_OK && count--) {
+						assert(p_target->tap);
+						data_scan_fields[0].out_value = (uint8_t const*)buffer;
+						jtag_add_dr_scan(p_target->tap, ARRAY_LEN(data_scan_fields), data_scan_fields, TAP_IDLE);
+						jtag_add_dr_scan(p_target->tap, 2, instr_fields[0], TAP_IDLE);
+						jtag_add_dr_scan(p_target->tap, 2, instr_fields[1], TAP_IDLE);
+						jtag_add_dr_scan(p_target->tap, 2, instr_fields[2], TAP_IDLE);
+						buffer += size;
+						error_code__update(p_target, jtag_execute_queue());
+						if ((DAP_OPSTATUS & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
+							LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
+							error_code__update(p_target, ERROR_TARGET_FAILURE);
+						}
 					}
-
-					/// Load data to work register
-					(void)exec__step(p_target, RV_CSRRW(p_data_reg->number, CSR_DBG_SCRATCH, zero));
-					advance_pc_counter += instr_step;
-					if (error_code__get(p_target) != ERROR_OK) {
-						break;
-					}
-
-					/// Exec store item from register to memory
-					(void)exec__step(p_target, store_OP);
-					advance_pc_counter += instr_step;
-					if (error_code__get(p_target) != ERROR_OK) {
-						break;
-					}
-
-					(void)exec__step(p_target, RV_ADDI(p_addr_reg->number, p_addr_reg->number, size));
-					advance_pc_counter += instr_step;
-					if (error_code__get(p_target) != ERROR_OK) {
-						break;
-					}
-
-					if (advance_pc_counter != 0) {
-						/// jump back to correct pc
-						(void)exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
-						advance_pc_counter = 0;
+				}
+#else
+				{
+					while ((error_code__get(p_target) == ERROR_OK) && count--) {
+						/// Set data to CSR
+						exec__set_csr_data(p_target, buf_get_u32(buffer, 0, 8 * size));
 						if (error_code__get(p_target) != ERROR_OK) {
 							break;
 						}
+
+						/// Load data to work register
+						(void)exec__step(p_target, OP_data_to_reg);
+						advance_pc_counter += instr_step;
+						if (error_code__get(p_target) != ERROR_OK) {
+							break;
+						}
+
+						/// Exec store item from register to memory
+						(void)exec__step(p_target, OP_reg_to_mem);
+						advance_pc_counter += instr_step;
+						if (error_code__get(p_target) != ERROR_OK) {
+							break;
+						}
+
+						(void)exec__step(p_target, OP_incr_add);
+						advance_pc_counter += instr_step;
+						if (error_code__get(p_target) != ERROR_OK) {
+							break;
+						}
+
+						if (advance_pc_counter != 0) {
+							/// jump back to correct pc
+							(void)exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+							advance_pc_counter = 0;
+							if (error_code__get(p_target) != ERROR_OK) {
+								break;
+							}
+						}
+						/// advance src/dst pointers
+#if 0
+						address += size;
+#endif
+						buffer += size;
+						assert(advance_pc_counter == 0);
 					}
-					/// advance src/dst pointers
-					address += size;
-					buffer += size;
-					assert(advance_pc_counter == 0);
+					/// end loop
 				}
-				/// end loop
+#endif
 			}
 		}
 	}
