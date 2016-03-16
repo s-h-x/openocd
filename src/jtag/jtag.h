@@ -115,9 +115,9 @@ struct scan_field {
 	uint8_t *in_value;
 
 	/** The value used to check the data scanned out. */
-	uint8_t *check_value;
+	const uint8_t *check_value;
 	/** The mask to go with check_value */
-	uint8_t *check_mask;
+	const uint8_t *check_mask;
 };
 
 struct jtag_tap {
@@ -370,7 +370,7 @@ void jtag_add_dr_scan(struct jtag_tap *tap, int num_fields,
 		const struct scan_field *fields, tap_state_t endstate);
 /** A version of jtag_add_dr_scan() that uses the check_value/mask fields */
 void jtag_add_dr_scan_check(struct jtag_tap *tap, int num_fields,
-		struct scan_field *fields, tap_state_t endstate);
+		const struct scan_field *fields, tap_state_t endstate);
 /**
  * Scan out the bits in ir scan mode.
  *

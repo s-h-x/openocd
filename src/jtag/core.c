@@ -57,7 +57,7 @@ static void jtag_add_scan_check(struct jtag_tap *active,
 		int in_num_fields,
 		const struct scan_field *in_fields,
 		tap_state_t state),
-		int in_num_fields, struct scan_field *in_fields, tap_state_t state);
+		int in_num_fields, const struct scan_field *in_fields, tap_state_t state);
 
 /**
  * The jtag_error variable is set when an error occurs while executing
@@ -422,7 +422,7 @@ static void jtag_add_scan_check(struct jtag_tap *active, void (*jtag_add_scan)(
 		int in_num_fields,
 		const struct scan_field *in_fields,
 		tap_state_t state),
-	int in_num_fields, struct scan_field *in_fields, tap_state_t state)
+	int in_num_fields, const struct scan_field *in_fields, tap_state_t state)
 {
 	jtag_add_scan(active, in_num_fields, in_fields, state);
 
@@ -440,7 +440,7 @@ static void jtag_add_scan_check(struct jtag_tap *active, void (*jtag_add_scan)(
 
 void jtag_add_dr_scan_check(struct jtag_tap *active,
 	int in_num_fields,
-	struct scan_field *in_fields,
+	const struct scan_field *in_fields,
 	tap_state_t state)
 {
 	if (jtag_verify)
