@@ -250,17 +250,17 @@ enum RISCV_CSR
 	CSR_timew = 0x901u,
 	/// Instructions-retired counter for RDINSTRET instruction
 	CSR_instretw = 0x902u,
-	/// Upper 32 bits of cycle, RV32I onl
+	/// Upper 32 bits of cycle, RV32I only
 	CSR_cyclehw = 0x980u,
 	/// Upper 32 bits of time, RV32I only
 	CSR_timehw = 0x981u,
-	/// Upper 32 bits of instret, RV32I only
+	/// Upper 32 bits of CSR_instretw, RV32I only
 	CSR_instrethw = 0x982u,
 	///@}
 
 	/// Hypervisor Trap Setup
 	///@{
-	/// Hypervisor status regist
+	/// Hypervisor status register
 	CSR_hstatus = 0x200u,
 	/// Hypervisor trap handler base address
 	CSR_htvec = 0x201u,
@@ -801,7 +801,7 @@ read_only_32_bits_regs(target const* const restrict p_target, enum TAP_IR_e ir)
 
 	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_RO_32) <= sizeof(uint32_t));
 	uint32_t const result = buf_get_u32(result_buffer, 0, TAP_LEN_DBG_STATUS);
-	LOG_DEBUG("drscan %s %d 0 ; # %8X", p_target->cmd_name, field.num_bits, result);
+	LOG_DEBUG("drscan %s %d 0 ; # %08X", p_target->cmd_name, field.num_bits, result);
 
 	error_code__prepend(p_target, old_err_code);
 	return result;
@@ -1283,8 +1283,10 @@ update_status(target* const restrict p_target)
 			break;
 		}
 	}
+#if 0
 	uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
 	LOG_DEBUG("pc_sample = 0x%08X", pc_sample);
+#endif
 	error_code__prepend(p_target, old_err_code);
 }
 
@@ -1592,6 +1594,13 @@ mstatus_FS__get(target* const restrict p_target)
 		if (error_code__get(p_target) == ERROR_OK) {
 		}
 	}
+	// restore temporary register
+	{
+		int const old_err_code = error_code__get_and_clear(p_target);
+		error_code__update(p_target, reg_x__store(p_wrk_reg));
+		error_code__prepend(p_target, old_err_code);
+		assert(!p_wrk_reg->dirty);
+	}
 	return ext_off;
 }
 #endif
@@ -1609,7 +1618,9 @@ reg_pc__get(reg* const restrict p_reg)
 	assert(p_target);
 #if USE_PC_FROM_PC_SAMPLE
 	uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
+#if 0
 	LOG_DEBUG("Updating cache from register %s <-- 0x%08X", p_reg->name, pc_sample);
+#endif
 	if (error_code__get(p_target) == ERROR_OK) {
 		reg__update_from_HW(p_reg, pc_sample);
 	} else {
