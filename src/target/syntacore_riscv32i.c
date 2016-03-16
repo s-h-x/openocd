@@ -2595,8 +2595,8 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 #if USE_PC_ADVMT_DSBL_BIT && USE_FAST_DR_SCANS
 				{
 					uint8_t DAP_OPSTATUS = DAP_OPSTATUS_OK;
-					uint8_t DAP_OPSTATUS_GOOD = DAP_OPSTATUS_OK;
-					uint8_t DAP_STATUS_MASK = DAP_OPSTATUS_MASK;
+					uint8_t const DAP_OPSTATUS_GOOD = DAP_OPSTATUS_OK;
+					uint8_t const DAP_STATUS_MASK = DAP_OPSTATUS_MASK;
 					uint8_t const data_wr_opcode[1] = {DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR};
 					scan_field const data_scan_opcode_field = {
 						.num_bits = TAP_LEN_DAP_CMD_OPCODE,
@@ -2625,7 +2625,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 						.check_value = &DAP_OPSTATUS_GOOD,
 						.check_mask = &DAP_STATUS_MASK,
 					};
-					scan_field instr_fields[3][2] =
+					scan_field const instr_fields[3][2] =
 					{
 						{
 							[0] = {
