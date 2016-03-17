@@ -54,6 +54,8 @@ Syntacore RISC-V target
 /// Required value should be less or equal to provided subversion.
 #define DBG_ID_SUBVERSION_MASK (0x000000FFu)
 
+#define WRITE_MEMORY_DATA_SCANS_BUFFER_SIZE (4096u)
+
 /// Utility macros
 ///@{
 #define STATIC_ASSERT(e) {enum {___my_static_assert = 1 / (!!(e)) };}
@@ -660,6 +662,16 @@ struct This_Arch
 {
 	int error_code;
 	uint8_t last_DAP_ctrl;
+	bool ir_select_using_cache;
+	bool dap_control_using_cache;
+	bool verify_dap_control;
+	bool use_pc_from_pc_sample;
+	bool check_pc_unchanged;
+	bool verify_hart_regtrans_write;
+	bool verify_core_regtrans_write;
+	bool resume_at_sw_breakpoint_emulates_saved_instruction;
+	bool use_pc_advmt_dsbl_bit;
+	bool use_fast_dr_scans;
 };
 typedef struct This_Arch This_Arch;
 
@@ -747,17 +759,19 @@ static void
 IR_select(target const* const restrict p_target, enum TAP_IR_e const new_instr)
 {
 	assert(p_target);
-#if IR_SELECT_USING_CACHE
-	assert(p_target->tap);
-	assert(p_target->tap->ir_length == TAP_IR_LEN);
-	/// Skip IR scan if IR is the same
-	if (buf_get_u32(p_target->tap->cur_instr, 0u, p_target->tap->ir_length) == new_instr) {
+	This_Arch const* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	if (p_arch->ir_select_using_cache) {
+		assert(p_target->tap);
+		assert(p_target->tap->ir_length == TAP_IR_LEN);
+		/// Skip IR scan if IR is the same
+		if (buf_get_u32(p_target->tap->cur_instr, 0u, p_target->tap->ir_length) == new_instr) {
 #if 0
-		LOG_DEBUG("IR %s resently selected %d", p_target->cmd_name, new_instr);
+			LOG_DEBUG("IR %s resently selected %d", p_target->cmd_name, new_instr);
 #endif
-		return;
+			return;
+		}
 	}
-#endif
 	/// or call real IR scan
 	IR_select_force(p_target, new_instr);
 }
@@ -886,35 +900,37 @@ static void
 DAP_CTRL_REG_verify(target const* const restrict p_target, uint8_t const set_dap_unit_group)
 {
 	assert(p_target);
-#if VERIFY_DAP_CONTROL
-	int const old_err_code = error_code__get_and_clear(p_target);
-	IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
-	if (error_code__get(p_target) != ERROR_OK) {
+	This_Arch const* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	if (p_arch->verify_dap_control) {
+		int const old_err_code = error_code__get_and_clear(p_target);
+		IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
+		if (error_code__get(p_target) != ERROR_OK) {
+			error_code__prepend(p_target, old_err_code);
+			return;
+		}
+		uint8_t get_dap_unit_group = 0;
+		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof get_dap_unit_group);
+		scan_field const field =
+		{
+			.num_bits = TAP_LEN_DAP_CTRL,
+			.in_value = &get_dap_unit_group,
+		};
+		// enforce jtag_execute_queue() to get get_dap_unit_group
+		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
+		error_code__update(p_target, jtag_execute_queue());
+		LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
+		if (error_code__get(p_target) != ERROR_OK) {
+			LOG_ERROR("JTAG error %d", error_code__get(p_target));
+			error_code__prepend(p_target, old_err_code);
+			return;
+		}
+		if (get_dap_unit_group != set_dap_unit_group) {
+			LOG_ERROR("Unit/Group verification error: set 0x%1X, but get 0x%1X!", set_dap_unit_group, get_dap_unit_group);
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+		}
 		error_code__prepend(p_target, old_err_code);
-		return;
 	}
-	uint8_t get_dap_unit_group = 0;
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof get_dap_unit_group);
-	scan_field const field =
-	{
-		.num_bits = TAP_LEN_DAP_CTRL,
-		.in_value = &get_dap_unit_group,
-	};
-	// enforce jtag_execute_queue() to get get_dap_unit_group
-	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-	error_code__update(p_target, jtag_execute_queue());
-	LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
-	if ( error_code__get(p_target) != ERROR_OK) {
-		LOG_ERROR("JTAG error %d", error_code__get(p_target));
-		error_code__prepend(p_target, old_err_code);
-		return;
-	}
-	if (get_dap_unit_group != set_dap_unit_group) {
-		LOG_ERROR("Unit/Group verification error: set 0x%1X, but get 0x%1X!", set_dap_unit_group, get_dap_unit_group);
-		error_code__update(p_target, ERROR_TARGET_FAILURE);
-	}
-	error_code__prepend(p_target, old_err_code);
-#endif
 }
 
 static uint32_t
@@ -984,11 +1000,13 @@ debug_controller__unlock(target const* const restrict p_target)
 	assert(p_target);
 	LOG_WARNING("Unlock !!!!");
 
-#if IR_SELECT_USING_CACHE
-	/// Force IR scan for safety
-	error_code__get_and_clear(p_target);
-	IR_select_force(p_target, TAP_INSTR_DAP_CTRL);
-#endif
+	This_Arch const* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	if (p_arch->ir_select_using_cache) {
+		/// Force IR scan for safety
+		error_code__get_and_clear(p_target);
+		IR_select_force(p_target, TAP_INSTR_DAP_CTRL);
+	}
 
 	static uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_UNIT_ID_HART_0, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_FGRP_HART_DBGCMD, 0, 1);
 	error_code__get_and_clear(p_target);
@@ -1037,15 +1055,15 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 
 	This_Arch* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
-#if DAP_CONTROL_USING_CACHE
-	if (p_arch->last_DAP_ctrl == set_dap_unit_group) {
+	if (p_arch->dap_control_using_cache) {
+		if (p_arch->last_DAP_ctrl == set_dap_unit_group) {
 #if 0
-		LOG_DEBUG("DAP_CTRL_REG of %s already 0x%1X", p_target->cmd_name, set_dap_unit_group);
+			LOG_DEBUG("DAP_CTRL_REG of %s already 0x%1X", p_target->cmd_name, set_dap_unit_group);
 #endif
-		return;
+			return;
+		}
+		LOG_DEBUG("DAP_CTRL_REG of %s reset to 0x%1X", p_target->cmd_name, set_dap_unit_group);
 	}
-	LOG_DEBUG("DAP_CTRL_REG of %s reset to 0x%1X", p_target->cmd_name, set_dap_unit_group);
-#endif
 	/// Invalidate last_DAP_ctrl
 	p_arch->last_DAP_ctrl = 0xFFu;
 
@@ -1149,6 +1167,33 @@ exec__step(target const* const restrict p_target, uint32_t instruction)
 		return 0xBADC0DE9u;
 	}
 	return DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC, instruction);
+}
+
+static inline uint32_t
+get_PC_to_check(target const* const restrict p_target)
+{
+	assert(p_target);
+	This_Arch const* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	if (p_arch->check_pc_unchanged && p_arch->use_pc_from_pc_sample) {
+		return HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
+	} else {
+		return 0xFFFFFFFFu;
+	}
+}
+
+static inline bool
+check_PC_unchanged(target const* const restrict p_target, uint32_t const pc_sample_1)
+{
+	assert(p_target);
+	This_Arch const* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	if (p_arch->check_pc_unchanged && p_arch->use_pc_from_pc_sample) {
+		uint32_t const pc_sample_2 = get_PC_to_check(p_target);
+		return pc_sample_2 == pc_sample_1;
+	} else {
+		return true;
+	}
 }
 /// @}
 
@@ -1400,9 +1445,7 @@ reg_x__get(reg* const restrict p_reg)
 		}
 	}
 
-#if CHECK_PC_UNCHANGED
-	uint32_t const pc_sample_1 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-#endif
+	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
 	if (error_code__get(p_target) == ERROR_OK) {
 		exec__setup(p_target);
 		if (error_code__get(p_target) != ERROR_OK) {
@@ -1424,10 +1467,7 @@ reg_x__get(reg* const restrict p_reg)
 		}
 		reg__update_from_HW(p_reg, value);
 	}
-#if CHECK_PC_UNCHANGED
-	uint32_t const pc_sample_2 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-	assert(pc_sample_2 == pc_sample_1);
-#endif
+	assert(check_PC_unchanged(p_target, pc_sample_1));
 	return error_code__get_and_clear(p_target);
 }
 
@@ -1442,9 +1482,7 @@ reg_x__store(reg* const restrict p_reg)
 		return error_code__get_and_clear(p_target);
 	}
 
-#if CHECK_PC_UNCHANGED
-	uint32_t const pc_sample_1 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-#endif
+	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
 	int advance_pc_counter = 0;
 
 	if (error_code__get(p_target) == ERROR_OK) {
@@ -1474,10 +1512,7 @@ reg_x__store(reg* const restrict p_reg)
 		assert(advance_pc_counter == 0);
 		assert(reg__check(p_reg));
 	}
-#if CHECK_PC_UNCHANGED
-	uint32_t const pc_sample_2 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-	assert(pc_sample_2 == pc_sample_1);
-#endif
+	assert(check_PC_unchanged(p_target, pc_sample_1));
 	return error_code__get_and_clear(p_target);
 }
 
@@ -1617,64 +1652,66 @@ reg_pc__get(reg* const restrict p_reg)
 	/// Find temporary GP register
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
-#if USE_PC_FROM_PC_SAMPLE
-	uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
+	This_Arch const* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	if (p_arch->use_pc_from_pc_sample) {
+		uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
 #if 0
-	LOG_DEBUG("Updating cache from register %s <-- 0x%08X", p_reg->name, pc_sample);
+		LOG_DEBUG("Updating cache from register %s <-- 0x%08X", p_reg->name, pc_sample);
 #endif
-	if (error_code__get(p_target) == ERROR_OK) {
-		reg__update_from_HW(p_reg, pc_sample);
-	} else {
-		reg__invalidate(p_reg);
-	}
-#else
-	update_status(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__get_and_clear(p_target);
-	}
-	if (p_target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
-		return error_code__get_and_clear(p_target);
-	}
-
-	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
-	assert(p_wrk_reg);
-
-	{
-		exec__setup(p_target);
-		int advance_pc_counter = 0;
 		if (error_code__get(p_target) == ERROR_OK) {
-			/// Copy pc to temporary register by AUIPC instruction
-			(void)exec__step(p_target, RV_AUIPC(p_wrk_reg->number, 0));
-			advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+			reg__update_from_HW(p_reg, pc_sample);
+		} else {
+			reg__invalidate(p_reg);
+		}
+	} else {
+		update_status(p_target);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__get_and_clear(p_target);
+		}
+		if (p_target->state != TARGET_HALTED) {
+			LOG_ERROR("Target not halted");
+			error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
+			return error_code__get_and_clear(p_target);
+		}
+
+		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+		assert(p_wrk_reg);
+
+		{
+			exec__setup(p_target);
+			int advance_pc_counter = 0;
 			if (error_code__get(p_target) == ERROR_OK) {
-				/// and store temporary register to CSR_DBG_SCRATCH CSR.
-				(void)exec__step(p_target, RV_CSRRW(zero, CSR_DBG_SCRATCH, p_wrk_reg->number));
+				/// Copy pc to temporary register by AUIPC instruction
+				(void)exec__step(p_target, RV_AUIPC(p_wrk_reg->number, 0));
 				advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 				if (error_code__get(p_target) == ERROR_OK) {
-					/// Correct pc by jump 2 instructions back and get previous command result.
-					uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
-					advance_pc_counter = 0;
+					/// and store temporary register to CSR_DBG_SCRATCH CSR.
+					(void)exec__step(p_target, RV_CSRRW(zero, CSR_DBG_SCRATCH, p_wrk_reg->number));
+					advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 					if (error_code__get(p_target) == ERROR_OK) {
-						assert(advance_pc_counter == 0);
-						reg__update_from_HW(p_reg, value);
-						uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-						LOG_DEBUG("pc_sample = 0x%08X", pc_sample);
+						/// Correct pc by jump 2 instructions back and get previous command result.
+						uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+						advance_pc_counter = 0;
+						if (error_code__get(p_target) == ERROR_OK) {
+							assert(advance_pc_counter == 0);
+							reg__update_from_HW(p_reg, value);
+							uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
+							LOG_DEBUG("pc_sample = 0x%08X", pc_sample);
+						}
 					}
 				}
 			}
 		}
-	}
 
-	// restore temporary register
+		// restore temporary register
 	{
 		int const old_err_code = error_code__get_and_clear(p_target);
 		error_code__update(p_target, reg_x__store(p_wrk_reg));
 		error_code__prepend(p_target, old_err_code);
 		assert(!p_wrk_reg->dirty);
 	}
-#endif
+	}
 	return error_code__get_and_clear(p_target);
 }
 
@@ -1769,9 +1806,7 @@ reg_f__get(reg* const restrict p_reg)
 	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
 	assert(p_wrk_reg);
 
-#if CHECK_PC_UNCHANGED
-	uint32_t const pc_sample_1 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-#endif
+	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
 	if (error_code__get(p_target) == ERROR_OK) {
 		exec__setup(p_target);
 		int advance_pc_counter = 0;
@@ -1796,10 +1831,7 @@ reg_f__get(reg* const restrict p_reg)
 		}
 	}
 
-#if CHECK_PC_UNCHANGED
-	uint32_t const pc_sample_2 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-	assert(pc_sample_2 == pc_sample_1);
-#endif
+	assert(check_PC_unchanged(p_target, pc_sample_1));
 	// restore temporary register
 	{
 		int const old_err_code = error_code__get_and_clear(p_target);
@@ -1840,9 +1872,7 @@ reg_f__set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
 	assert(p_wrk_reg);
 
-#if CHECK_PC_UNCHANGED
-	uint32_t const pc_sample_1 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-#endif
+	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
 	if (error_code__get(p_target) == ERROR_OK) {
 		exec__setup(p_target);
 		int advance_pc_counter = 0;
@@ -1872,10 +1902,7 @@ reg_f__set(reg* const restrict p_reg, uint8_t* const restrict buf)
 		}
 	}
 
-#if CHECK_PC_UNCHANGED
-	uint32_t const pc_sample_2 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-	assert(pc_sample_2 == pc_sample_1);
-#endif
+	assert(check_PC_unchanged(p_target, pc_sample_1));
 	// restore temporary register
 	int const old_err_code = error_code__get_and_clear(p_target);
 	error_code__update(p_target, reg_x__store(p_wrk_reg));
@@ -1922,17 +1949,19 @@ set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
 		return;
 	}
 
-#if VERIFY_HART_REGTRANS_WRITE
-	uint32_t const get_value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return;
+	This_Arch const* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	if (p_arch->verify_hart_regtrans_write) {
+		uint32_t const get_value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return;
+		}
+		if (get_value != set_value) {
+			LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value 0x%08X, but re-read value is 0x%08X", set_value, get_value);
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+			return;
+		}
 	}
-	if (get_value != set_value) {
-		LOG_ERROR("Write DBGC_HART_REGS_DMODE_ENBL with value 0x%08X, but re-read value is 0x%08X", set_value, get_value);
-		error_code__update(p_target, ERROR_TARGET_FAILURE);
-		return;
-	}
-#endif
 }
 
 static int
@@ -1960,8 +1989,9 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 	if (handle_breakpoints) {
 		dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 
-#if RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION
-		if (current) {
+		This_Arch const* const restrict p_arch = p_target->arch_info;
+		assert(p_arch);
+		if (p_arch->resume_at_sw_breakpoint_emulates_saved_instruction && current) {
 			// Find breakpoint for current instruction
 			error_code__update(p_target, reg_pc__get(p_pc));
 			assert(p_pc->value);
@@ -1996,7 +2026,6 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 				}
 			}
 		}
-#endif
 	} else {
 		dmode_enabled &= !BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 	}
@@ -2052,8 +2081,9 @@ reset__set(target* const restrict p_target, bool const active)
 		return error_code__get_and_clear(p_target);
 	}
 
-#if VERIFY_CORE_REGTRANS_WRITE
-	{
+	This_Arch const* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	if (p_arch->verify_core_regtrans_write) {
 		// double check
 		uint32_t const get_new_value2 = core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
 		if (error_code__get(p_target) != ERROR_OK) {
@@ -2065,7 +2095,6 @@ reset__set(target* const restrict p_target, bool const active)
 			return error_code__get_and_clear(p_target);
 		}
 	}
-#endif
 
 	update_status(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
@@ -2227,6 +2256,16 @@ this_init_target(struct command_context *cmd_ctx, target* const restrict p_targe
 	This_Arch the_arch = {
 		.error_code = ERROR_OK,
 		.last_DAP_ctrl = 0xFF,
+		.ir_select_using_cache = !!(IR_SELECT_USING_CACHE),
+		.dap_control_using_cache = !!(DAP_CONTROL_USING_CACHE),
+		.verify_dap_control = !!(VERIFY_DAP_CONTROL),
+		.use_pc_from_pc_sample = !!(USE_PC_FROM_PC_SAMPLE),
+		.check_pc_unchanged = !!(CHECK_PC_UNCHANGED) && !!(USE_PC_FROM_PC_SAMPLE),
+		.verify_hart_regtrans_write = !!(VERIFY_HART_REGTRANS_WRITE),
+		.verify_core_regtrans_write = !!(VERIFY_CORE_REGTRANS_WRITE),
+		.resume_at_sw_breakpoint_emulates_saved_instruction = !!(RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION),
+		.use_pc_advmt_dsbl_bit = !!(USE_PC_ADVMT_DSBL_BIT),
+		.use_fast_dr_scans = !!(USE_FAST_DR_SCANS),
 	};
 	This_Arch* p_arch_info = calloc(1, sizeof(This_Arch));
 	*p_arch_info = the_arch;
@@ -2448,9 +2487,7 @@ this_read_memory(target* const restrict p_target, uint32_t address, uint32_t con
 	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
 	assert(p_wrk_reg);
 
-#if CHECK_PC_UNCHANGED
-	uint32_t const pc_sample_1 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-#endif
+	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
 	if (error_code__get(p_target) == ERROR_OK) {
 		/// Define opcode for load item to register
 		uint32_t const load_OP =
@@ -2507,10 +2544,7 @@ this_read_memory(target* const restrict p_target, uint32_t address, uint32_t con
 		}
 	}
 
-#if CHECK_PC_UNCHANGED
-	uint32_t const pc_sample_2 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-	assert(pc_sample_2 == pc_sample_1);
-#endif
+	assert(check_PC_unchanged(p_target, pc_sample_1));
 	/// restore temporary register
 	{
 		int const old_err_code = error_code__get_and_clear(p_target);
@@ -2571,15 +2605,13 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 		/*size == 1*/ RV_SB(p_data_reg->number, p_addr_reg->number, 0);
 	uint32_t const OP_incr_add = RV_ADDI(p_addr_reg->number, p_addr_reg->number, size);
 
-#if CHECK_PC_UNCHANGED
-	uint32_t const pc_sample_1 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-#endif
-#if USE_PC_ADVMT_DSBL_BIT
-	int const instr_step = 0;
-	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
-#else
-	int const instr_step = NUM_BITS_TO_SIZE(ILEN);
-#endif
+	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+	This_Arch const* const restrict p_arch = p_target->arch_info;
+	assert(p_arch);
+	int const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0 : NUM_BITS_TO_SIZE(ILEN);
+	if (p_arch->use_pc_advmt_dsbl_bit) {
+		HART_REGTRANS_write(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
+	}
 	if (error_code__get(p_target) == ERROR_OK) {
 		/// Setup exec operations mode
 		exec__setup(p_target);
@@ -2592,8 +2624,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 				/// Load address to work register
 				(void)exec__step(p_target, RV_CSRRW(p_addr_reg->number, CSR_DBG_SCRATCH, zero));
 				advance_pc_counter += instr_step;
-#if USE_PC_ADVMT_DSBL_BIT && USE_FAST_DR_SCANS
-				{
+				if (p_arch->use_pc_advmt_dsbl_bit && p_arch->use_fast_dr_scans) {
 					uint8_t DAP_OPSTATUS = DAP_OPSTATUS_OK;
 					uint8_t const DAP_OPSTATUS_GOOD = DAP_OPSTATUS_OK;
 					uint8_t const DAP_STATUS_MASK = DAP_OPSTATUS_MASK;
@@ -2649,11 +2680,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 							[1] = instr_scan_opcode_field,
 						},
 					};
-					enum
-					{
-						data_scan_buffer_size = 1024u
-					};
-					scan_field data_scan_buffer[data_scan_buffer_size][2];
+					scan_field data_scan_buffer[WRITE_MEMORY_DATA_SCANS_BUFFER_SIZE][2];
 					unsigned data_scan_buffer_iterator = 0;
 					while (error_code__get(p_target) == ERROR_OK && count--) {
 						assert(p_target->tap);
@@ -2665,7 +2692,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 						jtag_add_dr_scan_check(p_target->tap, 2, instr_fields[1], TAP_IDLE);
 						jtag_add_dr_scan_check(p_target->tap, 2, instr_fields[2], TAP_IDLE);
 						buffer += size;
-						data_scan_buffer_iterator = (data_scan_buffer_iterator + 1) % data_scan_buffer_size;
+						data_scan_buffer_iterator = (data_scan_buffer_iterator + 1) % WRITE_MEMORY_DATA_SCANS_BUFFER_SIZE;
 						if (data_scan_buffer_iterator == 0 || count == 0) {
 							error_code__update(p_target, jtag_execute_queue());
 							if ((DAP_OPSTATUS & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
@@ -2674,9 +2701,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 							}
 						}
 					}
-				}
-#else
-				{
+				} else {
 					while ((error_code__get(p_target) == ERROR_OK) && count--) {
 						/// Set data to CSR
 						exec__set_csr_data(p_target, buf_get_u32(buffer, 0, 8 * size));
@@ -2721,18 +2746,15 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 					}
 					/// end loop
 				}
-#endif
 			}
 		}
 	}
 
-#if USE_PC_ADVMT_DSBL_BIT
-	HART_REGTRANS_write(p_target, DBGC_HART_REGS_DBG_CTRL, 0u);
-#endif
-#if CHECK_PC_UNCHANGED
-	uint32_t const pc_sample_2 = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-	assert(pc_sample_2 == pc_sample_1);
-#endif
+	if (p_arch->use_pc_advmt_dsbl_bit) {
+		HART_REGTRANS_write(p_target, DBGC_HART_REGS_DBG_CTRL, 0u);
+	}
+
+	assert(check_PC_unchanged(p_target, pc_sample_1));
 
 	/// restore temporary registers
 	{
