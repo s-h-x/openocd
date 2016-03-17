@@ -54,8 +54,6 @@ Syntacore RISC-V target
 /// Required value should be less or equal to provided subversion.
 #define DBG_ID_SUBVERSION_MASK (0x000000FFu)
 
-#define WRITE_MEMORY_DATA_SCANS_BUFFER_SIZE (4096u)
-
 /// Utility macros
 ///@{
 #define STATIC_ASSERT(e) {enum {___my_static_assert = 1 / (!!(e)) };}
@@ -777,7 +775,6 @@ IR_select(target const* const restrict p_target, enum TAP_IR_e const new_instr)
 	/// or call real IR scan
 	IR_select_force(p_target, new_instr);
 }
-
 
 /** @brief Common method to retrieve data of read-only 32-bits TAPs
 
@@ -2638,7 +2635,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 						.check_value = &DAP_OPSTATUS_GOOD,
 						.check_mask = &DAP_STATUS_MASK,
 					};
-					scan_field const data_scan_fields[2] =
+					scan_field data_scan_fields[2] =
 					{
 						[0] = {
 							.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,
@@ -2682,26 +2679,19 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 							[1] = instr_scan_opcode_field,
 						},
 					};
-					scan_field data_scan_buffer[WRITE_MEMORY_DATA_SCANS_BUFFER_SIZE][2];
-					unsigned data_scan_buffer_iterator = 0;
 					while (error_code__get(p_target) == ERROR_OK && count--) {
 						assert(p_target->tap);
-						data_scan_buffer[data_scan_buffer_iterator][0] = data_scan_fields[0];
-						data_scan_buffer[data_scan_buffer_iterator][0].out_value = (uint8_t const*)buffer;
-						data_scan_buffer[data_scan_buffer_iterator][1] = data_scan_fields[1];
-						jtag_add_dr_scan_check(p_target->tap, ARRAY_LEN(data_scan_fields), data_scan_buffer[data_scan_buffer_iterator], TAP_IDLE);
+						data_scan_fields[0].out_value = (uint8_t const*)buffer;
+						jtag_add_dr_scan_check(p_target->tap, ARRAY_LEN(data_scan_fields), data_scan_fields, TAP_IDLE);
 						jtag_add_dr_scan_check(p_target->tap, 2, instr_fields[0], TAP_IDLE);
 						jtag_add_dr_scan_check(p_target->tap, 2, instr_fields[1], TAP_IDLE);
 						jtag_add_dr_scan_check(p_target->tap, 2, instr_fields[2], TAP_IDLE);
 						buffer += size;
-						data_scan_buffer_iterator = (data_scan_buffer_iterator + 1) % WRITE_MEMORY_DATA_SCANS_BUFFER_SIZE;
-						if (data_scan_buffer_iterator == 0 || count == 0) {
-							error_code__update(p_target, jtag_execute_queue());
-							if ((DAP_OPSTATUS & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
-								LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
-								error_code__update(p_target, ERROR_TARGET_FAILURE);
-							}
-						}
+					}
+					error_code__update(p_target, jtag_execute_queue());
+					if ((DAP_OPSTATUS & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
+						LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
+						error_code__update(p_target, ERROR_TARGET_FAILURE);
 					}
 				} else {
 					while ((error_code__get(p_target) == ERROR_OK) && count--) {
