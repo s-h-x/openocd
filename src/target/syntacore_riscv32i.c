@@ -744,10 +744,12 @@ IR_select_force(target const* const restrict p_target, enum TAP_IR_e const new_i
 	};
 	jtag_add_ir_scan(p_target->tap, &field, TAP_IDLE);
 	LOG_DEBUG("irscan %s %d", p_target->cmd_name, new_instr);
+#if 0
 	// force jtag_execute_queue() here because field reference local variable
 	if (error_code__update(p_target, jtag_execute_queue()) != ERROR_OK) {
 		LOG_ERROR("Error %d", error_code__get(p_target));
 	}
+#endif
 }
 
 /** @brief Cached version of instruction register
