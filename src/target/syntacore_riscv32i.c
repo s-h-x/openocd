@@ -26,23 +26,24 @@ Syntacore RISC-V target
 #include <limits.h>
 
 /// Don't make irscan if IR uis the same
-#define IR_SELECT_USING_CACHE 1
+#define USE_IR_SELECT_CACHE 0
 /// Don't write DAP_CONTROL if it is the same 
-#define DAP_CONTROL_USING_CACHE 1
+#define USE_DAP_CONTROL_CACHE 0
 /// Verify value of DAP_CONTROL after write
-#define VERIFY_DAP_CONTROL 1
+#define USE_VERIFY_DAP_CONTROL 1
 /// Using PC_SAMPLE register instead AUIPC/CSRRW chain of instruction 
 #define USE_PC_FROM_PC_SAMPLE 1
 /// Verify values of HART REGTRANS after write
-#define VERIFY_HART_REGTRANS_WRITE 1
+#define USE_VERIFY_HART_REGTRANS_WRITE 1
 /// Verify values of CORE REGTRANS after write
-#define VERIFY_CORE_REGTRANS_WRITE 1
+#define USE_VERIFY_CORE_REGTRANS_WRITE 1
 /// If first instruction in normal resume replaced by breakpoint opcode,
 /// then emulate first step by execution of stored opcode with debug facilities
-#define RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION 1
+#define USE_RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION 1
 #define USE_PC_ADVMT_DSBL_BIT 1
-#define USE_FAST_DR_SCANS 1
-#define CHECK_PC_UNCHANGED USE_PC_FROM_PC_SAMPLE
+#define USE_QUEUING_FOR_DR_SCANS 1
+#define USE_CHECK_PC_UNCHANGED USE_PC_FROM_PC_SAMPLE
+#define USE_LOW_LEVEL_UNLOCK 1
 /// TAP IDCODE expected
 #define EXPECTED_IDCODE (0xC0DEDEB1u)
 
@@ -658,40 +659,43 @@ typedef struct scan_field scan_field;
 typedef struct target target;
 typedef struct reg reg;
 
-struct This_Arch
+struct sc_rv32i__Arch
 {
 	int error_code;
 	uint8_t last_DAP_ctrl;
-	bool ir_select_using_cache;
-	bool dap_control_using_cache;
-	bool verify_dap_control;
+	bool use_ir_select_cache;
+	bool use_dap_control_cache;
+	bool use_verify_dap_control;
 	bool use_pc_from_pc_sample;
-	bool check_pc_unchanged;
-	bool verify_hart_regtrans_write;
-	bool verify_core_regtrans_write;
-	bool resume_at_sw_breakpoint_emulates_saved_instruction;
+	bool use_check_pc_unchanged;
+	bool use_verify_hart_regtrans_write;
+	bool use_verify_core_regtrans_write;
+	bool use_resume_at_sw_breakpoint_emulates_saved_instruction;
 	bool use_pc_advmt_dsbl_bit;
-	bool use_fast_dr_scans;
+	bool use_queuing_for_dr_scans;
+	bool use_low_level_unlock;
 };
-typedef struct This_Arch This_Arch;
+typedef struct sc_rv32i__Arch sc_rv32i__Arch;
 enum
 {
 	DAP_CTRL_INVALID_CODE = 0xFFu,
 };
 
-static This_Arch const initial_arch = {
+static sc_rv32i__Arch const initial_arch = {
 	.error_code = ERROR_OK,
 	.last_DAP_ctrl = DAP_CTRL_INVALID_CODE,
-	.ir_select_using_cache = !!(IR_SELECT_USING_CACHE),
-	.dap_control_using_cache = !!(DAP_CONTROL_USING_CACHE),
-	.verify_dap_control = !!(VERIFY_DAP_CONTROL),
+
+	.use_ir_select_cache = !!(USE_IR_SELECT_CACHE),
+	.use_dap_control_cache = !!(USE_DAP_CONTROL_CACHE),
+	.use_verify_dap_control = !!(USE_VERIFY_DAP_CONTROL),
 	.use_pc_from_pc_sample = !!(USE_PC_FROM_PC_SAMPLE),
-	.check_pc_unchanged = !!(CHECK_PC_UNCHANGED) && !!(USE_PC_FROM_PC_SAMPLE),
-	.verify_hart_regtrans_write = !!(VERIFY_HART_REGTRANS_WRITE),
-	.verify_core_regtrans_write = !!(VERIFY_CORE_REGTRANS_WRITE),
-	.resume_at_sw_breakpoint_emulates_saved_instruction = !!(RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION),
+	.use_check_pc_unchanged = !!(USE_CHECK_PC_UNCHANGED) && !!(USE_PC_FROM_PC_SAMPLE),
+	.use_verify_hart_regtrans_write = !!(USE_VERIFY_HART_REGTRANS_WRITE),
+	.use_verify_core_regtrans_write = !!(USE_VERIFY_CORE_REGTRANS_WRITE),
+	.use_resume_at_sw_breakpoint_emulates_saved_instruction = !!(USE_RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION),
 	.use_pc_advmt_dsbl_bit = !!(USE_PC_ADVMT_DSBL_BIT),
-	.use_fast_dr_scans = !!(USE_FAST_DR_SCANS),
+	.use_queuing_for_dr_scans = !!(USE_QUEUING_FOR_DR_SCANS),
+	.use_low_level_unlock = !!(USE_LOW_LEVEL_UNLOCK),
 };
 
 static uint8_t const DAP_OPSTATUS_GOOD = DAP_OPSTATUS_OK;
@@ -703,7 +707,7 @@ static int
 error_code__get(target const* const restrict p_target)
 {
 	assert(p_target);
-	This_Arch const* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
 	return p_arch->error_code;
 }
@@ -712,7 +716,7 @@ static int
 error_code__update(target const* const restrict p_target, int const a_error_code)
 {
 	assert(p_target);
-	This_Arch* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
 	if (ERROR_OK == error_code__get(p_target) && ERROR_OK != a_error_code) {
 		LOG_DEBUG("Set new error code: %d", a_error_code);
@@ -725,7 +729,7 @@ static int
 error_code__get_and_clear(target const* const restrict p_target)
 {
 	assert(p_target);
-	This_Arch* const const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch* const const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
 	int const result = error_code__get(p_target);
 	p_arch->error_code = ERROR_OK;
@@ -759,8 +763,7 @@ IR_select_force(target const* const restrict p_target, enum TAP_IR_e const new_i
 	assert(p_target->tap->ir_length == TAP_IR_LEN);
 	uint8_t out_buffer[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {};
 	buf_set_u32(out_buffer, 0, TAP_IR_LEN, new_instr);
-	scan_field field =
-	{
+	scan_field field = {
 		.num_bits = p_target->tap->ir_length,
 		.out_value = out_buffer,
 	};
@@ -783,9 +786,9 @@ static void
 IR_select(target const* const restrict p_target, enum TAP_IR_e const new_instr)
 {
 	assert(p_target);
-	This_Arch const* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->ir_select_using_cache) {
+	if (p_arch->use_ir_select_cache) {
 		assert(p_target->tap);
 		assert(p_target->tap->ir_length == TAP_IR_LEN);
 		/// Skip IR scan if IR is the same
@@ -913,7 +916,7 @@ DAP_CTRL_REG_set_force(target const* const restrict p_target, uint8_t const set_
 		.check_mask = &DAP_STATUS_MASK,
 	};
 
-	This_Arch* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
 
 	/// set invalid cache value
@@ -939,9 +942,9 @@ static void
 DAP_CTRL_REG_verify(target const* const restrict p_target, uint8_t const set_dap_unit_group)
 {
 	assert(p_target);
-	This_Arch const* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->verify_dap_control) {
+	if (p_arch->use_verify_dap_control) {
 		int const old_err_code = error_code__get_and_clear(p_target);
 		IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
 		if (error_code__get(p_target) != ERROR_OK) {
@@ -1040,37 +1043,99 @@ debug_controller__unlock(target const* const restrict p_target)
 	assert(p_target);
 	LOG_WARNING("Unlock !!!!");
 
-	This_Arch const* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->ir_select_using_cache) {
-		/// Force IR scan for safety
+
+	uint32_t lock_context = 0xBADC0DEAu;
+	if (p_arch->use_low_level_unlock) {
+		assert(p_target->tap);
+		assert(p_target->tap->ir_length == TAP_IR_LEN);
+
+		{
+			static uint8_t const ir_out_buffer_DAP_CTRL[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {TAP_INSTR_DAP_CTRL};
+			/// @todo jtag_add_ir_scan need non-const scan_field
+			static scan_field ir_field_DAP_CTRL = {.num_bits = TAP_IR_LEN, .out_value = ir_out_buffer_DAP_CTRL};
+			LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_INSTR_DAP_CTRL);
+			jtag_add_ir_scan(p_target->tap, &ir_field_DAP_CTRL, TAP_IDLE);
+		}
+
+	{
+		static uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_UNIT_ID_HART_0, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_FGRP_HART_DBGCMD, 0, 1);
+		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof set_dap_unit_group);
+		static scan_field const dr_field_DAP_CTRL = {.num_bits = TAP_LEN_DAP_CTRL, .out_value = &set_dap_unit_group};
+		p_arch->last_DAP_ctrl = DAP_CTRL_INVALID_CODE;
+		LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, dr_field_DAP_CTRL.num_bits, set_dap_unit_group);
+		jtag_add_dr_scan(p_target->tap, 1, &dr_field_DAP_CTRL, TAP_IDLE);
+	}
+
+	{
+		static uint8_t const ir_out_buffer_DAP_CMD[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {TAP_INSTR_DAP_CMD};
+		static scan_field ir_field_DAP_CMD = {.num_bits = TAP_IR_LEN, .out_value = ir_out_buffer_DAP_CMD};
+		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_INSTR_DAP_CMD);
+		jtag_add_ir_scan(p_target->tap, &ir_field_DAP_CMD, TAP_IDLE);
+	}
+
+	{
+		static uint32_t const dap_opcode_ext_UNLOCK = 0xF0F0A5A5u;
+		static uint8_t const dap_opcode_UNLOCK = DBGC_DAP_OPCODE_DBGCMD_UNLOCK;
+		scan_field const dr_fields_UNLOCK[2] = {
+			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT, .out_value = (uint8_t const*)(&dap_opcode_ext_UNLOCK), .in_value = (uint8_t*)(&lock_context)},
+			{.num_bits = TAP_LEN_DAP_CMD_OPCODE, .out_value = &dap_opcode_UNLOCK}
+		};
+		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name, dr_fields_UNLOCK[0].num_bits, dap_opcode_ext_UNLOCK, dr_fields_UNLOCK[1].num_bits, dap_opcode_UNLOCK);
+		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(dr_fields_UNLOCK), dr_fields_UNLOCK, TAP_IDLE);
+		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name, dr_fields_UNLOCK[0].num_bits, dap_opcode_ext_UNLOCK, dr_fields_UNLOCK[1].num_bits, dap_opcode_UNLOCK);
+		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(dr_fields_UNLOCK), dr_fields_UNLOCK, TAP_IDLE);
+	}
+
+	{
+		static uint8_t const ir_out_buffer_DBG_STATUS[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {TAP_INSTR_DBG_STATUS};
+		static scan_field ir_field_DBG_STATUS = {.num_bits = TAP_IR_LEN, .out_value = ir_out_buffer_DBG_STATUS};
+		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_INSTR_DBG_STATUS);
+		jtag_add_ir_scan(p_target->tap, &ir_field_DBG_STATUS, TAP_IDLE);
+	}
+
+	uint32_t status = 0xBADC0DEBu;
+	{
+		scan_field const dr_field_DBG_STATUS = {.num_bits = TAP_LEN_DBG_STATUS, .out_value = (uint8_t const*)(&status), .in_value = (uint8_t*)(&status)};
+		LOG_DEBUG("drscan %s %d 0x%08X", p_target->cmd_name, dr_field_DBG_STATUS.num_bits, status);
+		jtag_add_dr_scan(p_target->tap, 1, &dr_field_DBG_STATUS, TAP_IDLE);
+	}
+
+	// enforse jtag_execute_queue() to get values
+	bool const ok = (error_code__update(p_target, jtag_execute_queue()) == ERROR_OK) && ((status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) == 0);
+	LOG_DEBUG("%s context=0x%08X, status=0x%08X", ok ? "Unlock succsessful!" : "Unlock unsuccsessful!", lock_context, status);
+	} else {
+		if (p_arch->use_ir_select_cache) {
+			/// Force IR scan for safety
+			error_code__get_and_clear(p_target);
+			IR_select_force(p_target, TAP_INSTR_DAP_CTRL);
+		}
+
+		static uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_UNIT_ID_HART_0, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_FGRP_HART_DBGCMD, 0, 1);
 		error_code__get_and_clear(p_target);
-		IR_select_force(p_target, TAP_INSTR_DAP_CTRL);
+		DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
+
+		// First write, try to unlock debug controller
+		error_code__get_and_clear(p_target);
+		(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_UNLOCK, 0xFEEDBEEFu);
+
+		// Second write, once more try to unlock debug controller and get lock_context
+		error_code__get_and_clear(p_target);
+		lock_context = DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_UNLOCK, 0xBEEFFEEDu);
+		LOG_WARNING("Lock context: 0x%08X", lock_context);
+
+		/// Check that unlock was successful
+		error_code__get_and_clear(p_target);
+		uint32_t const core_status = DBG_STATUS_get(p_target);
+		if ((error_code__get_and_clear(p_target) == ERROR_OK) && ((core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) == 0)) {
+			LOG_DEBUG("Unlock succsess: 0x%08X", lock_context);
+			return lock_context;
+		}
+
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+		LOG_ERROR("Locked: 0x%08X", lock_context);
 	}
-
-	static uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_UNIT_ID_HART_0, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_FGRP_HART_DBGCMD, 0, 1);
-	error_code__get_and_clear(p_target);
-	DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
-
-	// First write, try to unlock debug controller
-	error_code__get_and_clear(p_target);
-	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_UNLOCK, 0xFEEDBEEFu);
-
-	// Second write, once more try to unlock debug controller and get lock_context
-	error_code__get_and_clear(p_target);
-	uint32_t const lock_context = DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_UNLOCK, 0xBEEFFEEDu);
-	LOG_WARNING("Lock context: 0x%08X", lock_context);
-
-	/// Check that unlock was successful
-	error_code__get_and_clear(p_target);
-	uint32_t const core_status = DBG_STATUS_get(p_target);
-	if ((error_code__get_and_clear(p_target) == ERROR_OK) && ((core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) == 0)) {
-		LOG_DEBUG("Unlock succsess: 0x%08X", lock_context);
-		return lock_context;
-	}
-
-	error_code__update(p_target, ERROR_TARGET_FAILURE);
-	LOG_ERROR("Locked: 0x%08X", lock_context);
 	return lock_context;
 }
 
@@ -1093,15 +1158,15 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 		0,
 		TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1);
 
-	This_Arch* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->dap_control_using_cache) {
+	if (p_arch->use_dap_control_cache) {
 		if (p_arch->last_DAP_ctrl == set_dap_unit_group) {
 #if 0
 			LOG_DEBUG("DAP_CTRL_REG of %s already 0x%1X", p_target->cmd_name, set_dap_unit_group);
 #endif
 			return;
-}
+		}
 		LOG_DEBUG("DAP_CTRL_REG of %s reset to 0x%1X", p_target->cmd_name, set_dap_unit_group);
 	}
 
@@ -1214,9 +1279,9 @@ static inline uint32_t
 get_PC_to_check(target const* const restrict p_target)
 {
 	assert(p_target);
-	This_Arch const* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->check_pc_unchanged && p_arch->use_pc_from_pc_sample) {
+	if (p_arch->use_check_pc_unchanged && p_arch->use_pc_from_pc_sample) {
 		return HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
 	} else {
 		return 0xFFFFFFFFu;
@@ -1227,9 +1292,9 @@ static inline void
 check_PC_unchanged(target const* const restrict p_target, uint32_t const pc_sample_1)
 {
 	assert(p_target);
-	This_Arch const* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->check_pc_unchanged && p_arch->use_pc_from_pc_sample) {
+	if (p_arch->use_check_pc_unchanged && p_arch->use_pc_from_pc_sample) {
 		uint32_t const pc_sample_2 = get_PC_to_check(p_target);
 		if (pc_sample_2 != pc_sample_1) {
 			LOG_ERROR("pc changed from 0x%08X to 0x%08X", pc_sample_1, pc_sample_2);
@@ -1376,7 +1441,7 @@ update_status(target* const restrict p_target)
 	LOG_DEBUG("pc_sample = 0x%08X", pc_sample);
 #endif
 	error_code__prepend(p_target, old_err_code);
-		}
+}
 
 /// GP registers accessors
 ///@{
@@ -1589,14 +1654,14 @@ reg_x__set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	if (p_reg->valid && (buf_get_u32(p_reg->value, 0, XLEN) == value)) {
 		// skip same value
 		return error_code__clear(p_target);
-}
+	}
 #endif
 	assert(p_reg->value);
 	buf_set_u32(p_reg->value, 0, XLEN, value);
 
 	/// store dirty register data to HW
 	return reg_x__store(p_reg);
-	}
+}
 
 static int
 reg_x0__get(reg* const restrict p_reg)
@@ -1706,7 +1771,7 @@ reg_pc__get(reg* const restrict p_reg)
 	/// Find temporary GP register
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
-	This_Arch const* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
 	if (p_arch->use_pc_from_pc_sample) {
 		uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
@@ -1718,7 +1783,7 @@ reg_pc__get(reg* const restrict p_reg)
 		} else {
 			reg__invalidate(p_reg);
 		}
-} else {
+	} else {
 		LOG_DEBUG("update_status");
 		update_status(p_target);
 		if (error_code__get(p_target) != ERROR_OK) {
@@ -2001,9 +2066,9 @@ set_DEMODE_ENBL(target* const restrict p_target, uint32_t const set_value)
 		return;
 	}
 
-	This_Arch const* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->verify_hart_regtrans_write) {
+	if (p_arch->use_verify_hart_regtrans_write) {
 		uint32_t const get_value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_ENBL);
 		if (error_code__get(p_target) != ERROR_OK) {
 			return;
@@ -2042,9 +2107,9 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 	if (handle_breakpoints) {
 		dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 
-		This_Arch const* const restrict p_arch = p_target->arch_info;
+		sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
 		assert(p_arch);
-		if (p_arch->resume_at_sw_breakpoint_emulates_saved_instruction && current) {
+		if (p_arch->use_resume_at_sw_breakpoint_emulates_saved_instruction && current) {
 			// Find breakpoint for current instruction
 			error_code__update(p_target, reg_pc__get(p_pc));
 			assert(p_pc->value);
@@ -2133,9 +2198,9 @@ reset__set(target* const restrict p_target, bool const active)
 		return error_code__get_and_clear(p_target);
 	}
 
-	This_Arch const* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->verify_core_regtrans_write) {
+	if (p_arch->use_verify_core_regtrans_write) {
 		// double check
 		uint32_t const get_new_value2 = core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
 		if (error_code__get(p_target) != ERROR_OK) {
@@ -2302,11 +2367,11 @@ static reg const def_regs_array[] = {
 };
 
 static int
-this_init_target(struct command_context *cmd_ctx, target* const restrict p_target)
+sc_rv32i__init_target(struct command_context *cmd_ctx, target* const restrict p_target)
 {
 	assert(p_target);
 	p_target->reg_cache = reg_cache__create("rv32i", def_regs_array, ARRAY_LEN(def_regs_array), p_target);
-	This_Arch* p_arch_info = calloc(1, sizeof(This_Arch));
+	sc_rv32i__Arch* p_arch_info = calloc(1, sizeof(sc_rv32i__Arch));
 	*p_arch_info = initial_arch;
 
 	p_target->arch_info = p_arch_info;
@@ -2314,7 +2379,7 @@ this_init_target(struct command_context *cmd_ctx, target* const restrict p_targe
 }
 
 static void
-this_deinit_target(target* const restrict p_target)
+sc_rv32i__deinit_target(target* const restrict p_target)
 {
 	assert(p_target);
 	while (p_target->reg_cache) {
@@ -2336,14 +2401,14 @@ this_deinit_target(target* const restrict p_target)
 }
 
 static int
-this_target_create(target* const restrict p_target, struct Jim_Interp *interp)
+sc_rv32i__target_create(target* const restrict p_target, struct Jim_Interp *interp)
 {
 	assert(p_target);
 	return ERROR_OK;
 }
 
 static int
-this_examine(target* const restrict p_target)
+sc_rv32i__examine(target* const restrict p_target)
 {
 	assert(p_target);
 	for (int i = 0; i < 10; ++i) {
@@ -2383,7 +2448,7 @@ this_examine(target* const restrict p_target)
 }
 
 static int
-this_poll(target* const restrict p_target)
+sc_rv32i__poll(target* const restrict p_target)
 {
 	assert(p_target);
 	LOG_DEBUG("update_status");
@@ -2395,7 +2460,7 @@ this_poll(target* const restrict p_target)
 }
 
 static int
-this_arch_state(target* const restrict p_target)
+sc_rv32i__arch_state(target* const restrict p_target)
 {
 	assert(p_target);
 	LOG_DEBUG("update_status");
@@ -2404,7 +2469,7 @@ this_arch_state(target* const restrict p_target)
 }
 
 static int
-this_halt(target* const restrict p_target)
+sc_rv32i__halt(target* const restrict p_target)
 {
 	assert(p_target);
 	// May be already halted?
@@ -2452,7 +2517,7 @@ this_halt(target* const restrict p_target)
 }
 
 static int
-this_resume(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
+sc_rv32i__resume(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	assert(p_target);
 	uint32_t const dmode_enabled = NORMAL_DEBUG_ENABLE_MASK;
@@ -2460,7 +2525,7 @@ this_resume(target* const restrict p_target, int const current, uint32_t const a
 }
 
 static int
-this_step(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints)
+sc_rv32i__step(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints)
 {
 	assert(p_target);
 	uint32_t const dmode_enabled = (NORMAL_DEBUG_ENABLE_MASK) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
@@ -2468,7 +2533,7 @@ this_step(target* const restrict p_target, int const current, uint32_t const add
 }
 
 static int
-this_assert_reset(target* const restrict p_target)
+sc_rv32i__assert_reset(target* const restrict p_target)
 {
 	LOG_DEBUG("Reset control");
 	assert(p_target);
@@ -2476,7 +2541,7 @@ this_assert_reset(target* const restrict p_target)
 }
 
 static int
-this_deassert_reset(target* const restrict p_target)
+sc_rv32i__deassert_reset(target* const restrict p_target)
 {
 	LOG_DEBUG("Reset control");
 	assert(p_target);
@@ -2484,7 +2549,7 @@ this_deassert_reset(target* const restrict p_target)
 }
 
 static int
-this_soft_reset_halt(target* const restrict p_target)
+sc_rv32i__soft_reset_halt(target* const restrict p_target)
 {
 	LOG_DEBUG("Soft reset called");
 	assert(p_target);
@@ -2502,7 +2567,7 @@ this_soft_reset_halt(target* const restrict p_target)
 }
 
 static int
-this_read_memory(target* const restrict p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* restrict buffer)
+sc_rv32i__read_memory(target* const restrict p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* restrict buffer)
 {
 	assert(p_target);
 	assert(buffer);
@@ -2612,7 +2677,7 @@ this_read_memory(target* const restrict p_target, uint32_t address, uint32_t con
 }
 
 static int
-this_write_memory(target* const restrict p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* restrict buffer)
+sc_rv32i__write_memory(target* const restrict p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* restrict buffer)
 {
 	assert(p_target);
 	assert(buffer);
@@ -2655,7 +2720,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 	assert(p_addr_reg->number != p_data_reg->number);
 
 	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
-	This_Arch const* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
 	size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
 	if (p_arch->use_pc_advmt_dsbl_bit) {
@@ -2683,7 +2748,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 				};
 
 				static uint32_t max_pc_offset = (((1u << 20) - 1u) / NUM_BITS_TO_SIZE(XLEN)) * NUM_BITS_TO_SIZE(XLEN);
-				if (p_arch->use_fast_dr_scans) {
+				if (p_arch->use_queuing_for_dr_scans) {
 					uint8_t DAP_OPSTATUS = 0;
 					uint8_t const data_wr_opcode[1] = {DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR};
 					scan_field const data_scan_opcode_field = {
@@ -2791,7 +2856,7 @@ this_write_memory(target* const restrict p_target, uint32_t address, uint32_t co
 }
 
 static int
-this_add_breakpoint(target* const restrict p_target, struct breakpoint* const restrict breakpoint)
+sc_rv32i__add_breakpoint(target* const restrict p_target, struct breakpoint* const restrict breakpoint)
 {
 	assert(p_target);
 	assert(breakpoint);
@@ -2847,7 +2912,7 @@ this_add_breakpoint(target* const restrict p_target, struct breakpoint* const re
 }
 
 static int
-this_remove_breakpoint(target* const restrict p_target, struct breakpoint* const restrict breakpoint)
+sc_rv32i__remove_breakpoint(target* const restrict p_target, struct breakpoint* const restrict breakpoint)
 {
 	assert(p_target);
 	assert(breakpoint);
@@ -2886,13 +2951,13 @@ this_remove_breakpoint(target* const restrict p_target, struct breakpoint* const
 
 /// gdb_server expects valid reg values and will use set method for updating reg values
 static int
-this_get_gdb_reg_list(target* const restrict p_target, reg **reg_list[], int* const restrict reg_list_size, enum target_register_class const reg_class)
+sc_rv32i__get_gdb_reg_list(target* const restrict p_target, reg **reg_list[], int* const restrict reg_list_size, enum target_register_class const reg_class)
 {
 	assert(p_target);
 	assert(reg_list_size);
 	assert(reg_class == REG_CLASS_ALL || reg_class == REG_CLASS_GENERAL);
 
-	This_Arch *arch_info = p_target->arch_info;
+	sc_rv32i__Arch *arch_info = p_target->arch_info;
 	assert(arch_info);
 
 	size_t const num_regs = reg_class == REG_CLASS_ALL ? TOTAL_NUMBER_OF_REGS : REG_PC_NUMBER + 1;
@@ -2911,22 +2976,22 @@ target_type syntacore_riscv32i_target =
 {
 	.name = "syntacore_riscv32i",
 
-	.poll = this_poll,
-	.arch_state = this_arch_state,
+	.poll = sc_rv32i__poll,
+	.arch_state = sc_rv32i__arch_state,
 	.target_request_data = NULL,
 
-	.halt = this_halt,
-	.resume = this_resume,
-	.step = this_step,
+	.halt = sc_rv32i__halt,
+	.resume = sc_rv32i__resume,
+	.step = sc_rv32i__step,
 
-	.assert_reset = this_assert_reset,
-	.deassert_reset = this_deassert_reset,
-	.soft_reset_halt = this_soft_reset_halt,
+	.assert_reset = sc_rv32i__assert_reset,
+	.deassert_reset = sc_rv32i__deassert_reset,
+	.soft_reset_halt = sc_rv32i__soft_reset_halt,
 
-	.get_gdb_reg_list = this_get_gdb_reg_list,
+	.get_gdb_reg_list = sc_rv32i__get_gdb_reg_list,
 
-	.read_memory = this_read_memory,
-	.write_memory = this_write_memory,
+	.read_memory = sc_rv32i__read_memory,
+	.write_memory = sc_rv32i__write_memory,
 
 	.read_buffer = NULL,
 	.write_buffer = NULL,
@@ -2934,11 +2999,11 @@ target_type syntacore_riscv32i_target =
 	.checksum_memory = NULL,
 	.blank_check_memory = NULL,
 
-	.add_breakpoint = this_add_breakpoint,
+	.add_breakpoint = sc_rv32i__add_breakpoint,
 	.add_context_breakpoint = NULL,
 	.add_hybrid_breakpoint = NULL,
 
-	.remove_breakpoint = this_remove_breakpoint,
+	.remove_breakpoint = sc_rv32i__remove_breakpoint,
 
 	.add_watchpoint = NULL,
 	.remove_watchpoint = NULL,
@@ -2951,14 +3016,14 @@ target_type syntacore_riscv32i_target =
 
 	.commands = NULL,
 
-	.target_create = this_target_create,
+	.target_create = sc_rv32i__target_create,
 	.target_jim_configure = NULL,
 	.target_jim_commands = NULL,
 
-	.examine = this_examine,
+	.examine = sc_rv32i__examine,
 
-	.init_target = this_init_target,
-	.deinit_target = this_deinit_target,
+	.init_target = sc_rv32i__init_target,
+	.deinit_target = sc_rv32i__deinit_target,
 
 	.virt2phys = NULL,
 	.read_phys_memory = NULL,
