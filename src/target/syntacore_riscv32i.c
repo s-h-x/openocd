@@ -1452,55 +1452,60 @@ static void
 update_status(target* const restrict p_target)
 {
 	assert(p_target);
-#if 0
-	int const old_err_code = error_code__get_and_clear(p_target);
-#else
 	error_code__get_and_clear(p_target);
 	int const old_err_code = ERROR_OK;
-#endif
-	uint32_t core_status = try_to_get_ready(p_target);
-	LOG_DEBUG("Check core_status for lock: 0x%08X", core_status);
-	if (0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) {
-		LOG_WARNING("Lock detected: 0x%08X", core_status);
-		uint32_t const lock_context = debug_controller__unlock(p_target);
-		if (error_code__get(p_target) != ERROR_OK) {
-			/// return with error_code != ERROR_OK if unlock was unsuccsesful
-			LOG_ERROR("Unlock unsucsessful with lock_context=0x%8X", lock_context);
-			error_code__prepend(p_target, old_err_code);
+	{
+		// Reset protection
+		jtag_add_tlr();
+		uint32_t const IDCODE = IDCODE_get(p_target);
+		assert(IDCODE == EXPECTED_IDCODE);
+	}
+
+	{
+		uint32_t core_status = try_to_get_ready(p_target);
+		LOG_DEBUG("Check core_status for lock: 0x%08X", core_status);
+		if (0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) {
+			LOG_WARNING("Lock detected: 0x%08X", core_status);
+			uint32_t const lock_context = debug_controller__unlock(p_target);
+			if (error_code__get(p_target) != ERROR_OK) {
+				/// return with error_code != ERROR_OK if unlock was unsuccsesful
+				LOG_ERROR("Unlock unsucsessful with lock_context=0x%8X", lock_context);
+				error_code__prepend(p_target, old_err_code);
+				return;
+			}
+			core_status = DBG_STATUS_get(p_target);
+			LOG_WARNING("Lock with lock_context=0x%8X fixed: 0x%08X", lock_context, core_status);
+		}
+		LOG_DEBUG("Core_status: 0x%08X", core_status);
+		if ((core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT))) != BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) {
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return;
 		}
-		core_status = DBG_STATUS_get(p_target);
-		LOG_WARNING("Lock with lock_context=0x%8X fixed: 0x%08X", lock_context, core_status);
-	}
-	LOG_DEBUG("Core_status: 0x%08X", core_status);
-	if ((core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT))) != BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) {
-		error_code__update(p_target, ERROR_TARGET_FAILURE);
-		return;
-	}
 
-	uint32_t const hart0_err_bits =
-		BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT) |
-		BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_STKY_BIT);
-	if (core_status & hart0_err_bits) {
-		LOG_WARNING("Hart errors detected: 0x%08X", core_status);
-		HART0_clear_sticky(p_target);
-		error_code__get_and_clear(p_target);
-		core_status = DBG_STATUS_get(p_target);
-		LOG_WARNING("Hart errors %s: 0x%08X", core_status & hart0_err_bits ? "not fixed!" : "fixed", core_status);
-	}
+		uint32_t const hart0_err_bits =
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT) |
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_STKY_BIT);
+		if (core_status & hart0_err_bits) {
+			LOG_WARNING("Hart errors detected: 0x%08X", core_status);
+			HART0_clear_sticky(p_target);
+			error_code__get_and_clear(p_target);
+			core_status = DBG_STATUS_get(p_target);
+			LOG_WARNING("Hart errors %s: 0x%08X", core_status & hart0_err_bits ? "not fixed!" : "fixed", core_status);
+		}
 
-	uint32_t const cdsr_err_bits =
-		BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_BIT) |
-		BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_HWCORE_BIT) |
-		BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_FSMBUSY_BIT) |
-		BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_DAP_OPCODE_BIT);
-	if (core_status & cdsr_err_bits) {
-		LOG_WARNING("Core errors detected: 0x%08X", core_status);
-		error_code__get_and_clear(p_target);
-		core_clear_errors(p_target);
-		error_code__get_and_clear(p_target);
-		core_status = DBG_STATUS_get(p_target);
-		LOG_WARNING("Core errors %s: 0x%08X", core_status & cdsr_err_bits ? "not fixed!" : "fixed", core_status);
+		uint32_t const cdsr_err_bits =
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_BIT) |
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_HWCORE_BIT) |
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_FSMBUSY_BIT) |
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_DAP_OPCODE_BIT);
+		if (core_status & cdsr_err_bits) {
+			LOG_WARNING("Core errors detected: 0x%08X", core_status);
+			error_code__get_and_clear(p_target);
+			core_clear_errors(p_target);
+			error_code__get_and_clear(p_target);
+			core_status = DBG_STATUS_get(p_target);
+			LOG_WARNING("Core errors %s: 0x%08X", core_status & cdsr_err_bits ? "not fixed!" : "fixed", core_status);
+		}
 	}
 
 	/// Only 1 HART available
@@ -1531,12 +1536,7 @@ update_status(target* const restrict p_target)
 			break;
 		}
 	}
-#if 0
-	uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-	LOG_DEBUG("pc_sample = 0x%08X", pc_sample);
-#endif
 	error_code__prepend(p_target, old_err_code);
-	LOG_DEBUG("Update end");
 }
 
 /// GP registers accessors
@@ -2291,12 +2291,12 @@ reset__set(target* const restrict p_target, bool const active)
 	if (active) {
 		if (p_target->state != TARGET_RESET) {
 			/// issue error if we are still running
-			LOG_ERROR("RV is not resetting after reset assert");
+			LOG_ERROR("Target is not resetting after reset assert");
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 		}
 	} else {
 		if (p_target->state == TARGET_RESET) {
-			LOG_ERROR("RV is stiil in reset after reset deassert");
+			LOG_ERROR("Target is still in reset after reset deassert");
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 		}
 	}
@@ -2490,28 +2490,21 @@ sc_rv32i__examine(target* const restrict p_target)
 		}
 		LOG_DEBUG("update_status error, retry");
 	}
+
 	if (error_code__get(p_target) == ERROR_OK) {
-#if 0
-		if (!target_was_examined(p_target)) {
-#endif
-			uint32_t const IDCODE = IDCODE_get(p_target);
-			uint32_t const DBG_ID = DBG_ID_get(p_target);
-			LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE, DBG_ID, BLD_ID_get(p_target));
-			assert(IDCODE == EXPECTED_IDCODE);
-			assert((DBG_ID & DBG_ID_VERSION_MASK) == (DBG_ID_VERSION_MASK & EXPECTED_DBG_ID));
+		uint32_t const IDCODE = IDCODE_get(p_target);
+		uint32_t const DBG_ID = DBG_ID_get(p_target);
+		LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE, DBG_ID, BLD_ID_get(p_target));
+		assert(IDCODE == EXPECTED_IDCODE);
+		assert((DBG_ID & DBG_ID_VERSION_MASK) == (DBG_ID_VERSION_MASK & EXPECTED_DBG_ID));
 #if EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK
-			assert((DBG_ID & DBG_ID_SUBVERSION_MASK) >= (EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK));
+		assert((DBG_ID & DBG_ID_SUBVERSION_MASK) >= (EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK));
 #endif
-			if (error_code__get(p_target) == ERROR_OK) {
-				set_DEMODE_ENBL(p_target, NORMAL_DEBUG_ENABLE_MASK);
-				if (error_code__get(p_target) == ERROR_OK) {
-					LOG_DEBUG("Examined OK");
-					target_set_examined(p_target);
-				}
-			}
-#if 0
+		set_DEMODE_ENBL(p_target, NORMAL_DEBUG_ENABLE_MASK);
+		if (error_code__get(p_target) == ERROR_OK) {
+			LOG_DEBUG("Examined OK");
+			target_set_examined(p_target);
 		}
-#endif
 	}
 
 	return error_code__get_and_clear(p_target);
@@ -2551,7 +2544,7 @@ sc_rv32i__halt(target* const restrict p_target)
 		}
 
 		if (p_target->state == TARGET_HALTED) {
-			LOG_WARNING("Halt request when RV is already in halted state");
+			LOG_WARNING("Halt request when target is already in halted state");
 			return error_code__get_and_clear(p_target);
 		}
 	}
