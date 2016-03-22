@@ -26,9 +26,9 @@ Syntacore RISC-V target
 #include <limits.h>
 
 /// Don't make irscan if IR uis the same
-#define USE_IR_SELECT_CACHE 0
+#define USE_IR_SELECT_CACHE 1
 /// Don't write DAP_CONTROL if it is the same 
-#define USE_DAP_CONTROL_CACHE 0
+#define USE_DAP_CONTROL_CACHE 1
 /// Verify value of DAP_CONTROL after write
 #define USE_VERIFY_DAP_CONTROL 1
 /// Using PC_SAMPLE register instead AUIPC/CSRRW chain of instruction 
@@ -1162,7 +1162,7 @@ HART0_clear_sticky(target* const restrict p_target)
 static inline uint8_t
 REGTRANS_scan_type(bool const write, uint8_t const index)
 {
-	assert((index & !LOW_BITS_MASK(3)) == 0);
+	assert((index & ~LOW_BITS_MASK(3)) == 0);
 	return MAKE_TYPE_FIELD(uint8_t, !!write, 3, 3) | MAKE_TYPE_FIELD(uint8_t, index, 0, 2);
 }
 
@@ -1473,14 +1473,10 @@ update_status(target* const restrict p_target)
 		LOG_WARNING("Lock with lock_context=0x%8X fixed: 0x%08X", lock_context, core_status);
 	}
 	LOG_DEBUG("Core_status: 0x%08X", core_status);
-#if 1
-	assert((core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT))) == BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT));
-#else
 	if ((core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT))) != BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) {
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return;
 	}
-#endif
 
 	uint32_t const hart0_err_bits =
 		BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT) |
@@ -1621,6 +1617,19 @@ reg_cache__chain_invalidate(reg_cache* p_reg_cache)
 }
 
 static void
+check_that_target_halted(target* const restrict p_target)
+{
+	LOG_DEBUG("update_status");
+	update_status(p_target);
+	if (error_code__get(p_target) == ERROR_OK) {
+		if (p_target->state != TARGET_HALTED) {
+			LOG_ERROR("Target not halted");
+			error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
+		}
+	}
+}
+
+static void
 reg_x__operation_conditions_check(reg const* const restrict p_reg)
 {
 	assert(p_reg);
@@ -1632,15 +1641,7 @@ reg_x__operation_conditions_check(reg const* const restrict p_reg)
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return;
 	}
-	LOG_DEBUG("update_status");
-	update_status(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return;
-	}
-	if (p_target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
-	}
+	check_that_target_halted(p_target);
 }
 
 static int
@@ -1829,13 +1830,8 @@ static mstatus_context_field_e
 mstatus_FS__get(target* const restrict p_target)
 {
 	assert(p_target);
-	update_status(p_target);
+	check_that_target_halted(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
-		return ext_off;
-	}
-	if (p_target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
 		return ext_off;
 	}
 	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
@@ -1884,17 +1880,10 @@ reg_pc__get(reg* const restrict p_reg)
 			reg__invalidate(p_reg);
 		}
 	} else {
-		LOG_DEBUG("update_status");
-		update_status(p_target);
+		check_that_target_halted(p_target);
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__get_and_clear(p_target);
 		}
-		if (p_target->state != TARGET_HALTED) {
-			LOG_ERROR("Target not halted");
-			error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
-			return error_code__get_and_clear(p_target);
-		}
-
 		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
 		assert(p_wrk_reg);
 
@@ -1943,17 +1932,10 @@ reg_pc__set(reg* const restrict p_reg, uint8_t* const restrict buf)
 
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
-	LOG_DEBUG("update_status");
-	update_status(p_target);
+	check_that_target_halted(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__get_and_clear(p_target);
 	}
-	if (p_target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
-		return error_code__get_and_clear(p_target);
-	}
-
 	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
 	assert(p_wrk_reg);
 
@@ -2005,14 +1987,8 @@ reg_f__get(reg* const restrict p_reg)
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
 
-	LOG_DEBUG("update_status");
-	update_status(p_target);
+	check_that_target_halted(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__get_and_clear(p_target);
-	}
-	if (p_target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -2072,14 +2048,8 @@ reg_f__set(reg* const restrict p_reg, uint8_t* const restrict buf)
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
 
-	LOG_DEBUG("update_status");
-	update_status(p_target);
+	check_that_target_halted(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__get_and_clear(p_target);
-	}
-	if (p_target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -2185,11 +2155,9 @@ static int
 resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	assert(p_target);
-	LOG_DEBUG("update_status");
-	update_status(p_target);
-	if (p_target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		return ERROR_TARGET_NOT_HALTED;
+	check_that_target_halted(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__get_and_clear(p_target);
 	}
 
 	/// @todo multiple caches
@@ -2609,10 +2577,8 @@ sc_rv32i__halt(target* const restrict p_target)
 	}
 
 	// Verify that in debug mode
-	if (p_target->state != TARGET_HALTED) {
-		// issue error if we are still running
-		LOG_ERROR("RV is not halted after Halt command");
-		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
+	check_that_target_halted(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -2690,17 +2656,9 @@ sc_rv32i__read_memory(target* const restrict p_target, uint32_t address, uint32_
 	}
 
 	/// Check that target halted
-	{
-		LOG_DEBUG("update_status");
-		update_status(p_target);
-		if (error_code__get(p_target) != ERROR_OK) {
-			return error_code__get_and_clear(p_target);
-		}
-		if (p_target->state != TARGET_HALTED) {
-			LOG_ERROR("Target not halted");
-			error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
-			return error_code__get_and_clear(p_target);
-		}
+	check_that_target_halted(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__get_and_clear(p_target);
 	}
 
 	/// Reserve work register
@@ -2802,19 +2760,12 @@ sc_rv32i__write_memory(target* const restrict p_target, uint32_t address, uint32
 	if (count == 0) {
 		return error_code__get_and_clear(p_target);
 	}
-	/// Check that target halted
-	{
-		LOG_DEBUG("update_status");
-		update_status(p_target);
-		if (error_code__get(p_target) != ERROR_OK) {
-			return error_code__get_and_clear(p_target);
-		}
-		if (p_target->state != TARGET_HALTED) {
-			LOG_ERROR("Target not halted");
-			error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
-			return error_code__get_and_clear(p_target);
-		}
+
+	check_that_target_halted(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__get_and_clear(p_target);
 	}
+
 	/// Reserve work register
 	reg* const p_addr_reg = prepare_temporary_GP_register(p_target, zero);
 	assert(p_addr_reg);
@@ -2981,15 +2932,8 @@ sc_rv32i__add_breakpoint(target* const restrict p_target, struct breakpoint* con
 		return error_code__get_and_clear(p_target);
 	}
 
-	LOG_DEBUG("update_status");
-	update_status(p_target);
+	check_that_target_halted(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__get_and_clear(p_target);
-	}
-
-	if (p_target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -3033,13 +2977,8 @@ sc_rv32i__remove_breakpoint(target* const restrict p_target, struct breakpoint* 
 	}
 
 	assert(p_target);
-	LOG_DEBUG("update_status");
-	update_status(p_target);
+	check_that_target_halted(p_target);
 	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__get_and_clear(p_target);
-	}
-	if (p_target->state != TARGET_HALTED) {
-		error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
 		return error_code__get_and_clear(p_target);
 	}
 
