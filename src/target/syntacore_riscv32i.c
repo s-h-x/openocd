@@ -890,7 +890,7 @@ DBG_STATUS_get(target const* const restrict p_target)
 }
 
 /// set unit/group
-static uint8_t
+static void
 DAP_CTRL_REG_set_force(target const* const restrict p_target, uint8_t const set_dap_unit_group)
 {
 	assert(p_target);
@@ -898,7 +898,7 @@ DAP_CTRL_REG_set_force(target const* const restrict p_target, uint8_t const set_
 	IR_select(p_target, TAP_INSTR_DAP_CTRL);
 	if (error_code__get(p_target) != ERROR_OK) {
 		error_code__prepend(p_target, old_err_code);
-		return 0xF8u;
+		return;
 	}
 
 	// clear status bits
@@ -922,16 +922,24 @@ DAP_CTRL_REG_set_force(target const* const restrict p_target, uint8_t const set_
 	jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
 
 	// enforce jtag_execute_queue() to get status
-	if (error_code__update(p_target, jtag_execute_queue()) != ERROR_OK) {
-		LOG_ERROR("JTAG error %d", error_code__get(p_target));
-	}
+	int const jtag_status = jtag_execute_queue();
 	LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
-	if ((status & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
-		LOG_WARNING("TAP status 0x%1X", (uint32_t)status);
+	if (jtag_status != ERROR_OK) {
+		uint32_t const dbg_status = DBG_STATUS_get(p_target);
+		static uint32_t const dbg_status_check_value = BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
+		static uint32_t const dbg_status_mask =
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) |
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
+		if ((dbg_status & dbg_status_mask) != (dbg_status_check_value & dbg_status_mask)) {
+			LOG_ERROR("JTAG error %d, operation_status=0x%1X ,dbg_status=0x%08X", jtag_status, (uint32_t)status, dbg_status);
+			error_code__update(p_target, jtag_status);
+		} else {
+			LOG_WARNING("JTAG error %d, operation_status=0x%1X, but dbg_status=0x%08X", jtag_status, (uint32_t)status, dbg_status);
+		}
+	} else {
+		p_arch->last_DAP_ctrl = set_dap_unit_group;
 	}
-
 	error_code__prepend(p_target, old_err_code);
-	return status;
 }
 
 /// verify unit/group
@@ -939,37 +947,38 @@ static void
 DAP_CTRL_REG_verify(target const* const restrict p_target, uint8_t const set_dap_unit_group)
 {
 	assert(p_target);
-	sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
+	sc_rv32i__Arch* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->use_verify_dap_control) {
-		int const old_err_code = error_code__get_and_clear(p_target);
-		IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
-		if (error_code__get(p_target) != ERROR_OK) {
-			error_code__prepend(p_target, old_err_code);
-			return;
-		}
-		uint8_t get_dap_unit_group = 0;
-		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof get_dap_unit_group);
-		scan_field const field =
-		{
-			.num_bits = TAP_LEN_DAP_CTRL,
-			.in_value = &get_dap_unit_group,
-		};
-		// enforce jtag_execute_queue() to get get_dap_unit_group
-		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-		error_code__update(p_target, jtag_execute_queue());
-		LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
-		if (error_code__get(p_target) != ERROR_OK) {
-			LOG_ERROR("JTAG error %d", error_code__get(p_target));
-			error_code__prepend(p_target, old_err_code);
-			return;
-		}
-		if (get_dap_unit_group != set_dap_unit_group) {
+	p_arch->last_DAP_ctrl = DAP_CTRL_INVALID_CODE;
+	int const old_err_code = error_code__get_and_clear(p_target);
+	IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
+	if (error_code__get(p_target) != ERROR_OK) {
+		error_code__prepend(p_target, old_err_code);
+		return;
+	}
+	uint8_t get_dap_unit_group = 0;
+	uint8_t set_dap_unit_group_mask = 0x0Fu;
+	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof get_dap_unit_group);
+	scan_field const field =
+	{
+		.num_bits = TAP_LEN_DAP_CTRL,
+		.in_value = &get_dap_unit_group,
+		.check_value = &set_dap_unit_group,
+		.check_mask = &set_dap_unit_group_mask,
+	};
+	// enforce jtag_execute_queue() to get get_dap_unit_group
+	jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
+	error_code__update(p_target, jtag_execute_queue());
+	LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
+	if (error_code__get(p_target) == ERROR_OK) {
+		if (get_dap_unit_group == set_dap_unit_group) {
+			p_arch->last_DAP_ctrl = get_dap_unit_group;
+		} else {
 			LOG_ERROR("Unit/Group verification error: set 0x%1X, but get 0x%1X!", set_dap_unit_group, get_dap_unit_group);
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 		}
-		error_code__prepend(p_target, old_err_code);
 	}
+	error_code__prepend(p_target, old_err_code);
 }
 
 static uint32_t
@@ -1188,7 +1197,7 @@ core_clear_errors(target* const restrict p_target)
 	{
 		uint8_t ir_dap_cmd_out_buffer[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {};
 		buf_set_u32(ir_dap_cmd_out_buffer, 0, TAP_IR_LEN, TAP_INSTR_DAP_CMD);
-		scan_field ir_dap_cmd_field = { .num_bits = p_target->tap->ir_length, .out_value = ir_dap_cmd_out_buffer};
+		scan_field ir_dap_cmd_field = {.num_bits = p_target->tap->ir_length, .out_value = ir_dap_cmd_out_buffer};
 		jtag_add_ir_scan(p_target->tap, &ir_dap_cmd_field, TAP_IDLE);
 		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_INSTR_DAP_CMD);
 	}
@@ -1240,17 +1249,13 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 	p_arch->last_DAP_ctrl = DAP_CTRL_INVALID_CODE;
 
 	int const old_err_code = error_code__get_and_clear(p_target);
-	uint8_t const status = DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
-	if ((status & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
-		LOG_WARNING("DAP_CTRL_REG status 0x%1X!", status);
-	}
-
-	error_code__get_and_clear(p_target);
-	DAP_CTRL_REG_verify(p_target, set_dap_unit_group);
-	if (error_code__get(p_target) == ERROR_OK) {
-		p_arch->last_DAP_ctrl = set_dap_unit_group;
-	} else {
-		error_code__update(p_target, ERROR_TARGET_FAILURE);
+	DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
+	if (p_arch->use_verify_dap_control) {
+		error_code__get_and_clear(p_target);
+		DAP_CTRL_REG_verify(p_target, set_dap_unit_group);
+		if (error_code__get(p_target) == ERROR_OK) {
+			p_arch->last_DAP_ctrl = set_dap_unit_group;
+		}
 	}
 	error_code__prepend(p_target, old_err_code);
 }
@@ -1261,6 +1266,7 @@ REGTRANS_write(target const* const restrict p_target, enum type_dbgc_unit_id_e a
 	assert(p_target);
 	DAP_CTRL_REG_set(p_target, a_unit, a_fgrp);
 	if (error_code__get(p_target) != ERROR_OK) {
+		LOG_WARNING("DAP_CTRL_REG_set error");
 		return;
 	}
 	(void)DAP_CMD_scan(p_target, REGTRANS_scan_type(true, index), data);
@@ -1272,6 +1278,7 @@ REGTRANS_read(target const* const restrict p_target, enum type_dbgc_unit_id_e co
 	assert(p_target);
 	DAP_CTRL_REG_set(p_target, a_unit, a_fgrp);
 	if (error_code__get(p_target) != ERROR_OK) {
+		LOG_WARNING("DAP_CTRL_REG_set error");
 		return 0xBADC0DE3u;
 	}
 	(void)DAP_CMD_scan(p_target, REGTRANS_scan_type(false, index), 0);
@@ -1420,12 +1427,39 @@ update_debug_reason(target* const restrict p_target)
 	}
 }
 
+
+static uint32_t
+try_to_get_ready(target* const restrict p_target)
+{
+	uint32_t core_status = DBG_STATUS_get(p_target);
+	if ((core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) != 0) {
+		return core_status;
+	}
+	static unsigned const max_retries = 10u;
+	for (unsigned i = 2; i <= max_retries; ++i) {
+		error_code__get_and_clear(p_target);
+		core_status = DBG_STATUS_get(p_target);
+		if ((core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) != 0) {
+			LOG_DEBUG("Ready: 0x%08X after %d requests", core_status, i);
+			return core_status;
+		}
+	}
+	LOG_ERROR("Not ready: 0x%08X after %d requests", core_status, max_retries);
+	return core_status;
+}
+
 static void
 update_status(target* const restrict p_target)
 {
 	assert(p_target);
+#if 0
 	int const old_err_code = error_code__get_and_clear(p_target);
-	uint32_t core_status = DBG_STATUS_get(p_target);
+#else
+	error_code__get_and_clear(p_target);
+	int const old_err_code = ERROR_OK;
+#endif
+	uint32_t core_status = try_to_get_ready(p_target);
+	LOG_DEBUG("Check core_status for lock: 0x%08X", core_status);
 	if (0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) {
 		LOG_WARNING("Lock detected: 0x%08X", core_status);
 		uint32_t const lock_context = debug_controller__unlock(p_target);
@@ -1438,7 +1472,15 @@ update_status(target* const restrict p_target)
 		core_status = DBG_STATUS_get(p_target);
 		LOG_WARNING("Lock with lock_context=0x%8X fixed: 0x%08X", lock_context, core_status);
 	}
-	assert(!(core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)));
+	LOG_DEBUG("Core_status: 0x%08X", core_status);
+#if 1
+	assert((core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT))) == BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT));
+#else
+	if ((core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT))) != BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) {
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+		return;
+	}
+#endif
 
 	uint32_t const hart0_err_bits =
 		BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT) |
@@ -1498,6 +1540,7 @@ update_status(target* const restrict p_target)
 	LOG_DEBUG("pc_sample = 0x%08X", pc_sample);
 #endif
 	error_code__prepend(p_target, old_err_code);
+	LOG_DEBUG("Update end");
 }
 
 /// GP registers accessors
@@ -2212,6 +2255,7 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 	}
 	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 	if (error_code__get(p_target) != ERROR_OK) {
+		LOG_WARNING("DAP_CTRL_REG_set error");
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -2239,6 +2283,7 @@ reset__set(target* const restrict p_target, bool const active)
 	assert(p_target);
 	DAP_CTRL_REG_set(p_target, DBGC_UNIT_ID_CORE, DBGC_FGRP_CORE_REGTRANS);
 	if (error_code__get(p_target) != ERROR_OK) {
+		LOG_WARNING("DAP_CTRL_REG_set error");
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -2475,31 +2520,31 @@ sc_rv32i__examine(target* const restrict p_target)
 		if (error_code__get(p_target) == ERROR_OK) {
 			break;
 		}
+		LOG_DEBUG("update_status error, retry");
 	}
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__get_and_clear(p_target);
-	}
-
-	assert(p_target);
-	if (!target_was_examined(p_target)) {
-		uint32_t const IDCODE = IDCODE_get(p_target);
-		uint32_t const DBG_ID = DBG_ID_get(p_target);
-		LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE, DBG_ID, BLD_ID_get(p_target));
-		assert(IDCODE == EXPECTED_IDCODE);
-		assert((DBG_ID & DBG_ID_VERSION_MASK) == (DBG_ID_VERSION_MASK & EXPECTED_DBG_ID));
-#if EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK
-		assert((DBG_ID & DBG_ID_SUBVERSION_MASK) >= (EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK));
+	if (error_code__get(p_target) == ERROR_OK) {
+#if 0
+		if (!target_was_examined(p_target)) {
 #endif
-		if (error_code__get(p_target) != ERROR_OK) {
-			return error_code__get_and_clear(p_target);
+			uint32_t const IDCODE = IDCODE_get(p_target);
+			uint32_t const DBG_ID = DBG_ID_get(p_target);
+			LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE, DBG_ID, BLD_ID_get(p_target));
+			assert(IDCODE == EXPECTED_IDCODE);
+			assert((DBG_ID & DBG_ID_VERSION_MASK) == (DBG_ID_VERSION_MASK & EXPECTED_DBG_ID));
+#if EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK
+			assert((DBG_ID & DBG_ID_SUBVERSION_MASK) >= (EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK));
+#endif
+			if (error_code__get(p_target) == ERROR_OK) {
+				set_DEMODE_ENBL(p_target, NORMAL_DEBUG_ENABLE_MASK);
+				if (error_code__get(p_target) == ERROR_OK) {
+					LOG_DEBUG("Examined OK");
+					target_set_examined(p_target);
+				}
+			}
+#if 0
 		}
-		set_DEMODE_ENBL(p_target, NORMAL_DEBUG_ENABLE_MASK);
-		if (error_code__get(p_target) != ERROR_OK) {
-			return error_code__get_and_clear(p_target);
-		}
+#endif
 	}
-
-	target_set_examined(p_target);
 
 	return error_code__get_and_clear(p_target);
 }
@@ -2547,6 +2592,7 @@ sc_rv32i__halt(target* const restrict p_target)
 	{
 		DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 		if (error_code__get(p_target) != ERROR_OK) {
+			LOG_WARNING("DAP_CTRL_REG_set error");
 			return error_code__get_and_clear(p_target);
 		}
 
