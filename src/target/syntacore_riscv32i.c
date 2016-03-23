@@ -147,6 +147,9 @@ Syntacore RISC-V target
 #define RV_JAL(rd, imm_20_01)       RV_INSTR_UJ_TYPE((imm_20_01), (rd), 0x6Fu)
 
 #define RV_NOP()                    RV_ADDI(zero, zero, 0u)
+
+#define RV_CSRW(csr, rs1)           RV_CSRRW(zero, csr, rs1)
+#define RV_CSRR(rd, csr)            RV_CSRRS(rd, csr, zero)
 ///@]
 
 /// RISC-V GP registers id
@@ -158,6 +161,7 @@ enum
 	NUMBER_OF_X_REGS = 32u,
 	NUMBER_OF_GP_REGS = NUMBER_OF_X_REGS + 1u,
 	NUMBER_OF_F_REGS = 32u,
+	NUMBER_OF_CSR_REGS = 1u,
 	TOTAL_NUMBER_OF_REGS = NUMBER_OF_GP_REGS + NUMBER_OF_F_REGS,
 };
 
@@ -925,7 +929,7 @@ DAP_CTRL_REG_set_force(target const* const restrict p_target, uint8_t const set_
 			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) |
 			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
 		if ((dbg_status & dbg_status_mask) != (dbg_status_check_value & dbg_status_mask)) {
-			LOG_ERROR("JTAG error %d, operation_status=0x%1X ,dbg_status=0x%08X", jtag_status, (uint32_t)status, dbg_status);
+			LOG_ERROR("JTAG error %d, operation_status=0x%1X, dbg_status=0x%08X", jtag_status, (uint32_t)status, dbg_status);
 			error_code__update(p_target, jtag_status);
 		} else {
 			LOG_WARNING("JTAG error %d, operation_status=0x%1X, but dbg_status=0x%08X", jtag_status, (uint32_t)status, dbg_status);
@@ -1684,7 +1688,7 @@ reg_x__get(reg* const restrict p_reg)
 		}
 		int advance_pc_counter = 0;
 		// Save p_reg->number register to CSR_DBG_SCRATCH CSR
-		(void)exec__step(p_target, RV_CSRRW(zero, CSR_DBG_SCRATCH, p_reg->number));
+		(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_reg->number));
 		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__get_and_clear(p_target);
@@ -1723,7 +1727,7 @@ reg_x__store(reg* const restrict p_reg)
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__get_and_clear(p_target);
 		}
-		(void)exec__step(p_target, RV_CSRRW(p_reg->number, CSR_DBG_SCRATCH, zero));
+		(void)exec__step(p_target, RV_CSRR(p_reg->number, CSR_DBG_SCRATCH));
 		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 		if (error_code__get(p_target) != ERROR_OK) {
 			return error_code__get_and_clear(p_target);
@@ -1833,37 +1837,6 @@ prepare_temporary_GP_register(target const* const restrict p_target, int const a
 	return p_dirty;
 }
 
-#if 0
-static mstatus_context_field_e
-mstatus_FS__get(target* const restrict p_target)
-{
-	assert(p_target);
-	check_that_target_halted(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return ext_off;
-	}
-	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
-	assert(p_wrk_reg);
-
-	exec__setup(p_target);
-	int advance_pc_counter = 0;
-	if (error_code__get(p_target) == ERROR_OK) {
-		(void)exec__step(p_target, RV_CSRRW(p_wrk_reg->number, CSR_mstatus, zero));
-		advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
-		if (error_code__get(p_target) == ERROR_OK) {
-		}
-	}
-	// restore temporary register
-	{
-		int const old_err_code = error_code__get_and_clear(p_target);
-		error_code__update(p_target, reg_x__store(p_wrk_reg));
-		error_code__prepend(p_target, old_err_code);
-		assert(!p_wrk_reg->dirty);
-	}
-	return ext_off;
-}
-#endif
-
 /// Update pc cache from HW (if non-cached)
 static int
 reg_pc__get(reg* const restrict p_reg)
@@ -1900,7 +1873,7 @@ reg_pc__get(reg* const restrict p_reg)
 			advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 			if (error_code__get(p_target) == ERROR_OK) {
 				/// and store temporary register to CSR_DBG_SCRATCH CSR.
-				(void)exec__step(p_target, RV_CSRRW(zero, CSR_DBG_SCRATCH, p_wrk_reg->number));
+				(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
 				advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 				if (error_code__get(p_target) == ERROR_OK) {
 					/// Correct pc by jump 2 instructions back and get previous command result.
@@ -1954,7 +1927,7 @@ reg_pc__set(reg* const restrict p_reg, uint8_t* const restrict buf)
 		exec__set_csr_data(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
 		if (error_code__get(p_target) == ERROR_OK) {
 			// set temporary register value to restoring pc value
-			(void)exec__step(p_target, RV_CSRRW(p_wrk_reg->number, CSR_DBG_SCRATCH, zero));
+			(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
 			advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 			if (error_code__get(p_target) == ERROR_OK) {
 				assert(p_wrk_reg->dirty);
@@ -2012,7 +1985,7 @@ reg_f__get(reg* const restrict p_reg)
 			advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 			if (error_code__get(p_target) == ERROR_OK) {
 				/// and store temporary register to CSR_DBG_SCRATCH CSR.
-				(void)exec__step(p_target, RV_CSRRW(zero, CSR_DBG_SCRATCH, p_wrk_reg->number));
+				(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
 				advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 				if (error_code__get(p_target) == ERROR_OK) {
 					/// Correct pc by jump 2 instructions back and get previous command result.
@@ -2073,12 +2046,141 @@ reg_f__set(reg* const restrict p_reg, uint8_t* const restrict buf)
 			exec__set_csr_data(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
 			if (error_code__get(p_target) == ERROR_OK) {
 				// set temporary register value to restoring pc value
-				(void)exec__step(p_target, RV_CSRRW(p_wrk_reg->number, CSR_DBG_SCRATCH, zero));
+				(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
 				advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 				if (error_code__get(p_target) == ERROR_OK) {
 					assert(p_wrk_reg->dirty);
 					assert(0 < p_wrk_reg->number && p_wrk_reg->number < NUMBER_OF_F_REGS);
 					(void)exec__step(p_target, RV_FMV_X_S(p_reg->number, p_wrk_reg->number));
+					advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+					if (error_code__get(p_target) == ERROR_OK) {
+						/// Correct pc by jump 2 instructions back and get previous command result.
+						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
+						(void)exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+						advance_pc_counter = 0;
+						assert(p_reg->valid);
+						assert(p_reg->dirty);
+						p_reg->dirty = false;
+					}
+				}
+			}
+		}
+	}
+
+	check_PC_unchanged(p_target, pc_sample_1);
+	// restore temporary register
+	int const old_err_code = error_code__get_and_clear(p_target);
+	error_code__update(p_target, reg_x__store(p_wrk_reg));
+	error_code__prepend(p_target, old_err_code);
+	assert(!p_wrk_reg->dirty);
+	return error_code__get_and_clear(p_target);
+}
+
+static int
+reg_csr__get(reg* const restrict p_reg)
+{
+	assert(p_reg);
+	assert(p_reg->number < 4096u);
+	if (!p_reg->exist) {
+		LOG_WARNING("CSR %s (#%d) is unavailable", p_reg->name, p_reg->number);
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+
+	assert(reg__check(p_reg));
+
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
+
+	check_that_target_halted(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__get_and_clear(p_target);
+	}
+
+	/// @todo check that FPU is enabled
+	/// Find temporary GP register
+	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+	assert(p_wrk_reg);
+
+	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+	if (error_code__get(p_target) == ERROR_OK) {
+		exec__setup(p_target);
+		int advance_pc_counter = 0;
+		if (error_code__get(p_target) == ERROR_OK) {
+			/// Copy values to temporary register
+			(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, p_reg->number));
+			advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+			if (error_code__get(p_target) == ERROR_OK) {
+				/// and store temporary register to CSR_DBG_SCRATCH CSR.
+				(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
+				advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+				if (error_code__get(p_target) == ERROR_OK) {
+					/// Correct pc by jump 2 instructions back and get previous command result.
+					assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
+					uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+					advance_pc_counter = 0;
+					if (error_code__get(p_target) == ERROR_OK) {
+						reg__set_valid_value_to_cache(p_reg, value);
+					}
+				}
+			}
+		}
+	}
+
+	if (error_code__get(p_target) == ERROR_OK) {
+		update_status(p_target);
+	}
+	check_PC_unchanged(p_target, pc_sample_1);
+
+	// restore temporary register
+	int const old_err_code = error_code__get_and_clear(p_target);
+	error_code__update(p_target, reg_x__store(p_wrk_reg));
+	error_code__prepend(p_target, old_err_code);
+	assert(!p_wrk_reg->dirty);
+
+	return error_code__get_and_clear(p_target);
+}
+
+static int
+reg_csr__set(reg* const restrict p_reg, uint8_t* const restrict buf)
+{
+	assert(p_reg);
+	assert(p_reg->number < 4096u);
+	if (!p_reg->exist) {
+		LOG_WARNING("Register %s is unavailable", p_reg->name);
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+
+	assert(reg__check(p_reg));
+
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
+
+	check_that_target_halted(p_target);
+	if (error_code__get(p_target) != ERROR_OK) {
+		return error_code__get_and_clear(p_target);
+	}
+
+	/// @todo check that FPU is enabled
+	/// Find temporary GP register
+	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+	assert(p_wrk_reg);
+
+	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+	if (error_code__get(p_target) == ERROR_OK) {
+		exec__setup(p_target);
+		int advance_pc_counter = 0;
+		if (error_code__get(p_target) == ERROR_OK) {
+			reg__set_new_cache_value(p_reg, buf);
+
+			exec__set_csr_data(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
+			if (error_code__get(p_target) == ERROR_OK) {
+				// set temporary register value to restoring pc value
+				(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
+				advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
+				if (error_code__get(p_target) == ERROR_OK) {
+					assert(p_wrk_reg->dirty);
+					assert(p_wrk_reg->number < NUMBER_OF_X_REGS);
+					(void)exec__step(p_target, RV_CSRW(p_reg->number, p_wrk_reg->number));
 					advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 					if (error_code__get(p_target) == ERROR_OK) {
 						/// Correct pc by jump 2 instructions back and get previous command result.
@@ -2304,117 +2406,128 @@ static reg_arch_type const reg_f_accessors =
 	.set = reg_f__set,
 };
 
-static struct reg_feature feature = {
+static reg_arch_type const reg_csr_accessors =
+{
+	.get = reg_csr__get,
+	.set = reg_csr__set,
+};
+static struct reg_feature feature_riscv_org = {
 	.name = "org.gnu.gdb.riscv.cpu",
 };
 
 static char const def_GP_regs_name[] = "rv32i";
 static reg const def_GP_regs_array[] = {
 	// Hard-wired zero
-	{.name = "x0", .number = 0, .caller_save = false, .dirty = false, .valid = true, .exist = true, .size = XLEN, .type = &reg_x0_accessors, .feature = &feature},
+	{.name = "x0", .number = 0, .caller_save = false, .dirty = false, .valid = true, .exist = true, .size = XLEN, .type = &reg_x0_accessors, .feature = &feature_riscv_org},
 
 	// Return address
-	{.name = "x1", .number = 1, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
+	{.name = "x1", .number = 1, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
 
 	// Stack pointer
-	{.name = "x2", .number = 2, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
+	{.name = "x2", .number = 2, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
 
 	// Global pointer
-	{.name = "x3", .number = 3, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
+	{.name = "x3", .number = 3, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
 
 	// Thread pointer
-	{.name = "x4", .number = 4, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
+	{.name = "x4", .number = 4, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
 
 	// Temporaries
-	{.name = "x5", .number = 5, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x6", .number = 6, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x7", .number = 7, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
+	{.name = "x5", .number = 5, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x6", .number = 6, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x7", .number = 7, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
 
 	// Saved register/frame pointer
-	{.name = "x8", .number = 8, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
+	{.name = "x8", .number = 8, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
 
 	// Saved register
-	{.name = "x9", .number = 9, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
+	{.name = "x9", .number = 9, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
 
 	// Function arguments/return values
-	{.name = "x10", .number = 10, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x11", .number = 11, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
+	{.name = "x10", .number = 10, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x11", .number = 11, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
 
 	// Function arguments
-	{.name = "x12", .number = 12, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x13", .number = 13, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x14", .number = 14, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x15", .number = 15, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x16", .number = 16, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x17", .number = 17, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
+	{.name = "x12", .number = 12, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x13", .number = 13, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x14", .number = 14, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x15", .number = 15, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x16", .number = 16, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x17", .number = 17, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
 
 	// Saved registers
-	{.name = "x18", .number = 18, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x19", .number = 19, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x20", .number = 20, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x21", .number = 21, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x22", .number = 22, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x23", .number = 23, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x24", .number = 24, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x25", .number = 25, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x26", .number = 26, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x27", .number = 27, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
+	{.name = "x18", .number = 18, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x19", .number = 19, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x20", .number = 20, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x21", .number = 21, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x22", .number = 22, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x23", .number = 23, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x24", .number = 24, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x25", .number = 25, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x26", .number = 26, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x27", .number = 27, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
 
 	// Temporaries
-	{.name = "x28", .number = 28, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x29", .number = 29, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x30", .number = 30, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
-	{.name = "x31", .number = 31, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature},
+	{.name = "x28", .number = 28, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x29", .number = 29, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x30", .number = 30, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x31", .number = 31, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
 
 	// Program counter
-	{.name = "pc", .number = REG_PC_NUMBER, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_pc_accessors, .feature = &feature},
+	{.name = "pc", .number = REG_PC_NUMBER, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_pc_accessors, .feature = &feature_riscv_org},
 };
 
 static char const def_FP_regs_name[] = "rv32if";
 static reg const def_FP_regs_array[] = {
 	// FP temporaries
-	{.name = "f0", .number = 0, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f1", .number = 1, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f2", .number = 2, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f3", .number = 3, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f4", .number = 4, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f5", .number = 5, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f6", .number = 6, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f7", .number = 7, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
+	{.name = "f0", .number = 0, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f1", .number = 1, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f2", .number = 2, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f3", .number = 3, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f4", .number = 4, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f5", .number = 5, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f6", .number = 6, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f7", .number = 7, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
 
 	// FP saved registers
-	{.name = "f8", .number = 8, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f9", .number = 9, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
+	{.name = "f8", .number = 8, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f9", .number = 9, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
 
 	// FP arguments/return values
-	{.name = "f10", .number = 10, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f11", .number = 11, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
+	{.name = "f10", .number = 10, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f11", .number = 11, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
 
 	// FP arguments
-	{.name = "f12", .number = 12, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f13", .number = 13, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f14", .number = 14, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f15", .number = 15, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f16", .number = 16, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f17", .number = 17, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
+	{.name = "f12", .number = 12, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f13", .number = 13, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f14", .number = 14, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f15", .number = 15, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f16", .number = 16, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f17", .number = 17, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
 
 	// FP saved registers
-	{.name = "f18", .number = 18, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f19", .number = 19, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f20", .number = 20, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f21", .number = 21, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f22", .number = 22, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f23", .number = 23, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f24", .number = 24, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f25", .number = 25, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f26", .number = 26, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f27", .number = 27, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
+	{.name = "f18", .number = 18, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f19", .number = 19, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f20", .number = 20, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f21", .number = 21, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f22", .number = 22, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f23", .number = 23, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f24", .number = 24, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f25", .number = 25, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f26", .number = 26, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f27", .number = 27, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
 
 	// FP temporaries
-	{.name = "f28", .number = 28, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f29", .number = 29, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f30", .number = 30, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
-	{.name = "f31", .number = 31, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature},
+	{.name = "f28", .number = 28, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f29", .number = 29, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f30", .number = 30, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f31", .number = 31, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+};
+
+static char const def_CSR_regs_name[] = "rv32iCSR";
+static reg const def_CSR_regs_array[] = {
+	// FP temporaries
+	{.name = "mstatus", .number = CSR_mstatus, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_csr_accessors, .feature = &feature_riscv_org}
 };
 
 static int
@@ -2424,6 +2537,8 @@ sc_rv32i__init_target(struct command_context *cmd_ctx, target* const restrict p_
 	reg_cache* p_reg_cache_last = p_target->reg_cache = reg_cache__create(def_GP_regs_name, def_GP_regs_array, ARRAY_LEN(def_GP_regs_array), p_target);;
 	assert(p_reg_cache_last);
 	p_reg_cache_last = p_reg_cache_last->next = reg_cache__create(def_FP_regs_name, def_FP_regs_array, ARRAY_LEN(def_FP_regs_array), p_target);
+	assert(p_reg_cache_last);
+	p_reg_cache_last = p_reg_cache_last->next = reg_cache__create(def_CSR_regs_name, def_CSR_regs_array, ARRAY_LEN(def_CSR_regs_array), p_target);
 	assert(p_reg_cache_last);
 
 	sc_rv32i__Arch* p_arch_info = calloc(1, sizeof(sc_rv32i__Arch));
@@ -2663,7 +2778,7 @@ sc_rv32i__read_memory(target* const restrict p_target, uint32_t address, uint32_
 				}
 
 				/// Load address to work register
-				(void)exec__step(p_target, RV_CSRRW(p_wrk_reg->number, CSR_DBG_SCRATCH, zero));
+				(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
 				advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 				if (error_code__get(p_target) != ERROR_OK) {
 					break;
@@ -2677,7 +2792,7 @@ sc_rv32i__read_memory(target* const restrict p_target, uint32_t address, uint32_
 				}
 
 				/// Exec store work register to csr
-				(void)exec__step(p_target, RV_CSRRW(zero, CSR_DBG_SCRATCH, p_wrk_reg->number));
+				(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
 				advance_pc_counter += NUM_BITS_TO_SIZE(ILEN);
 
 				/// get data from csr and jump back to correct pc
@@ -2766,12 +2881,12 @@ sc_rv32i__write_memory(target* const restrict p_target, uint32_t address, uint32
 			exec__set_csr_data(p_target, address);
 			if (error_code__get(p_target) == ERROR_OK) {
 				/// Load address to work register
-				(void)exec__step(p_target, RV_CSRRW(p_addr_reg->number, CSR_DBG_SCRATCH, zero));
+				(void)exec__step(p_target, RV_CSRR(p_addr_reg->number, CSR_DBG_SCRATCH));
 				advance_pc_counter += instr_step;
 
 				// Opcodes
 				uint32_t const instructions[3] = {
-					RV_CSRRW(p_data_reg->number, CSR_DBG_SCRATCH, zero),
+					RV_CSRR(p_data_reg->number, CSR_DBG_SCRATCH),
 					(size == 4 ? RV_SW(p_data_reg->number, p_addr_reg->number, 0) :
 					size == 2 ? RV_SH(p_data_reg->number, p_addr_reg->number, 0) :
 					/*size == 1*/ RV_SB(p_data_reg->number, p_addr_reg->number, 0)),
