@@ -45,6 +45,7 @@ Syntacore RISC-V target
 #define USE_CHECK_PC_UNCHANGED USE_PC_FROM_PC_SAMPLE
 /// TAP IDCODE expected
 #define EXPECTED_IDCODE (0xC0DEDEB1u)
+#define FP_enabled !!1
 
 /// Lowest required DBG_ID
 #define EXPECTED_DBG_ID        (0x00800001u)
@@ -2480,48 +2481,48 @@ static reg const def_GP_regs_array[] = {
 static char const def_FP_regs_name[] = "rv32if";
 static reg const def_FP_regs_array[] = {
 	// FP temporaries
-	{.name = "f0", .number = 0, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f1", .number = 1, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f2", .number = 2, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f3", .number = 3, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f4", .number = 4, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f5", .number = 5, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f6", .number = 6, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f7", .number = 7, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f0", .number = 0, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f1", .number = 1, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f2", .number = 2, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f3", .number = 3, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f4", .number = 4, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f5", .number = 5, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f6", .number = 6, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f7", .number = 7, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
 
 	// FP saved registers
-	{.name = "f8", .number = 8, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f9", .number = 9, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f8", .number = 8, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f9", .number = 9, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
 
 	// FP arguments/return values
-	{.name = "f10", .number = 10, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f11", .number = 11, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f10", .number = 10, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f11", .number = 11, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
 
 	// FP arguments
-	{.name = "f12", .number = 12, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f13", .number = 13, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f14", .number = 14, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f15", .number = 15, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f16", .number = 16, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f17", .number = 17, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f12", .number = 12, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f13", .number = 13, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f14", .number = 14, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f15", .number = 15, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f16", .number = 16, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f17", .number = 17, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
 
 	// FP saved registers
-	{.name = "f18", .number = 18, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f19", .number = 19, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f20", .number = 20, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f21", .number = 21, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f22", .number = 22, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f23", .number = 23, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f24", .number = 24, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f25", .number = 25, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f26", .number = 26, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f27", .number = 27, .caller_save = false, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f18", .number = 18, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f19", .number = 19, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f20", .number = 20, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f21", .number = 21, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f22", .number = 22, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f23", .number = 23, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f24", .number = 24, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f25", .number = 25, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f26", .number = 26, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f27", .number = 27, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
 
 	// FP temporaries
-	{.name = "f28", .number = 28, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f29", .number = 29, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f30", .number = 30, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f31", .number = 31, .caller_save = true, .dirty = false, .valid = false, .exist = false, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f28", .number = 28, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f29", .number = 29, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f30", .number = 30, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f31", .number = 31, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
 };
 
 static char const def_CSR_regs_name[] = "rv32iCSR";
