@@ -155,7 +155,9 @@ enum
 	zero = 0u,
 	sp = 14u,
 	REG_PC_NUMBER = 32u,
-	TOTAL_NUMBER_OF_REGS = 32 + 1 + 32,
+	NUMBER_OF_GP_REGS = 33u,
+	NUMBER_OF_FP_REGS = 32u,
+	TOTAL_NUMBER_OF_REGS = NUMBER_OF_GP_REGS + NUMBER_OF_FP_REGS,
 };
 
 /// Type of instruction
@@ -1788,11 +1790,10 @@ static reg*
 prepare_temporary_GP_register(target const* const restrict p_target, int const after_reg)
 {
 	assert(p_target);
-	reg_cache const* const p_reg_cache = p_target->reg_cache;
-	assert(p_reg_cache);
-	reg* const p_reg_list = p_reg_cache->reg_list;
+	assert(p_target->reg_cache);
+	reg* const p_reg_list = p_target->reg_cache->reg_list;
 	assert(p_reg_list);
-	assert(p_reg_cache->num_regs >= REG_PC_NUMBER);
+	assert(p_target->reg_cache->num_regs >= REG_PC_NUMBER);
 	reg* p_valid = NULL;
 	reg* p_dirty = NULL;
 	for (size_t i = after_reg + 1; i < REG_PC_NUMBER; ++i) {
@@ -2121,7 +2122,7 @@ reg_cache__create(char const* name, reg const regs_templates[], size_t const num
 		.num_regs = num_regs,
 	};
 
-	reg_cache* const p_obj = calloc(1, sizeof(reg_cache));
+	reg_cache* const restrict p_obj = calloc(1, sizeof(reg_cache));
 	assert(p_obj);
 	*p_obj = the_reg_cache;
 	return p_obj;
@@ -2144,8 +2145,7 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 	}
 
 	/// @todo multiple caches
-	reg_cache* const p_reg_cache = p_target->reg_cache;
-	reg* const p_pc = &p_reg_cache->reg_list[REG_PC_NUMBER];
+	reg* const p_pc = &p_target->reg_cache->reg_list[REG_PC_NUMBER];
 	if (!current) {
 		uint8_t buf[sizeof address];
 		buf_set_u32(buf, 0, XLEN, address);
@@ -2180,7 +2180,7 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 				// If HART in single step mode
 				if (dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT)) {
 					// then single step already done
-					reg_cache__chain_invalidate(p_reg_cache);
+					reg_cache__chain_invalidate(p_target->reg_cache);
 					set_DEMODE_ENBL(p_target, dmode_enabled);
 #if 0
 					target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
@@ -2199,7 +2199,7 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 		dmode_enabled &= !BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 	}
 
-	reg_cache__chain_invalidate(p_reg_cache);
+	reg_cache__chain_invalidate(p_target->reg_cache);
 	set_DEMODE_ENBL(p_target, dmode_enabled);
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__get_and_clear(p_target);
@@ -2427,6 +2427,7 @@ sc_rv32i__deinit_target(target* const restrict p_target)
 	assert(p_target);
 	while (p_target->reg_cache) {
 		reg_cache* const p_reg_cache = p_target->reg_cache;
+		p_target->reg_cache = p_target->reg_cache->next;
 		reg* const reg_list = p_reg_cache->reg_list;
 		assert(!p_reg_cache->num_regs || reg_list);
 		for (unsigned i = 0; i < p_reg_cache->num_regs; ++i) {
@@ -2434,7 +2435,6 @@ sc_rv32i__deinit_target(target* const restrict p_target)
 		}
 		free(reg_list);
 
-		p_target->reg_cache = p_reg_cache->next;
 		free(p_reg_cache);
 	}
 	if (p_target->arch_info) {
@@ -2963,14 +2963,20 @@ sc_rv32i__get_gdb_reg_list(target* const restrict p_target, reg **reg_list[], in
 	assert(reg_list_size);
 	assert(reg_class == REG_CLASS_ALL || reg_class == REG_CLASS_GENERAL);
 
-	size_t const num_regs = reg_class == REG_CLASS_ALL ? TOTAL_NUMBER_OF_REGS : REG_PC_NUMBER + 1;
-	reg** p_reg_array = calloc(num_regs, sizeof(reg*));
-	reg *a_reg_list = p_target->reg_cache->reg_list;
-	for (size_t i = 0; i < num_regs; ++i) {
-		p_reg_array[i] = &a_reg_list[i];
+	size_t const num_regs = reg_class == REG_CLASS_ALL ? TOTAL_NUMBER_OF_REGS : NUMBER_OF_GP_REGS;
+	reg** const p_reg_array = calloc(num_regs, sizeof(reg*));
+	reg** p_reg_iter = p_reg_array;
+	size_t regs_left = num_regs;
+	for (reg_cache * restrict p_reg_cache = p_target->reg_cache; p_reg_cache && regs_left; p_reg_cache = p_reg_cache->next) {
+		reg *p_reg_list = p_reg_cache->reg_list;
+		for (size_t i = 0; i < p_reg_cache->num_regs && regs_left; ++i, --regs_left) {
+			*p_reg_iter++ = &p_reg_list[i];
+		}
 	}
+
+	// out results
 	*reg_list = p_reg_array;
-	*reg_list_size = num_regs;
+	*reg_list_size = num_regs - regs_left;
 	return error_code__get_and_clear(p_target);
 }
 
