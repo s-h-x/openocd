@@ -1770,6 +1770,8 @@ reg_x__set(reg* const restrict p_reg, uint8_t* const restrict buf)
 
 	assert(p_reg->value);
 	buf_set_u32(p_reg->value, 0, XLEN, value);
+	p_reg->valid = true;
+	p_reg->dirty = true;
 
 	/// store dirty register data to HW
 	return reg_x__store(p_reg);
