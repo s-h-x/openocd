@@ -2941,7 +2941,7 @@ sc_rv32i__write_memory(target* const restrict p_target, uint32_t address, uint32
 					};
 
 					data_scan_fields[0].out_value = (uint8_t const*)buffer;
-					LOG_DEBUG("Repeat %d times:", count);
+					LOG_DEBUG("Repeat in loop %d times:", count);
 					LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
 							  data_scan_fields[0].num_bits, buf_get_u32(data_scan_fields[0].out_value, 0, data_scan_fields[0].num_bits),
 							  data_scan_fields[1].num_bits, buf_get_u32(data_scan_fields[1].out_value, 0, data_scan_fields[1].num_bits));
@@ -2961,6 +2961,7 @@ sc_rv32i__write_memory(target* const restrict p_target, uint32_t address, uint32
 						}
 						buffer += size;
 					}
+					LOG_DEBUG("End loop");
 					if (!p_arch->use_pc_advmt_dsbl_bit) {
 						assert(advance_pc_counter % NUM_BITS_TO_SIZE(XLEN) == 0);
 						while (advance_pc_counter) {
