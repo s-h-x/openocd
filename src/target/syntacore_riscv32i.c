@@ -2547,9 +2547,19 @@ static reg const def_FP_regs_array[] = {
 
 static char const def_CSR_regs_name[] = "rv32iCSR";
 static reg const def_CSR_regs_array[] = {
-	// FP temporaries
-	{.name = "mstatus", .number = CSR_mstatus, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_csr_accessors, .feature = &feature_riscv_org}
+#define DEF_ITEM(NAME) {.name = #NAME, .number = CSR_##NAME, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_csr_accessors, .feature = &feature_riscv_org}
+	DEF_ITEM(mcpuid),
+	DEF_ITEM(mimpid),
+	DEF_ITEM(mhartid),
+	DEF_ITEM(mstatus),
+	DEF_ITEM(mepc),
+	DEF_ITEM(mcause),
+	DEF_ITEM(mbadaddr),
+	DEF_ITEM(mip),
+	DEF_ITEM(fflags),
+	DEF_ITEM(frm),
 };
+#undef DEF_ITEM
 
 static int
 sc_rv32i__init_target(struct command_context *cmd_ctx, target* const restrict p_target)
@@ -3200,6 +3210,7 @@ target_type syntacore_riscv32i_target =
 	.deinit_target = sc_rv32i__deinit_target,
 
 	.virt2phys = NULL,
+	// Default implementation is to call read_memory.
 	.read_phys_memory = NULL,
 	.write_phys_memory = NULL,
 
