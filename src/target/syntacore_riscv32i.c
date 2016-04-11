@@ -39,7 +39,7 @@ Syntacore RISC-V target
 #define USE_VERIFY_CORE_REGTRANS_WRITE 1
 /// If first instruction in normal resume replaced by breakpoint opcode,
 /// then emulate first step by execution of stored opcode with debug facilities
-#define USE_RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION 1
+#define USE_RESUME_AT_SW_BREAKPOINT_EMULATES_SAVED_INSTRUCTION 0
 #define USE_PC_ADVMT_DSBL_BIT 1
 #define USE_QUEUING_FOR_DR_SCANS 1
 #define USE_CHECK_PC_UNCHANGED USE_PC_FROM_PC_SAMPLE
@@ -1254,7 +1254,7 @@ debug_controller__unlock(target const* const restrict p_target)
 	{
 		static uint8_t const ir_out_buffer_DAP_CTRL[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {TAP_INSTR_DAP_CTRL};
 		/// @todo jtag_add_ir_scan need non-const scan_field
-		static scan_field ir_field_DAP_CTRL = {.num_bits = TAP_IR_LEN, .out_value = ir_out_buffer_DAP_CTRL};
+		static scan_field ir_field_DAP_CTRL = {.num_bits = TAP_IR_LEN,.out_value = ir_out_buffer_DAP_CTRL};
 		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_INSTR_DAP_CTRL);
 		jtag_add_ir_scan(p_target->tap, &ir_field_DAP_CTRL, TAP_IDLE);
 	}
@@ -1262,7 +1262,7 @@ debug_controller__unlock(target const* const restrict p_target)
 	{
 		static uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_UNIT_ID_HART_0, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_FGRP_HART_DBGCMD, 0, 1);
 		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof set_dap_unit_group);
-		static scan_field const dr_field_DAP_CTRL = {.num_bits = TAP_LEN_DAP_CTRL, .out_value = &set_dap_unit_group};
+		static scan_field const dr_field_DAP_CTRL = {.num_bits = TAP_LEN_DAP_CTRL,.out_value = &set_dap_unit_group};
 		p_arch->last_DAP_ctrl = DAP_CTRL_INVALID_CODE;
 		LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, dr_field_DAP_CTRL.num_bits, set_dap_unit_group);
 		jtag_add_dr_scan(p_target->tap, 1, &dr_field_DAP_CTRL, TAP_IDLE);
@@ -1270,7 +1270,7 @@ debug_controller__unlock(target const* const restrict p_target)
 
 	{
 		static uint8_t const ir_out_buffer_DAP_CMD[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {TAP_INSTR_DAP_CMD};
-		static scan_field ir_field_DAP_CMD = {.num_bits = TAP_IR_LEN, .out_value = ir_out_buffer_DAP_CMD};
+		static scan_field ir_field_DAP_CMD = {.num_bits = TAP_IR_LEN,.out_value = ir_out_buffer_DAP_CMD};
 		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_INSTR_DAP_CMD);
 		jtag_add_ir_scan(p_target->tap, &ir_field_DAP_CMD, TAP_IDLE);
 	}
@@ -1279,8 +1279,8 @@ debug_controller__unlock(target const* const restrict p_target)
 		static uint32_t const dap_opcode_ext_UNLOCK = 0xF0F0A5A5u;
 		static uint8_t const dap_opcode_UNLOCK = DBGC_DAP_OPCODE_DBGCMD_UNLOCK;
 		scan_field const dr_fields_UNLOCK[2] = {
-			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT, .out_value = (uint8_t const*)(&dap_opcode_ext_UNLOCK), .in_value = (uint8_t*)(&lock_context)},
-			{.num_bits = TAP_LEN_DAP_CMD_OPCODE, .out_value = &dap_opcode_UNLOCK}
+			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = (uint8_t const*)(&dap_opcode_ext_UNLOCK),.in_value = (uint8_t*)(&lock_context)},
+			{.num_bits = TAP_LEN_DAP_CMD_OPCODE,.out_value = &dap_opcode_UNLOCK}
 		};
 		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name, dr_fields_UNLOCK[0].num_bits, dap_opcode_ext_UNLOCK, dr_fields_UNLOCK[1].num_bits, dap_opcode_UNLOCK);
 		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(dr_fields_UNLOCK), dr_fields_UNLOCK, TAP_IDLE);
@@ -1290,14 +1290,14 @@ debug_controller__unlock(target const* const restrict p_target)
 
 	{
 		static uint8_t const ir_out_buffer_DBG_STATUS[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {TAP_INSTR_DBG_STATUS};
-		static scan_field ir_field_DBG_STATUS = {.num_bits = TAP_IR_LEN, .out_value = ir_out_buffer_DBG_STATUS};
+		static scan_field ir_field_DBG_STATUS = {.num_bits = TAP_IR_LEN,.out_value = ir_out_buffer_DBG_STATUS};
 		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_INSTR_DBG_STATUS);
 		jtag_add_ir_scan(p_target->tap, &ir_field_DBG_STATUS, TAP_IDLE);
 	}
 
 	uint32_t status = 0xBADC0DEBu;
 	{
-		scan_field const dr_field_DBG_STATUS = {.num_bits = TAP_LEN_DBG_STATUS, .out_value = (uint8_t const*)(&status), .in_value = (uint8_t*)(&status)};
+		scan_field const dr_field_DBG_STATUS = {.num_bits = TAP_LEN_DBG_STATUS,.out_value = (uint8_t const*)(&status),.in_value = (uint8_t*)(&status)};
 		LOG_DEBUG("drscan %s %d 0x%08X", p_target->cmd_name, dr_field_DBG_STATUS.num_bits, status);
 		jtag_add_dr_scan(p_target->tap, 1, &dr_field_DBG_STATUS, TAP_IDLE);
 	}
@@ -1321,7 +1321,7 @@ HART0_clear_sticky(target* const restrict p_target)
 	{
 		uint8_t ir_dap_ctrl_out_buffer[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {};
 		buf_set_u32(ir_dap_ctrl_out_buffer, 0, TAP_IR_LEN, TAP_INSTR_DAP_CTRL);
-		scan_field ir_dap_ctrl_field = {.num_bits = p_target->tap->ir_length, .out_value = ir_dap_ctrl_out_buffer};
+		scan_field ir_dap_ctrl_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_ctrl_out_buffer};
 		jtag_add_ir_scan(p_target->tap, &ir_dap_ctrl_field, TAP_IDLE);
 		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_INSTR_DAP_CTRL);
 	}
@@ -1331,14 +1331,14 @@ HART0_clear_sticky(target* const restrict p_target)
 		p_arch->last_DAP_ctrl = DAP_CTRL_INVALID_CODE;
 
 		uint8_t const set_dap_unit_group = 0x1u;
-		scan_field const dr_dap_ctrl_field = {.num_bits = TAP_LEN_DAP_CTRL, .out_value = &set_dap_unit_group};
+		scan_field const dr_dap_ctrl_field = {.num_bits = TAP_LEN_DAP_CTRL,.out_value = &set_dap_unit_group};
 		jtag_add_dr_scan(p_target->tap, 1, &dr_dap_ctrl_field, TAP_IDLE);
 	}
 
 	{
 		uint8_t ir_dap_cmd_out_buffer[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {};
 		buf_set_u32(ir_dap_cmd_out_buffer, 0, TAP_IR_LEN, TAP_INSTR_DAP_CMD);
-		scan_field ir_dap_cmd_field = {.num_bits = p_target->tap->ir_length, .out_value = ir_dap_cmd_out_buffer};
+		scan_field ir_dap_cmd_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_cmd_out_buffer};
 		jtag_add_ir_scan(p_target->tap, &ir_dap_cmd_field, TAP_IDLE);
 	}
 
@@ -1346,8 +1346,8 @@ HART0_clear_sticky(target* const restrict p_target)
 		uint32_t const dap_opcode_ext = BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS);
 		uint8_t const dap_opcode = DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL;
 		scan_field const fields[2] = {
-			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT, .out_value = (uint8_t const*)&dap_opcode_ext},
-			{.num_bits = TAP_LEN_DAP_CMD_OPCODE, .out_value = &dap_opcode}
+			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = (uint8_t const*)&dap_opcode_ext},
+			{.num_bits = TAP_LEN_DAP_CMD_OPCODE,.out_value = &dap_opcode}
 		};
 		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
 	}
@@ -1373,7 +1373,7 @@ core_clear_errors(target* const restrict p_target)
 	{
 		uint8_t ir_dap_ctrl_out_buffer[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {};
 		buf_set_u32(ir_dap_ctrl_out_buffer, 0, TAP_IR_LEN, TAP_INSTR_DAP_CTRL);
-		scan_field ir_dap_ctrl_field = {.num_bits = p_target->tap->ir_length, .out_value = ir_dap_ctrl_out_buffer};
+		scan_field ir_dap_ctrl_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_ctrl_out_buffer};
 		jtag_add_ir_scan(p_target->tap, &ir_dap_ctrl_field, TAP_IDLE);
 		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_INSTR_DAP_CTRL);
 	}
@@ -1383,7 +1383,7 @@ core_clear_errors(target* const restrict p_target)
 		p_arch->last_DAP_ctrl = DAP_CTRL_INVALID_CODE;
 
 		uint8_t const set_dap_unit_group = (DBGC_UNIT_ID_CORE << TAP_LEN_DAP_CTRL_FGROUP) | DBGC_FGRP_CORE_REGTRANS;
-		scan_field const field = {.num_bits = TAP_LEN_DAP_CTRL, .out_value = &set_dap_unit_group};
+		scan_field const field = {.num_bits = TAP_LEN_DAP_CTRL,.out_value = &set_dap_unit_group};
 		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
 		LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, set_dap_unit_group);
 	}
@@ -1391,7 +1391,7 @@ core_clear_errors(target* const restrict p_target)
 	{
 		uint8_t ir_dap_cmd_out_buffer[NUM_BITS_TO_SIZE(TAP_IR_LEN)] = {};
 		buf_set_u32(ir_dap_cmd_out_buffer, 0, TAP_IR_LEN, TAP_INSTR_DAP_CMD);
-		scan_field ir_dap_cmd_field = {.num_bits = p_target->tap->ir_length, .out_value = ir_dap_cmd_out_buffer};
+		scan_field ir_dap_cmd_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_cmd_out_buffer};
 		jtag_add_ir_scan(p_target->tap, &ir_dap_cmd_field, TAP_IDLE);
 		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_INSTR_DAP_CMD);
 	}
@@ -1400,8 +1400,8 @@ core_clear_errors(target* const restrict p_target)
 		uint32_t const dap_opcode_ext = 0xFFFFFFFF;
 		uint8_t const dap_opcode = REGTRANS_scan_type(true, DBGC_CORE_REGS_DBG_STS);
 		scan_field const fields[2] = {
-			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT, .out_value = (uint8_t const*)&dap_opcode_ext},
-			{.num_bits = TAP_LEN_DAP_CMD_OPCODE, .out_value = &dap_opcode}
+			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = (uint8_t const*)&dap_opcode_ext},
+			{.num_bits = TAP_LEN_DAP_CMD_OPCODE,.out_value = &dap_opcode}
 		};
 		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
 		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name, fields[0].num_bits, dap_opcode_ext, fields[1].num_bits, dap_opcode);
@@ -1415,17 +1415,17 @@ DAP_CTRL_REG_set(target const* const restrict p_target, enum type_dbgc_unit_id_e
 	assert(
 		(
 		((dap_unit == DBGC_UNIT_ID_HART_0 && 0 == p_target->coreid) || (dap_unit == DBGC_UNIT_ID_HART_1 && 1 == p_target->coreid)) &&
-		(dap_group == DBGC_FGRP_HART_REGTRANS || dap_group == DBGC_FGRP_HART_DBGCMD)
-		) ||
-		(dap_unit == DBGC_UNIT_ID_CORE && dap_group == DBGC_FGRP_HART_REGTRANS)
-		);
+			(dap_group == DBGC_FGRP_HART_REGTRANS || dap_group == DBGC_FGRP_HART_DBGCMD)
+			) ||
+			(dap_unit == DBGC_UNIT_ID_CORE && dap_group == DBGC_FGRP_HART_REGTRANS)
+	);
 
 	uint8_t const set_dap_unit_group =
 		MAKE_TYPE_FIELD(uint8_t,
-		MAKE_TYPE_FIELD(uint8_t, dap_unit, TAP_LEN_DAP_CTRL_FGROUP, TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1) |
-		MAKE_TYPE_FIELD(uint8_t, dap_group, 0, TAP_LEN_DAP_CTRL_FGROUP - 1),
-		0,
-		TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1);
+						MAKE_TYPE_FIELD(uint8_t, dap_unit, TAP_LEN_DAP_CTRL_FGROUP, TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1) |
+						MAKE_TYPE_FIELD(uint8_t, dap_group, 0, TAP_LEN_DAP_CTRL_FGROUP - 1),
+						0,
+						TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1);
 
 	sc_rv32i__Arch* const restrict p_arch = p_target->arch_info;
 	assert(p_arch);
@@ -1775,7 +1775,7 @@ reg__set_valid_value_to_cache(reg* const restrict p_reg, uint32_t const value)
 	assert(p_reg->exist);
 
 	STATIC_ASSERT((CHAR_BIT) == 8);
-	assert(p_reg->size <= (CHAR_BIT)* sizeof value);
+	assert(p_reg->size <= (CHAR_BIT) * sizeof value);
 
 	LOG_DEBUG("Updating cache from register %s to 0x%08X", p_reg->name, value);
 
@@ -1795,7 +1795,7 @@ reg__set_new_cache_value(reg* const restrict p_reg, uint8_t* const restrict buf)
 	assert(p_reg->exist);
 
 	STATIC_ASSERT((CHAR_BIT) == 8);
-	assert(p_reg->size <= (CHAR_BIT)* sizeof(uint32_t));
+	assert(p_reg->size <= (CHAR_BIT) * sizeof(uint32_t));
 
 	LOG_DEBUG("Set register %s cache to 0x%08X", p_reg->name, buf_get_u32(buf, 0, p_reg->size));
 
@@ -2563,9 +2563,7 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 	if (handle_breakpoints) {
 		dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 
-		sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
-		assert(p_arch);
-		if (p_arch->use_resume_at_sw_breakpoint_emulates_saved_instruction && current) {
+		if (current) {
 			// Find breakpoint for current instruction
 			error_code__update(p_target, reg_pc__get(p_pc));
 			assert(p_pc->value);
@@ -2580,9 +2578,20 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 			if (p_next_bkp) {
 				// If next instruction is replaced by breakpoint, then execute saved instruction
 				uint32_t const instruction = buf_get_u32(p_next_bkp->orig_instr, 0, ILEN);
-				exec__setup(p_target);
-				exec__step(p_target, instruction);
-				// If HART in single step mode
+				sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
+				assert(p_arch);
+				if (p_arch->use_resume_at_sw_breakpoint_emulates_saved_instruction) {
+					exec__setup(p_target);
+					exec__step(p_target, instruction);
+					// If HART in single step mode
+				} else {
+					error_code__update(p_target, target_write_u32(p_target, p_next_bkp->address, instruction));
+					reg_cache__chain_invalidate(p_target->reg_cache);
+					set_DEMODE_ENBL(p_target, dmode_enabled | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT));
+					DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
+					(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
+					error_code__update(p_target, target_write_u32(p_target, p_next_bkp->address, RV_SBREAK()));
+				}
 				if (dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT)) {
 					// then single step already done
 					reg_cache__chain_invalidate(p_target->reg_cache);
@@ -2717,110 +2726,110 @@ static struct reg_feature feature_riscv_org = {
 static char const def_GP_regs_name[] = "rv32i";
 static reg const def_GP_regs_array[] = {
 	// Hard-wired zero
-	{.name = "x0", .number = 0, .caller_save = false, .dirty = false, .valid = true, .exist = true, .size = XLEN, .type = &reg_x0_accessors, .feature = &feature_riscv_org},
+	{.name = "x0",.number = 0,.caller_save = false,.dirty = false,.valid = true,.exist = true,.size = XLEN,.type = &reg_x0_accessors,.feature = &feature_riscv_org},
 
 	// Return address
-	{.name = "x1", .number = 1, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x1",.number = 1,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
 
 	// Stack pointer
-	{.name = "x2", .number = 2, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x2",.number = 2,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
 
 	// Global pointer
-	{.name = "x3", .number = 3, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x3",.number = 3,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
 
 	// Thread pointer
-	{.name = "x4", .number = 4, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x4",.number = 4,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
 
 	// Temporaries
-	{.name = "x5", .number = 5, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x6", .number = 6, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x7", .number = 7, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x5",.number = 5,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x6",.number = 6,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x7",.number = 7,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
 
 	// Saved register/frame pointer
-	{.name = "x8", .number = 8, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x8",.number = 8,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
 
 	// Saved register
-	{.name = "x9", .number = 9, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x9",.number = 9,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
 
 	// Function arguments/return values
-	{.name = "x10", .number = 10, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x11", .number = 11, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x10",.number = 10,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x11",.number = 11,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
 
 	// Function arguments
-	{.name = "x12", .number = 12, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x13", .number = 13, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x14", .number = 14, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x15", .number = 15, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x16", .number = 16, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x17", .number = 17, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x12",.number = 12,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x13",.number = 13,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x14",.number = 14,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x15",.number = 15,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x16",.number = 16,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x17",.number = 17,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
 
 	// Saved registers
-	{.name = "x18", .number = 18, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x19", .number = 19, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x20", .number = 20, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x21", .number = 21, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x22", .number = 22, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x23", .number = 23, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x24", .number = 24, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x25", .number = 25, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x26", .number = 26, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x27", .number = 27, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x18",.number = 18,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x19",.number = 19,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x20",.number = 20,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x21",.number = 21,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x22",.number = 22,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x23",.number = 23,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x24",.number = 24,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x25",.number = 25,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x26",.number = 26,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x27",.number = 27,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
 
 	// Temporaries
-	{.name = "x28", .number = 28, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x29", .number = 29, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x30", .number = 30, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
-	{.name = "x31", .number = 31, .caller_save = true, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_x_accessors, .feature = &feature_riscv_org},
+	{.name = "x28",.number = 28,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x29",.number = 29,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x30",.number = 30,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
+	{.name = "x31",.number = 31,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org},
 
 	// Program counter
-	{.name = "pc", .number = REG_PC_NUMBER, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_pc_accessors, .feature = &feature_riscv_org},
+	{.name = "pc",.number = REG_PC_NUMBER,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_pc_accessors,.feature = &feature_riscv_org},
 };
 
 static char const def_FP_regs_name[] = "rv32if";
 static reg const def_FP_regs_array[] = {
 	// FP temporaries
-	{.name = "f0", .number = 0, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f1", .number = 1, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f2", .number = 2, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f3", .number = 3, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f4", .number = 4, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f5", .number = 5, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f6", .number = 6, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f7", .number = 7, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f0",.number = 0,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f1",.number = 1,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f2",.number = 2,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f3",.number = 3,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f4",.number = 4,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f5",.number = 5,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f6",.number = 6,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f7",.number = 7,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
 
 	// FP saved registers
-	{.name = "f8", .number = 8, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f9", .number = 9, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f8",.number = 8,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f9",.number = 9,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
 
 	// FP arguments/return values
-	{.name = "f10", .number = 10, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f11", .number = 11, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f10",.number = 10,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f11",.number = 11,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
 
 	// FP arguments
-	{.name = "f12", .number = 12, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f13", .number = 13, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f14", .number = 14, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f15", .number = 15, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f16", .number = 16, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f17", .number = 17, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f12",.number = 12,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f13",.number = 13,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f14",.number = 14,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f15",.number = 15,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f16",.number = 16,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f17",.number = 17,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
 
 	// FP saved registers
-	{.name = "f18", .number = 18, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f19", .number = 19, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f20", .number = 20, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f21", .number = 21, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f22", .number = 22, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f23", .number = 23, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f24", .number = 24, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f25", .number = 25, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f26", .number = 26, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f27", .number = 27, .caller_save = false, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f18",.number = 18,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f19",.number = 19,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f20",.number = 20,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f21",.number = 21,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f22",.number = 22,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f23",.number = 23,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f24",.number = 24,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f25",.number = 25,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f26",.number = 26,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f27",.number = 27,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
 
 	// FP temporaries
-	{.name = "f28", .number = 28, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f29", .number = 29, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f30", .number = 30, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
-	{.name = "f31", .number = 31, .caller_save = true, .dirty = false, .valid = false, .exist = FP_enabled, .size = FLEN, .type = &reg_f_accessors, .feature = &feature_riscv_org},
+	{.name = "f28",.number = 28,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f29",.number = 29,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f30",.number = 30,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
+	{.name = "f31",.number = 31,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org},
 };
 
 static char const def_CSR_regs_name[] = "rv32iCSR";
@@ -3207,8 +3216,8 @@ sc_rv32i__write_memory(target* const restrict p_target, uint32_t address, uint32
 					RV_CSRR(p_data_reg->number, CSR_DBG_SCRATCH),
 					(size == 4 ? RV_SW(p_data_reg->number, p_addr_reg->number, 0) :
 					size == 2 ? RV_SH(p_data_reg->number, p_addr_reg->number, 0) :
-					/*size == 1*/ RV_SB(p_data_reg->number, p_addr_reg->number, 0)),
-					RV_ADDI(p_addr_reg->number, p_addr_reg->number, size)
+					 /*size == 1*/ RV_SB(p_data_reg->number, p_addr_reg->number, 0)),
+					 RV_ADDI(p_addr_reg->number, p_addr_reg->number, size)
 				};
 
 				static uint32_t max_pc_offset = (((1u << 20) - 1u) / NUM_BITS_TO_SIZE(XLEN)) * NUM_BITS_TO_SIZE(XLEN);
@@ -3222,7 +3231,7 @@ sc_rv32i__write_memory(target* const restrict p_target, uint32_t address, uint32
 						.check_value = &DAP_OPSTATUS_GOOD,
 						.check_mask = &DAP_STATUS_MASK,
 					};
-					scan_field data_scan_fields[TAP_NUM_FIELDS_DAP_CMD] = {{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT}, data_scan_opcode_field, };
+					scan_field data_scan_fields[TAP_NUM_FIELDS_DAP_CMD] = {{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT}, data_scan_opcode_field,};
 					uint8_t const instr_exec_opcode[1] = {DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC};
 					scan_field const instr_scan_opcode_field = {
 						.num_bits = TAP_LEN_DAP_CMD_OPCODE,
@@ -3232,9 +3241,9 @@ sc_rv32i__write_memory(target* const restrict p_target, uint32_t address, uint32
 						.check_mask = &DAP_STATUS_MASK,
 					};
 					scan_field const instr_fields[ARRAY_LEN(instructions)][TAP_NUM_FIELDS_DAP_CMD] = {
-						{{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT, .out_value = (uint8_t const*)(&instructions[0])}, instr_scan_opcode_field},
-						{{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT, .out_value = (uint8_t const*)(&instructions[1])}, instr_scan_opcode_field},
-						{{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT, .out_value = (uint8_t const*)(&instructions[2])}, instr_scan_opcode_field}
+						{{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = (uint8_t const*)(&instructions[0])}, instr_scan_opcode_field},
+						{{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = (uint8_t const*)(&instructions[1])}, instr_scan_opcode_field},
+						{{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = (uint8_t const*)(&instructions[2])}, instr_scan_opcode_field}
 					};
 
 					data_scan_fields[0].out_value = (uint8_t const*)buffer;
@@ -3266,7 +3275,7 @@ sc_rv32i__write_memory(target* const restrict p_target, uint32_t address, uint32
 							advance_pc_counter -= step_back;
 							assert(advance_pc_counter % NUM_BITS_TO_SIZE(XLEN) == 0);
 							uint32_t const OP_correct_pc = RV_JAL(zero, -(int)(step_back));
-							scan_field const instr_pc_correct_fields[2] = {{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT, .out_value = (uint8_t const*)(&OP_correct_pc)}, instr_scan_opcode_field};
+							scan_field const instr_pc_correct_fields[2] = {{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = (uint8_t const*)(&OP_correct_pc)}, instr_scan_opcode_field};
 							LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
 									  instr_pc_correct_fields[0].num_bits, buf_get_u32(instr_pc_correct_fields[0].out_value, 0, instr_pc_correct_fields[0].num_bits),
 									  instr_pc_correct_fields[1].num_bits, buf_get_u32(instr_pc_correct_fields[1].out_value, 0, instr_pc_correct_fields[1].num_bits));
