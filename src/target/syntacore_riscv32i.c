@@ -3257,6 +3257,7 @@ sc_rv32i__write_memory(target* const restrict p_target, uint32_t address, uint32
 								  instr_fields[i][1].num_bits, buf_get_u32(instr_fields[i][1].out_value, 0, instr_fields[i][1].num_bits));
 					}
 
+					size_t count1 = 0;
 					while (error_code__get(p_target) == ERROR_OK && count--) {
 						assert(p_target->tap);
 						data_scan_fields[0].out_value = (uint8_t const*)buffer;
@@ -3266,6 +3267,11 @@ sc_rv32i__write_memory(target* const restrict p_target, uint32_t address, uint32
 							advance_pc_counter += instr_step;
 						}
 						buffer += size;
+						if (++count1 > 500000) {
+							LOG_DEBUG("Force jtag_execute_queue_noclear()");
+							jtag_execute_queue_noclear();
+							count1 = 0;
+						}
 					}
 					LOG_DEBUG("End loop");
 					if (!p_arch->use_pc_advmt_dsbl_bit) {
