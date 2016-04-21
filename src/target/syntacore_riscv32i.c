@@ -320,9 +320,15 @@ RV_CSRRCI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
 }
 
 static inline instr_type
-RV_SBREAK(void)
+RV_EBREAK(void)
 {
 	return RV_INSTR_I_TYPE(1, 0u, 0u, 0u, 0x73u);
+}
+
+static inline uint16_t
+RV_C_EBREAK(void)
+{
+	return 0x9002u;
 }
 
 static inline instr_type
@@ -2561,8 +2567,6 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 		assert(!p_pc->dirty);
 	}
 	if (handle_breakpoints) {
-		dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
-
 		if (current) {
 			// Find breakpoint for current instruction
 			error_code__update(p_target, reg_pc__get(p_pc));
@@ -2577,7 +2581,7 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 
 			if (p_next_bkp) {
 				// If next instruction is replaced by breakpoint, then execute saved instruction
-				uint32_t const instruction = buf_get_u32(p_next_bkp->orig_instr, 0, ILEN);
+				uint32_t const instruction = buf_get_u32(p_next_bkp->orig_instr, 0, p_next_bkp->length * 8);
 				sc_rv32i__Arch const* const restrict p_arch = p_target->arch_info;
 				assert(p_arch);
 				if (p_arch->use_resume_at_sw_breakpoint_emulates_saved_instruction) {
@@ -2585,12 +2589,14 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 					exec__step(p_target, instruction);
 					// If HART in single step mode
 				} else {
-					error_code__update(p_target, target_write_u32(p_target, p_next_bkp->address, instruction));
+					error_code__update(p_target, p_next_bkp->length == NUM_BITS_TO_SIZE(ILEN) ? target_write_u32(p_target, p_next_bkp->address, instruction) : target_write_u16(p_target, p_next_bkp->address, instruction));
+
 					reg_cache__chain_invalidate(p_target->reg_cache);
 					set_DEMODE_ENBL(p_target, dmode_enabled | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT));
 					DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 					(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
-					error_code__update(p_target, target_write_u32(p_target, p_next_bkp->address, RV_SBREAK()));
+
+					error_code__update(p_target, p_next_bkp->length == NUM_BITS_TO_SIZE(ILEN) ? target_write_u32(p_target, p_next_bkp->address, RV_EBREAK()) : target_write_u16(p_target, p_next_bkp->address, RV_C_EBREAK()));
 				}
 				if (dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT)) {
 					// then single step already done
@@ -2609,8 +2615,9 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 				}
 			}
 		}
+		dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 	} else {
-		dmode_enabled &= !BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
+		dmode_enabled &= ~BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 	}
 
 	reg_cache__chain_invalidate(p_target->reg_cache);
@@ -3000,6 +3007,7 @@ sc_rv32i__halt(target* const restrict p_target)
 static int
 sc_rv32i__resume(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
+	LOG_INFO("resume: current=%d address=0x%08x handle_breakpoints=%d debug_execution=%d", current, address, handle_breakpoints, debug_execution);
 	assert(p_target);
 	uint32_t const dmode_enabled = NORMAL_DEBUG_ENABLE_MASK;
 	return resume_common(p_target, dmode_enabled, current, address, handle_breakpoints, debug_execution);
@@ -3008,8 +3016,9 @@ sc_rv32i__resume(target* const restrict p_target, int const current, uint32_t co
 static int
 sc_rv32i__step(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints)
 {
+	LOG_INFO("step: current=%d address=0x%08x handle_breakpoints=%d debug_execution=%d", current, address, handle_breakpoints, debug_execution);
 	assert(p_target);
-	uint32_t const dmode_enabled = (NORMAL_DEBUG_ENABLE_MASK) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
+	uint32_t const dmode_enabled = NORMAL_DEBUG_ENABLE_MASK & ~BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
 	return resume_common(p_target, dmode_enabled, current, address, handle_breakpoints, false);
 }
 
@@ -3354,13 +3363,13 @@ sc_rv32i__add_breakpoint(target* const restrict p_target, struct breakpoint* con
 {
 	assert(p_target);
 	assert(breakpoint);
-	if (breakpoint->length != NUM_BITS_TO_SIZE(ILEN)) {
-		LOG_ERROR("Invalid breakpoint size ( != 4): %d", breakpoint->length);
+	if (breakpoint->length != NUM_BITS_TO_SIZE(ILEN) && breakpoint->length != 2) {
+		LOG_ERROR("Invalid breakpoint size ( != 4 && != 2): %d", breakpoint->length);
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__get_and_clear(p_target);
 	}
 
-	if ((breakpoint->address % NUM_BITS_TO_SIZE(ILEN)) != 0) {
+	if ((breakpoint->address % 2 /*NUM_BITS_TO_SIZE(ILEN)*/) != 0) {
 		LOG_ERROR("Unaligned breakpoint: 0x%08X", breakpoint->address);
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__get_and_clear(p_target);
@@ -3386,7 +3395,7 @@ sc_rv32i__add_breakpoint(target* const restrict p_target, struct breakpoint* con
 	}
 
 	/// Write SBREAK opcode
-	error_code__update(p_target, target_write_u32(p_target, breakpoint->address, RV_SBREAK()));
+	error_code__update(p_target, breakpoint->length == NUM_BITS_TO_SIZE(ILEN) ? target_write_u32(p_target, breakpoint->address, RV_EBREAK()) : target_write_u16(p_target, breakpoint->address, RV_C_EBREAK()));
 	if (error_code__get(p_target) != ERROR_OK) {
 		LOG_ERROR("Can't write SBREAK");
 		return error_code__get_and_clear(p_target);
