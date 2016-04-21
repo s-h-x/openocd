@@ -3007,7 +3007,7 @@ sc_rv32i__halt(target* const restrict p_target)
 static int
 sc_rv32i__resume(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
-	LOG_INFO("resume: current=%d address=0x%08x handle_breakpoints=%d debug_execution=%d", current, address, handle_breakpoints, debug_execution);
+	LOG_DEBUG("resume: current=%d address=0x%08x handle_breakpoints=%d debug_execution=%d", current, address, handle_breakpoints, debug_execution);
 	assert(p_target);
 	uint32_t const dmode_enabled = NORMAL_DEBUG_ENABLE_MASK;
 	return resume_common(p_target, dmode_enabled, current, address, handle_breakpoints, debug_execution);
@@ -3016,7 +3016,7 @@ sc_rv32i__resume(target* const restrict p_target, int const current, uint32_t co
 static int
 sc_rv32i__step(target* const restrict p_target, int const current, uint32_t const address, int const handle_breakpoints)
 {
-	LOG_INFO("step: current=%d address=0x%08x handle_breakpoints=%d", current, address, handle_breakpoints);
+	LOG_DEBUG("step: current=%d address=0x%08x handle_breakpoints=%d", current, address, handle_breakpoints);
 	assert(p_target);
 	uint32_t const dmode_enabled = (NORMAL_DEBUG_ENABLE_MASK & ~BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT)) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
 	return resume_common(p_target, dmode_enabled, current, address, handle_breakpoints, false);
