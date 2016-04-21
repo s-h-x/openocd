@@ -2615,7 +2615,7 @@ resume_common(target* const restrict p_target, uint32_t dmode_enabled, int const
 				}
 			}
 		}
-		dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
+		// dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 	} else {
 		dmode_enabled &= ~BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 	}
