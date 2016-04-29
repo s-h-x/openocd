@@ -47,7 +47,7 @@ Syntacore RISC-V target
 #define EXPECTED_IDCODE (0xC0DEDEB1u)
 #define FP_enabled !!1
 #define VERIFY_REG_WRITE 1
-
+#define WRITE_BUFFER_THRESHOLD (1u << 18)
 /// Lowest required DBG_ID
 #define EXPECTED_DBG_ID        (0x00800001u)
 /// Mask of DBG_ID version.
@@ -3276,7 +3276,7 @@ sc_rv32i__write_memory(target* const restrict p_target, uint32_t address, uint32
 							advance_pc_counter += instr_step;
 						}
 						buffer += size;
-						if (++count1 > 500000) {
+						if (++count1 >= WRITE_BUFFER_THRESHOLD) {
 							LOG_DEBUG("Force jtag_execute_queue_noclear()");
 							jtag_execute_queue_noclear();
 							count1 = 0;
