@@ -862,7 +862,6 @@ enum type_dbgc_core_dbg_ctrl_reg_bits_e
 
 typedef struct reg_cache reg_cache;
 typedef struct reg_arch_type reg_arch_type;
-typedef struct target_type target_type;
 typedef struct scan_field scan_field;
 typedef struct target target;
 typedef struct reg reg;
@@ -3467,7 +3466,7 @@ sc_rv32i__get_gdb_reg_list(target* const restrict p_target, reg **reg_list[], in
 }
 
 /// @todo make const
-target_type syntacore_riscv32i_target =
+struct target_type syntacore_riscv32i_target =
 {
 	.name = "syntacore_riscv32i",
 
