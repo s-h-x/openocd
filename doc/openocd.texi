@@ -2558,6 +2558,14 @@ If not specified, serial numbers are not considered.
 and are not restricted to containing only decimal digits.)
 @end deffn
 
+@deffn {Config Command} {ftdi_location} <bus>:<port>[,<port>]...
+Specifies the physical USB port of the adapter to use. The path
+roots at @var{bus} and walks down the physical ports, with each
+@var{port} option specifying a deeper level in the bus topology, the last
+@var{port} denoting where the target adapter is actually plugged.
+The USB bus topology can be queried with the command @emph{lsusb -t}.
+@end deffn
+
 @deffn {Config Command} {ftdi_channel} channel
 Selects the channel of the FTDI device to use for MPSSE operations. Most
 adapters use the default, channel 0, but there are exceptions.
@@ -5240,6 +5248,33 @@ Command disables watchdog timer.
 @end deffn
 @end deffn
 
+@deffn {Flash Driver} kinetis_ke
+@cindex kinetis_ke
+KE members of the Kinetis microcontroller family from Freescale include
+internal flash and use ARM Cortex M0+. The driver automatically recognizes
+the KE family and sub-family using the chip identification register, and
+autoconfigures itself.
+
+@example
+flash bank $_FLASHNAME kinetis_ke 0 0 0 0 $_TARGETNAME
+@end example
+
+@deffn Command {kinetis_ke mdm check_security}
+Checks status of device security lock. Used internally in examine-end event.
+@end deffn
+
+@deffn Command {kinetis_ke mdm mass_erase}
+Issues a complete Flash erase via the MDM-AP.
+This can be used to erase a chip back to its factory state.
+Command removes security lock from a device (use of SRST highly recommended).
+It does not require the processor to be halted.
+@end deffn
+
+@deffn Command {kinetis_ke disable_wdog}
+Command disables watchdog timer.
+@end deffn
+@end deffn
+
 @deffn {Flash Driver} fm4
 All members of the FM4 microcontroller family from Spansion (formerly Fujitsu)
 include internal flash and use ARM Cortex-M4 cores.
@@ -5940,6 +5975,11 @@ Reports the clock speed, which is used to calculate timings.
 Disables (@var{1}) or enables (@var{0}) use of the PLL to speed up
 the flash clock.
 @end deffn
+@end deffn
+
+@deffn {Flash Driver} xmc1xxx
+All members of the XMC1xxx microcontroller family from Infineon.
+This driver does not require the chip and bus width to be specified.
 @end deffn
 
 @deffn {Flash Driver} xmc4xxx

@@ -1903,6 +1903,8 @@ static int cortex_a_assert_reset(struct target *target)
 
 	/* FIXME when halt is requested, make it work somehow... */
 
+	/* This function can be called in "target not examined" state */
+
 	/* Issue some kind of warm reset. */
 	if (target_has_event_action(target, TARGET_EVENT_RESET_ASSERT))
 		target_handle_event(target, TARGET_EVENT_RESET_ASSERT);
@@ -2668,17 +2670,25 @@ static int cortex_a_read_phys_memory(struct target *target,
 	uint32_t address, uint32_t size,
 	uint32_t count, uint8_t *buffer)
 {
-	int retval = ERROR_COMMAND_SYNTAX_ERROR;
+	struct armv7a_common *armv7a = target_to_armv7a(target);
+	struct adiv5_dap *swjdp = armv7a->arm.dap;
+	uint8_t apsel = swjdp->apsel;
+	int retval;
+
+	if (!count || !buffer)
+		return ERROR_COMMAND_SYNTAX_ERROR;
 
 	LOG_DEBUG("Reading memory at real address 0x%" PRIx32 "; size %" PRId32 "; count %" PRId32,
 		address, size, count);
 
-	if (count && buffer) {
-		/* read memory through APB-AP */
-		cortex_a_prep_memaccess(target, 1);
-		retval = cortex_a_read_apb_ab_memory(target, address, size, count, buffer);
-		cortex_a_post_memaccess(target, 1);
-	}
+	if (armv7a->memory_ap_available && (apsel == armv7a->memory_ap->ap_num))
+		return mem_ap_read_buf(armv7a->memory_ap, buffer, size, count, address);
+
+	/* read memory through APB-AP */
+	cortex_a_prep_memaccess(target, 1);
+	retval = cortex_a_read_apb_ab_memory(target, address, size, count, buffer);
+	cortex_a_post_memaccess(target, 1);
+
 	return retval;
 }
 
@@ -2745,17 +2755,24 @@ static int cortex_a_write_phys_memory(struct target *target,
 	uint32_t address, uint32_t size,
 	uint32_t count, const uint8_t *buffer)
 {
-	int retval = ERROR_COMMAND_SYNTAX_ERROR;
+	struct armv7a_common *armv7a = target_to_armv7a(target);
+	struct adiv5_dap *swjdp = armv7a->arm.dap;
+	uint8_t apsel = swjdp->apsel;
+	int retval;
+
+	if (!count || !buffer)
+		return ERROR_COMMAND_SYNTAX_ERROR;
 
 	LOG_DEBUG("Writing memory to real address 0x%" PRIx32 "; size %" PRId32 "; count %" PRId32, address,
 		size, count);
 
-	if (count && buffer) {
-		/* write memory through APB-AP */
-		cortex_a_prep_memaccess(target, 1);
-		retval = cortex_a_write_apb_ab_memory(target, address, size, count, buffer);
-		cortex_a_post_memaccess(target, 1);
-	}
+	if (armv7a->memory_ap_available && (apsel == armv7a->memory_ap->ap_num))
+		return mem_ap_write_buf(armv7a->memory_ap, buffer, size, count, address);
+
+	/* write memory through APB-AP */
+	cortex_a_prep_memaccess(target, 1);
+	retval = cortex_a_write_apb_ab_memory(target, address, size, count, buffer);
+	cortex_a_post_memaccess(target, 1);
 
 	return retval;
 }
