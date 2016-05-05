@@ -3414,32 +3414,27 @@ sc_rv32i__remove_breakpoint(target* const p_target, struct breakpoint* const bre
 {
 	assert(p_target);
 	assert(breakpoint);
-	if (!(breakpoint->length == 4 || breakpoint->length == 2)) {
+	if (breakpoint->length == 4 || breakpoint->length == 2) {
+		if ((breakpoint->address % 2) == 0) {
+			if (breakpoint->type == BKPT_SOFT && breakpoint->set) {
+				assert(p_target);
+				check_that_target_halted(p_target);
+				if (error_code__get(p_target) == ERROR_OK) {
+					assert(breakpoint->orig_instr);
+					LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)", breakpoint->address, breakpoint->length, (breakpoint->length == 4 ? *(uint32_t const*)breakpoint->orig_instr : (uint32_t)(*(uint16_t const*)breakpoint->orig_instr)));
+					if (error_code__update(p_target, target_write_buffer(p_target, breakpoint->address, breakpoint->length, breakpoint->orig_instr)) == ERROR_OK) {
+						breakpoint->set = 0;
+					}
+				}
+			} else {
+				error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+			}
+		} else {
+			error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+		}
+	} else {
 		error_code__update(p_target, ERROR_TARGET_INVALID);
-		return error_code__get_and_clear(p_target);
 	}
-	if ((breakpoint->address % 2) != 0) {
-		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
-		return error_code__get_and_clear(p_target);
-	}
-	if (breakpoint->type != BKPT_SOFT || !breakpoint->set) {
-		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
-		return error_code__get_and_clear(p_target);
-	}
-
-	assert(p_target);
-	check_that_target_halted(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__get_and_clear(p_target);
-	}
-
-	assert(breakpoint->orig_instr);
-	LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)", breakpoint->address, breakpoint->length, (breakpoint->length == 4 ? *(uint32_t const*)breakpoint->orig_instr : (uint32_t)(*(uint16_t const*)breakpoint->orig_instr)));
-	error_code__update(p_target, target_write_buffer(p_target, breakpoint->address, breakpoint->length, breakpoint->orig_instr));
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__get_and_clear(p_target);
-	}
-	breakpoint->set = 0;
 	return error_code__get_and_clear(p_target);
 }
 
