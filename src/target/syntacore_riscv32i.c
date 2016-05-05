@@ -379,7 +379,7 @@ RV_CSRW(unsigned csr, reg_num_type rs1)
 static inline instr_type
 RV_CSRR(reg_num_type rd, csr_num_type csr)
 {
-	return RV_CSRRSI(rd, csr, 0);
+	return RV_CSRRS(rd, csr, zero);
 }
 ///@]
 
