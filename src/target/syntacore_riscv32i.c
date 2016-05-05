@@ -58,7 +58,10 @@ Syntacore RISC-V target
 #define DBG_ID_SUBVERSION_MASK (0x000000FFu)
 /// Utility macros
 ///@{
-#define STATIC_ASSERT(e) {enum {___my_static_assert = 1 / (!!(e)) };}
+#define STATIC_ASSERT2(COND,LINE) enum {static_assertion_at_line_##LINE= 1 / !!(COND)}
+#define STATIC_ASSERT1(COND,LINE) STATIC_ASSERT2(COND,LINE)
+#define STATIC_ASSERT(COND)  STATIC_ASSERT1(COND,__LINE__)
+
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
 
 #define BIT_NUM_TO_MASK(bit_num) (1u << (bit_num))
