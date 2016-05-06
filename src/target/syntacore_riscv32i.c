@@ -2859,6 +2859,7 @@ static reg const def_CSR_regs_array[] = {
 	DEF_ITEM(mtimecmp),
 	DEF_ITEM(fflags),
 	DEF_ITEM(frm),
+	DEF_ITEM(mie),
 };
 #undef DEF_ITEM
 
