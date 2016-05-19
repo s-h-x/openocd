@@ -1423,17 +1423,17 @@ DAP_CTRL_REG_set(target const* const p_target, enum type_dbgc_unit_id_e const da
 	assert(
 		(
 		((dap_unit == DBGC_UNIT_ID_HART_0 && 0 == p_target->coreid) || (dap_unit == DBGC_UNIT_ID_HART_1 && 1 == p_target->coreid)) &&
-			(dap_group == DBGC_FGRP_HART_REGTRANS || dap_group == DBGC_FGRP_HART_DBGCMD)
-			) ||
-			(dap_unit == DBGC_UNIT_ID_CORE && dap_group == DBGC_FGRP_HART_REGTRANS)
+		(dap_group == DBGC_FGRP_HART_REGTRANS || dap_group == DBGC_FGRP_HART_DBGCMD)
+	) ||
+	(dap_unit == DBGC_UNIT_ID_CORE && dap_group == DBGC_FGRP_HART_REGTRANS)
 	);
 
 	uint8_t const set_dap_unit_group =
 		MAKE_TYPE_FIELD(uint8_t,
-						MAKE_TYPE_FIELD(uint8_t, dap_unit, TAP_LEN_DAP_CTRL_FGROUP, TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1) |
-						MAKE_TYPE_FIELD(uint8_t, dap_group, 0, TAP_LEN_DAP_CTRL_FGROUP - 1),
-						0,
-						TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1);
+		MAKE_TYPE_FIELD(uint8_t, dap_unit, TAP_LEN_DAP_CTRL_FGROUP, TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1) |
+		MAKE_TYPE_FIELD(uint8_t, dap_group, 0, TAP_LEN_DAP_CTRL_FGROUP - 1),
+		0,
+		TAP_LEN_DAP_CTRL_FGROUP + TAP_LEN_DAP_CTRL_UNIT - 1);
 
 	sc_rv32i__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
@@ -2362,76 +2362,79 @@ reg_f__set(reg* const p_reg, uint8_t* const buf)
 	return error_code__get_and_clear(p_target);
 }
 
+static uint32_t csr_get_value(target* const p_target, uint32_t const csr_number)
+{
+	uint32_t value = 0xBADBAD;
+	assert(p_target);
+	check_that_target_halted(p_target);
+	if (error_code__get(p_target) == ERROR_OK) {
+		/// Find temporary GP register
+		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+		assert(p_wrk_reg);
+
+		uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+		if (error_code__get(p_target) == ERROR_OK) {
+			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			assert(p_arch);
+			size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
+			if (p_arch->use_pc_advmt_dsbl_bit) {
+				HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
+			}
+			exec__setup(p_target);
+			int advance_pc_counter = 0;
+			if (error_code__get(p_target) == ERROR_OK) {
+				/// Copy values to temporary register
+				(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, csr_number));
+				advance_pc_counter += instr_step;
+				if (error_code__get(p_target) == ERROR_OK) {
+					/// and store temporary register to CSR_DBG_SCRATCH CSR.
+					(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
+					advance_pc_counter += instr_step;
+					if (error_code__get(p_target) == ERROR_OK) {
+						/// Correct pc by jump 2 instructions back and get previous command result.
+						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
+						value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+						advance_pc_counter = 0;
+					}
+				}
+			}
+			if (p_arch->use_pc_advmt_dsbl_bit) {
+				HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
+			}
+		}
+
+		if (error_code__get(p_target) == ERROR_OK) {
+			update_status(p_target);
+		}
+		check_PC_unchanged(p_target, pc_sample_1);
+
+		// restore temporary register
+		int const old_err_code = error_code__get_and_clear(p_target);
+		error_code__update(p_target, reg_x__store(p_wrk_reg));
+		error_code__prepend(p_target, old_err_code);
+		assert(!p_wrk_reg->dirty);
+	}
+	return value;
+}
+
 static int
 reg_csr__get(reg* const p_reg)
 {
 	assert(p_reg);
-	assert(p_reg->number < 4096u);
+	uint32_t const csr_number = p_reg->number;
+	assert(csr_number < 4096u);
 	if (!p_reg->exist) {
-		LOG_WARNING("CSR %s (#%d) is unavailable", p_reg->name, p_reg->number);
+		LOG_WARNING("CSR %s (#%d) is unavailable", p_reg->name, csr_number);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
 	assert(reg__check(p_reg));
-
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
-
-	check_that_target_halted(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
-		return error_code__get_and_clear(p_target);
-	}
-
-	/// @todo check that FPU is enabled
-	/// Find temporary GP register
-	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
-	assert(p_wrk_reg);
-
-	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+	uint32_t const value = csr_get_value(p_target, csr_number);
 	if (error_code__get(p_target) == ERROR_OK) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
-		assert(p_arch);
-		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-		if (p_arch->use_pc_advmt_dsbl_bit) {
-			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
-		}
-		exec__setup(p_target);
-		int advance_pc_counter = 0;
-		if (error_code__get(p_target) == ERROR_OK) {
-			/// Copy values to temporary register
-			(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, p_reg->number));
-			advance_pc_counter += instr_step;
-			if (error_code__get(p_target) == ERROR_OK) {
-				/// and store temporary register to CSR_DBG_SCRATCH CSR.
-				(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
-				advance_pc_counter += instr_step;
-				if (error_code__get(p_target) == ERROR_OK) {
-					/// Correct pc by jump 2 instructions back and get previous command result.
-					assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-					uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
-					advance_pc_counter = 0;
-					if (error_code__get(p_target) == ERROR_OK) {
-						reg__set_valid_value_to_cache(p_reg, value);
-					}
-				}
-			}
-		}
-		if (p_arch->use_pc_advmt_dsbl_bit) {
-			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
-		}
+		reg__set_valid_value_to_cache(p_reg, value);
 	}
-
-	if (error_code__get(p_target) == ERROR_OK) {
-		update_status(p_target);
-	}
-	check_PC_unchanged(p_target, pc_sample_1);
-
-	// restore temporary register
-	int const old_err_code = error_code__get_and_clear(p_target);
-	error_code__update(p_target, reg_x__store(p_wrk_reg));
-	error_code__prepend(p_target, old_err_code);
-	assert(!p_wrk_reg->dirty);
-
 	return error_code__get_and_clear(p_target);
 }
 
@@ -3232,8 +3235,8 @@ sc_rv32i__write_memory(target* const p_target, uint32_t address, uint32_t const 
 					RV_CSRR(p_data_reg->number, CSR_DBG_SCRATCH),
 					(size == 4 ? RV_SW(p_data_reg->number, p_addr_reg->number, 0) :
 					size == 2 ? RV_SH(p_data_reg->number, p_addr_reg->number, 0) :
-					 /*size == 1*/ RV_SB(p_data_reg->number, p_addr_reg->number, 0)),
-					 RV_ADDI(p_addr_reg->number, p_addr_reg->number, size)
+					/*size == 1*/ RV_SB(p_data_reg->number, p_addr_reg->number, 0)),
+					RV_ADDI(p_addr_reg->number, p_addr_reg->number, size)
 				};
 
 				static uint32_t max_pc_offset = (((1u << 20) - 1u) / NUM_BITS_TO_SIZE(XLEN)) * NUM_BITS_TO_SIZE(XLEN);
@@ -3265,12 +3268,12 @@ sc_rv32i__write_memory(target* const p_target, uint32_t address, uint32_t const 
 					data_scan_fields[0].out_value = (uint8_t const*)buffer;
 					LOG_DEBUG("Repeat in loop %d times:", count);
 					LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
-							  data_scan_fields[0].num_bits, buf_get_u32(data_scan_fields[0].out_value, 0, data_scan_fields[0].num_bits),
-							  data_scan_fields[1].num_bits, buf_get_u32(data_scan_fields[1].out_value, 0, data_scan_fields[1].num_bits));
+						data_scan_fields[0].num_bits, buf_get_u32(data_scan_fields[0].out_value, 0, data_scan_fields[0].num_bits),
+						data_scan_fields[1].num_bits, buf_get_u32(data_scan_fields[1].out_value, 0, data_scan_fields[1].num_bits));
 					for (unsigned i = 0; i < ARRAY_LEN(instr_fields); ++i) {
 						LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
-								  instr_fields[i][0].num_bits, buf_get_u32(instr_fields[i][0].out_value, 0, instr_fields[i][0].num_bits),
-								  instr_fields[i][1].num_bits, buf_get_u32(instr_fields[i][1].out_value, 0, instr_fields[i][1].num_bits));
+							instr_fields[i][0].num_bits, buf_get_u32(instr_fields[i][0].out_value, 0, instr_fields[i][0].num_bits),
+							instr_fields[i][1].num_bits, buf_get_u32(instr_fields[i][1].out_value, 0, instr_fields[i][1].num_bits));
 					}
 
 					size_t count1 = 0;
@@ -3299,8 +3302,8 @@ sc_rv32i__write_memory(target* const p_target, uint32_t address, uint32_t const 
 							uint32_t const OP_correct_pc = RV_JAL(zero, -(int)(step_back));
 							scan_field const instr_pc_correct_fields[2] = {{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = (uint8_t const*)(&OP_correct_pc)}, instr_scan_opcode_field};
 							LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
-									  instr_pc_correct_fields[0].num_bits, buf_get_u32(instr_pc_correct_fields[0].out_value, 0, instr_pc_correct_fields[0].num_bits),
-									  instr_pc_correct_fields[1].num_bits, buf_get_u32(instr_pc_correct_fields[1].out_value, 0, instr_pc_correct_fields[1].num_bits));
+								instr_pc_correct_fields[0].num_bits, buf_get_u32(instr_pc_correct_fields[0].out_value, 0, instr_pc_correct_fields[0].num_bits),
+								instr_pc_correct_fields[1].num_bits, buf_get_u32(instr_pc_correct_fields[1].out_value, 0, instr_pc_correct_fields[1].num_bits));
 							jtag_add_dr_scan_check(p_target->tap, TAP_NUM_FIELDS_DAP_CMD, instr_pc_correct_fields, TAP_IDLE);
 						}
 						assert(advance_pc_counter == 0);
