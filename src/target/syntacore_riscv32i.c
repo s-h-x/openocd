@@ -2080,6 +2080,67 @@ prepare_temporary_GP_register(target const* const p_target, int const after_reg)
 	return p_dirty;
 }
 
+static uint32_t csr_get_value(target* const p_target, uint32_t const csr_number)
+{
+	uint32_t value = 0xBADBAD;
+	assert(p_target);
+	check_that_target_halted(p_target);
+	if (error_code__get(p_target) == ERROR_OK) {
+		/// Find temporary GP register
+		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+		assert(p_wrk_reg);
+
+		uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+		if (error_code__get(p_target) == ERROR_OK) {
+			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			assert(p_arch);
+			size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
+			if (p_arch->use_pc_advmt_dsbl_bit) {
+				HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
+			}
+			exec__setup(p_target);
+			int advance_pc_counter = 0;
+			if (error_code__get(p_target) == ERROR_OK) {
+				/// Copy values to temporary register
+				(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, csr_number));
+				advance_pc_counter += instr_step;
+				if (error_code__get(p_target) == ERROR_OK) {
+					/// and store temporary register to CSR_DBG_SCRATCH CSR.
+					(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
+					advance_pc_counter += instr_step;
+					if (error_code__get(p_target) == ERROR_OK) {
+						/// Correct pc by jump 2 instructions back and get previous command result.
+						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
+						value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+						advance_pc_counter = 0;
+					}
+				}
+			}
+			if (p_arch->use_pc_advmt_dsbl_bit) {
+				HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
+			}
+		}
+
+		if (error_code__get(p_target) == ERROR_OK) {
+			update_status(p_target);
+		}
+		check_PC_unchanged(p_target, pc_sample_1);
+
+		// restore temporary register
+		int const old_err_code = error_code__get_and_clear(p_target);
+		error_code__update(p_target, reg_x__store(p_wrk_reg));
+		error_code__prepend(p_target, old_err_code);
+		assert(!p_wrk_reg->dirty);
+	}
+	return value;
+}
+
+static bool is_RVC_enable(target* const p_target)
+{
+	uint32_t const mcpuid = csr_get_value(p_target, CSR_mcpuid);
+	return 0 != (mcpuid & (1u << ('C' - 'A')));
+}
+
 /// Update pc cache from HW (if non-cached)
 static int
 reg_pc__get(reg* const p_reg)
@@ -2163,6 +2224,20 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__get_and_clear(p_target);
 	}
+	
+	uint32_t const new_pc = buf_get_u32(buf, 0, p_reg->size);
+	/// @note odd address is valid for pc, bit 0 value is ignored.
+	if (0 != (new_pc & (1u << 1))) {
+		bool const RVC_enable = is_RVC_enable(p_target);
+		if (error_code__get(p_target) != ERROR_OK) {
+			return error_code__get_and_clear(p_target);
+		} else if (!RVC_enable) {
+			LOG_ERROR("Unaligned PC: 0x%08X", new_pc);
+			error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+			return error_code__get_and_clear(p_target);
+		}
+	}
+
 	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
 	assert(p_wrk_reg);
 
@@ -2360,61 +2435,6 @@ reg_f__set(reg* const p_reg, uint8_t* const buf)
 	error_code__prepend(p_target, old_err_code);
 	assert(!p_wrk_reg->dirty);
 	return error_code__get_and_clear(p_target);
-}
-
-static uint32_t csr_get_value(target* const p_target, uint32_t const csr_number)
-{
-	uint32_t value = 0xBADBAD;
-	assert(p_target);
-	check_that_target_halted(p_target);
-	if (error_code__get(p_target) == ERROR_OK) {
-		/// Find temporary GP register
-		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
-		assert(p_wrk_reg);
-
-		uint32_t const pc_sample_1 = get_PC_to_check(p_target);
-		if (error_code__get(p_target) == ERROR_OK) {
-			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
-			assert(p_arch);
-			size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-			if (p_arch->use_pc_advmt_dsbl_bit) {
-				HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
-			}
-			exec__setup(p_target);
-			int advance_pc_counter = 0;
-			if (error_code__get(p_target) == ERROR_OK) {
-				/// Copy values to temporary register
-				(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, csr_number));
-				advance_pc_counter += instr_step;
-				if (error_code__get(p_target) == ERROR_OK) {
-					/// and store temporary register to CSR_DBG_SCRATCH CSR.
-					(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
-					advance_pc_counter += instr_step;
-					if (error_code__get(p_target) == ERROR_OK) {
-						/// Correct pc by jump 2 instructions back and get previous command result.
-						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-						value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
-						advance_pc_counter = 0;
-					}
-				}
-			}
-			if (p_arch->use_pc_advmt_dsbl_bit) {
-				HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
-			}
-		}
-
-		if (error_code__get(p_target) == ERROR_OK) {
-			update_status(p_target);
-		}
-		check_PC_unchanged(p_target, pc_sample_1);
-
-		// restore temporary register
-		int const old_err_code = error_code__get_and_clear(p_target);
-		error_code__update(p_target, reg_x__store(p_wrk_reg));
-		error_code__prepend(p_target, old_err_code);
-		assert(!p_wrk_reg->dirty);
-	}
-	return value;
 }
 
 static int
@@ -3368,25 +3388,13 @@ sc_rv32i__write_memory(target* const p_target, uint32_t address, uint32_t const 
 	return error_code__get_and_clear(p_target);
 }
 
-static int
+static	int
 sc_rv32i__add_breakpoint(target* const p_target, struct breakpoint* const breakpoint)
 {
 	assert(p_target);
 	assert(breakpoint);
-	if (breakpoint->length != NUM_BITS_TO_SIZE(ILEN) && breakpoint->length != 2) {
-		LOG_ERROR("Invalid breakpoint size ( != 4 && != 2): %d", breakpoint->length);
-		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
-		return error_code__get_and_clear(p_target);
-	}
-
-	if ((breakpoint->address % 2 /*NUM_BITS_TO_SIZE(ILEN)*/) != 0) {
-		LOG_ERROR("Unaligned breakpoint: 0x%08X", breakpoint->address);
-		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
-		return error_code__get_and_clear(p_target);
-	}
-
 	if (breakpoint->type != BKPT_SOFT) {
-		LOG_ERROR("Only softawre breakpoins available");
+		LOG_ERROR("Only software breakpoins available");
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return error_code__get_and_clear(p_target);
 	}
@@ -3396,7 +3404,19 @@ sc_rv32i__add_breakpoint(target* const p_target, struct breakpoint* const breakp
 		return error_code__get_and_clear(p_target);
 	}
 
-	/// @todo check for duplicate breakpoints
+	bool const RVC_enable = is_RVC_enable(p_target);
+	if (!(breakpoint->length == NUM_BITS_TO_SIZE(ILEN) || (RVC_enable && breakpoint->length == 2))) {
+		LOG_ERROR("Invalid breakpoint size: %d", breakpoint->length);
+		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+		return error_code__get_and_clear(p_target);
+	}
+
+	if (breakpoint->address % (RVC_enable? 2 : 4) != 0) {
+		LOG_ERROR("Unaligned breakpoint: 0x%08X", breakpoint->address);
+		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+		return error_code__get_and_clear(p_target);
+	}
+
 	assert(breakpoint->orig_instr);
 	error_code__update(p_target, target_read_buffer(p_target, breakpoint->address, breakpoint->length, breakpoint->orig_instr));
 	if (error_code__get(p_target) != ERROR_OK) {
@@ -3404,10 +3424,22 @@ sc_rv32i__add_breakpoint(target* const p_target, struct breakpoint* const breakp
 		return error_code__get_and_clear(p_target);
 	}
 
-	/// Write SBREAK opcode
-	error_code__update(p_target, breakpoint->length == NUM_BITS_TO_SIZE(ILEN) ? target_write_u32(p_target, breakpoint->address, RV_EBREAK()) : target_write_u16(p_target, breakpoint->address, RV_C_EBREAK()));
+	/// Write EBREAK opcode
+	if (breakpoint->length == 4) {
+		if (0 == breakpoint->address % 4) {
+			error_code__update(p_target, target_write_u32(p_target, breakpoint->address, RV_EBREAK()));
+		} else {
+			uint32_t const instr = RV_EBREAK();
+			error_code__update(p_target, target_write_u16(p_target, breakpoint->address, (uint16_t)instr));
+			error_code__update(p_target, target_write_u16(p_target, breakpoint->address + 2, (uint16_t)(instr >> 16)));
+		}
+	} else if (breakpoint->length == 2) {
+		error_code__update(p_target, target_write_u16(p_target, breakpoint->address, RV_C_EBREAK()));
+	} else {
+		assert(/*logic_error:Bad breakpoint size*/ 0);
+	}
 	if (error_code__get(p_target) != ERROR_OK) {
-		LOG_ERROR("Can't write SBREAK");
+		LOG_ERROR("Can't write EBREAK");
 		return error_code__get_and_clear(p_target);
 	}
 
