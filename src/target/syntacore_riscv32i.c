@@ -1,4 +1,4 @@
-/**
+﻿/**
 @file
 
 Syntacore RISC-V target
@@ -2224,7 +2224,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 	if (error_code__get(p_target) != ERROR_OK) {
 		return error_code__get_and_clear(p_target);
 	}
-	
+
 	uint32_t const new_pc = buf_get_u32(buf, 0, p_reg->size);
 	/// @note odd address is valid for pc, bit 0 value is ignored.
 	if (0 != (new_pc & (1u << 1))) {
@@ -3084,8 +3084,219 @@ sc_rv32i__soft_reset_halt(target* const p_target)
 	return error_code__get_and_clear(p_target);
 }
 
+enum VM_mode
+{
+	VM_Mbare = 0,
+	VM_Mbb = 1,
+	VM_Mbbid = 2,
+	VM_Sv32 = 8,
+	VM_Sv39 = 9,
+	VM_Sv48 = 10,
+};
+#if 0
+typedef struct VM_chunk_struct
+{
+	uint32_t virt;
+	uint32_t phys;
+	uint32_t size;
+} VM_chunk;
+typedef struct VM_region_map_struct
+{
+	unsigned count;
+	VM_chunk const* p_chunks;
+} VM_region_map;
+static VM_region_map virt_2_phis_map(target *p_target, uint32_t vbase, uint32_t size, bool instruction)
+{
+	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
+	if (error_code__get(p_target) == ERROR_OK) {
+		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
+		uint32_t const VM = PRV == 0x3 ? VM_Mbare : (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
+		VM_region_map const bad_map = {.count = 0,.p_chunks = NULL};
+		switch (VM) {
+		case VM_Mbb:
+			{
+				uint32_t const mbound = csr_get_value(p_target, CSR_mbound);
+				if (error_code__get(p_target) != ERROR_OK) {
+					return bad_map;
+				} else if (!(vbase + size <= mbound)) {
+					return bad_map;
+				} else {
+					uint32_t const mbase = csr_get_value(p_target, CSR_mbase);
+					if (error_code__get(p_target) != ERROR_OK) {
+						return bad_map;
+					} else {
+						VM_chunk const chunk = {.virt = vbase,.phys = vbase + mbase,.size = size};
+						VM_chunk* const p_chunks = calloc(1, sizeof(VM_chunk));
+						p_chunks[0] = chunk;
+						VM_region_map const map = {.count = 1,.p_chunks = p_chunks};
+						return map;
+					}
+				}
+			}
+			break;
+
+		case VM_Mbbid:
+			{
+				uint32_t const mbound = csr_get_value(p_target, instruction ? CSR_mibound : CSR_mdbound);
+				if (error_code__get(p_target) != ERROR_OK) {
+					return bad_map;
+				} else if (!(vbase + size <= mbound)) {
+					return bad_map;
+				} else {
+					uint32_t const mbase = csr_get_value(p_target, instruction ? CSR_mibase : CSR_mdbase);
+					if (error_code__get(p_target) != ERROR_OK) {
+						return bad_map;
+					} else {
+						VM_chunk const chunk = {.virt = vbase,.phys = vbase + mbase,.size = size};
+						VM_chunk* const p_chunks = calloc(1, sizeof(VM_chunk));
+						p_chunks[0] = chunk;
+						VM_region_map const map = {.count = 1,.p_chunks = p_chunks};
+						return map;
+					}
+				}
+			}
+			break;
+		case VM_Sv32:
+			break;
+		case VM_Mbare:
+			{
+				VM_chunk const direct = {.virt = vbase,.phys = vbase,.size = size};
+				VM_chunk* const p_chunks = calloc(1, sizeof(VM_chunk));
+				p_chunks[0] = direct;
+				VM_region_map const map = {.count = 1,.p_chunks = p_chunks};
+				return map;
+			}
+			break;
+		case VM_Sv39:
+		case VM_Sv48:
+		default:
+			return bad_map;
+			break;
+		}
+	}
+}
+#endif
+static int sc_rv32i__mmu(target *p_target, int *p_mmu_enabled)
+{
+	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
+	if (error_code__get(p_target) == ERROR_OK) {
+		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
+		if (PRV == 0x3) {
+			*p_mmu_enabled = 0;
+		} else {
+			uint32_t const VM = (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
+			switch (VM) {
+			case VM_Mbb:
+			case VM_Mbbid:
+			case VM_Sv32:
+			case VM_Sv39:
+			case VM_Sv48:
+				*p_mmu_enabled = 1;
+				break;
+			case VM_Mbare:
+			default:
+				*p_mmu_enabled = 0;
+				break;
+			}
+		}
+	}
+	return error_code__get_and_clear(p_target);
+}
+
+static void virt_to_phis(target * p_target, uint32_t address, uint32_t * physical, bool const instruction)
+{
+	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
+	if (error_code__get(p_target) == ERROR_OK) {
+		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
+		uint32_t const VM = PRV == 0x3 ? VM_Mbare : (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
+		switch (VM) {
+		case VM_Mbb:
+			{
+				uint32_t const mbound = csr_get_value(p_target, CSR_mbound);
+				if (error_code__get(p_target) == ERROR_OK) {
+					if (!(address <= mbound)) {
+						error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+					} else {
+						uint32_t const mbase = csr_get_value(p_target, CSR_mbase);
+						if (error_code__get(p_target) == ERROR_OK) {
+							*physical = address + mbase;
+						}
+					}
+				}
+			}
+			break;
+
+		case VM_Mbbid:
+			{
+				uint32_t const mbound = csr_get_value(p_target, instruction ? CSR_mibound : CSR_mdbound);
+				if (error_code__get(p_target) == ERROR_OK) {
+					if (!(address <= mbound)) {
+						error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+					} else {
+						uint32_t const mbase = csr_get_value(p_target, instruction ? CSR_mibase : CSR_mdbase);
+						if (error_code__get(p_target) == ERROR_OK) {
+							*physical = address + mbase;
+						}
+					}
+				}
+			}
+			break;
+		case VM_Sv32:
+			{
+				uint32_t const sptbr = csr_get_value(p_target, CSR_sptbr);
+				if (error_code__get(p_target) == ERROR_OK) {
+					uint32_t pte1;
+					if (ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, ((address >> 20) & (~(~0u << 10) << 2)) | sptbr, 4, 1, (uint8_t *)&pte1))) {
+						if (0 == (pte1 & 1)) {
+							error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+						} else {
+							uint32_t const pte1_type = ((pte1 >> 1) & LOW_BITS_MASK(4));
+							if (pte1_type >= 2) {
+								*physical = ((pte1 << 2) & (~0 << 22)) | (address & LOW_BITS_MASK(22));
+							} else {
+								uint32_t pte0;
+								if (ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, (pte1 << 2) & (~0 << 12), 4, 1, (uint8_t *)&pte0))) {
+									if (0 == (pte0 & 1)) {
+										error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+									} else {
+										uint32_t const pte0_type = ((pte0 >> 1) & LOW_BITS_MASK(4));
+										if (pte0_type >= 2) {
+											*physical = ((pte0 << 2) & (~0 << 12)) | (address & LOW_BITS_MASK(12));
+										} else {
+											error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			break;
+		case VM_Mbare:
+			{
+				*physical = address;
+			}
+			break;
+
+		case VM_Sv39:
+		case VM_Sv48:
+		default:
+			error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+			break;
+		}
+	}
+}
+
+static int sc_rv32i__virt2phys(target *p_target, uint32_t address, uint32_t *physical)
+{
+	virt_to_phis(p_target, address, physical, false);
+	return error_code__get_and_clear(p_target);
+}
+
+
 static int
-sc_rv32i__read_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
+sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
 {
 	assert(p_target);
 	assert(buffer);
@@ -3196,7 +3407,7 @@ sc_rv32i__read_memory(target* const p_target, uint32_t address, uint32_t const s
 }
 
 static int
-sc_rv32i__write_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
+sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
 {
 	assert(p_target);
 	assert(buffer);
@@ -3411,7 +3622,7 @@ sc_rv32i__add_breakpoint(target* const p_target, struct breakpoint* const breakp
 		return error_code__get_and_clear(p_target);
 	}
 
-	if (breakpoint->address % (RVC_enable? 2 : 4) != 0) {
+	if (breakpoint->address % (RVC_enable ? 2 : 4) != 0) {
 		LOG_ERROR("Unaligned breakpoint: 0x%08X", breakpoint->address);
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__get_and_clear(p_target);
@@ -3522,8 +3733,8 @@ struct target_type syntacore_riscv32i_target =
 
 	.get_gdb_reg_list = sc_rv32i__get_gdb_reg_list,
 
-	.read_memory = sc_rv32i__read_memory,
-	.write_memory = sc_rv32i__write_memory,
+	.read_memory = sc_rv32i__read_phys_memory,
+	.write_memory = sc_rv32i__write_phys_memory,
 
 	.read_buffer = NULL,
 	.write_buffer = NULL,
@@ -3557,12 +3768,12 @@ struct target_type syntacore_riscv32i_target =
 	.init_target = sc_rv32i__init_target,
 	.deinit_target = sc_rv32i__deinit_target,
 
-	.virt2phys = NULL,
+	.virt2phys = sc_rv32i__virt2phys,
 	// Default implementation is to call read_memory.
 	.read_phys_memory = NULL,
 	.write_phys_memory = NULL,
 
-	.mmu = NULL,
+	.mmu = sc_rv32i__mmu,
 	.check_reset = NULL,
 	.get_gdb_fileio_info = NULL,
 	.gdb_fileio_end = NULL,
