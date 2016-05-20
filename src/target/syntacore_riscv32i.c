@@ -3101,94 +3101,14 @@ enum VM_mode
 	VM_Sv39 = 9,
 	VM_Sv48 = 10,
 };
-#if 0
-typedef struct VM_chunk_struct
-{
-	uint32_t virt;
-	uint32_t phys;
-	uint32_t size;
-} VM_chunk;
-typedef struct VM_region_map_struct
-{
-	unsigned count;
-	VM_chunk const* p_chunks;
-} VM_region_map;
-static VM_region_map virt_2_phis_map(target *p_target, uint32_t vbase, uint32_t size, bool instruction)
-{
-	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
-	if ( error_code__get(p_target) == ERROR_OK ) {
-		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
-		uint32_t const VM = PRV == 0x3 ? VM_Mbare : (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
-		VM_region_map const bad_map = {.count = 0,.p_chunks = NULL};
-		switch ( VM ) {
-		case VM_Mbb:
-			{
-				uint32_t const mbound = csr_get_value(p_target, CSR_mbound);
-				if ( error_code__get(p_target) != ERROR_OK ) {
-					return bad_map;
-				} else if ( !(vbase + size <= mbound) ) {
-					return bad_map;
-				} else {
-					uint32_t const mbase = csr_get_value(p_target, CSR_mbase);
-					if ( error_code__get(p_target) != ERROR_OK ) {
-						return bad_map;
-					} else {
-						VM_chunk const chunk = {.virt = vbase,.phys = vbase + mbase,.size = size};
-						VM_chunk* const p_chunks = calloc(1, sizeof(VM_chunk));
-						p_chunks[0] = chunk;
-						VM_region_map const map = {.count = 1,.p_chunks = p_chunks};
-						return map;
-					}
-				}
-			}
-			break;
 
-		case VM_Mbbid:
-			{
-				uint32_t const mbound = csr_get_value(p_target, instruction ? CSR_mibound : CSR_mdbound);
-				if ( error_code__get(p_target) != ERROR_OK ) {
-					return bad_map;
-				} else if ( !(vbase + size <= mbound) ) {
-					return bad_map;
-				} else {
-					uint32_t const mbase = csr_get_value(p_target, instruction ? CSR_mibase : CSR_mdbase);
-					if ( error_code__get(p_target) != ERROR_OK ) {
-						return bad_map;
-					} else {
-						VM_chunk const chunk = {.virt = vbase,.phys = vbase + mbase,.size = size};
-						VM_chunk* const p_chunks = calloc(1, sizeof(VM_chunk));
-						p_chunks[0] = chunk;
-						VM_region_map const map = {.count = 1,.p_chunks = p_chunks};
-						return map;
-					}
-				}
-			}
-			break;
-		case VM_Sv32:
-			break;
-		case VM_Mbare:
-			{
-				VM_chunk const direct = {.virt = vbase,.phys = vbase,.size = size};
-				VM_chunk* const p_chunks = calloc(1, sizeof(VM_chunk));
-				p_chunks[0] = direct;
-				VM_region_map const map = {.count = 1,.p_chunks = p_chunks};
-				return map;
-			}
-			break;
-		case VM_Sv39:
-		case VM_Sv48:
-		default:
-			return bad_map;
-			break;
-		}
-	}
-}
-#endif
 static int sc_rv32i__mmu(target *p_target, int *p_mmu_enabled)
 {
+	assert(p_target);
 	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
 	if ( error_code__get(p_target) == ERROR_OK ) {
 		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
+		assert(p_mmu_enabled);
 		if ( PRV == Priv_M || PRV == Priv_H ) {
 			*p_mmu_enabled = 0;
 		} else {
@@ -3212,29 +3132,37 @@ static int sc_rv32i__mmu(target *p_target, int *p_mmu_enabled)
 	return error_code__get_and_clear(p_target);
 }
 
-static void virt_to_phis(target *p_target, uint32_t address, uint32_t *physical, bool const instruction)
+static void virt_to_phis(target *p_target, uint32_t address, uint32_t *p_physical, uint32_t* p_bound, bool const instruction_space)
 {
+	assert(p_target);
 	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
 	if ( error_code__get(p_target) == ERROR_OK ) {
 		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
 		uint32_t const VM = PRV == Priv_M || PRV == Priv_H ? VM_Mbare : (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
+		assert(p_physical);
 		switch ( VM ) {
 		case VM_Mbare:
-			*physical = address;
+			*p_physical = address;
+			if ( p_bound ) {
+				*p_bound = UINT32_MAX;
+			}
 			break;
 
 		case VM_Mbb:
 		case VM_Mbbid:
 			{
-				uint32_t const bound = csr_get_value(p_target, VM == VM_Mbb ? CSR_mbound : /*VM == VM_Mbbid*/instruction ? CSR_mibound : CSR_mdbound);
+				uint32_t const bound = csr_get_value(p_target, VM == VM_Mbb ? CSR_mbound : /*VM == VM_Mbbid*/instruction_space ? CSR_mibound : CSR_mdbound);
 				if ( error_code__get(p_target) == ERROR_OK ) {
-					if ( address <= bound ) {
-						uint32_t const base = csr_get_value(p_target, VM_Mbb ? CSR_mbase : /*VM == VM_Mbbid*/instruction ? CSR_mibase : CSR_mdbase);
-						if ( error_code__get(p_target) == ERROR_OK ) {
-							*physical = address + base;
-						}
-					} else {
+					if ( !(address < bound) ) {
 						error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+					} else {
+						uint32_t const base = csr_get_value(p_target, VM_Mbb ? CSR_mbase : /*VM == VM_Mbbid*/instruction_space ? CSR_mibase : CSR_mdbase);
+						if ( error_code__get(p_target) == ERROR_OK ) {
+							*p_physical = address + base;
+							if ( p_bound ) {
+								*p_bound = bound - address;
+							}
+						}
 					}
 				}
 			}
@@ -3244,33 +3172,33 @@ static void virt_to_phis(target *p_target, uint32_t address, uint32_t *physical,
 			{
 				static uint32_t const offset_mask = LOW_BITS_MASK(10) << 2;
 				uint32_t const main_page = csr_get_value(p_target, CSR_sptbr);
-				if ( error_code__get(p_target) == ERROR_OK ) {
-					// lower bits should be zeros
+				if ( ERROR_OK == error_code__get(p_target) ) {
+					// lower bits should be zero
 					assert(0 == (main_page & LOW_BITS_MASK(12)));
 					uint32_t const offset_bits1 = address >> 20 & offset_mask;
 					uint32_t pte1;
 					if ( ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, main_page | offset_bits1, 4, 1, (uint8_t *)&pte1)) ) {
-						if ( 0 != (pte1 & BIT_NUM_TO_MASK(0)) ) {
-							if ( (pte1 >> 1 & LOW_BITS_MASK(4)) >= 2 ) {
-								*physical = (pte1 << 2 & ~LOW_BITS_MASK(22)) | (address & LOW_BITS_MASK(22));
-							} else {
-								uint32_t const base_0 = pte1 << 2 & ~LOW_BITS_MASK(12);
-								uint32_t const offset_bits0 = address >> 10 & offset_mask;
-								uint32_t pte0;
-								if ( ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, base_0 | offset_bits0, 4, 1, (uint8_t *)&pte0)) ) {
-									if ( 0 != (pte0 & BIT_NUM_TO_MASK(0)) ) {
-										if ( (pte0 >> 1 & LOW_BITS_MASK(4)) >= 2 ) {
-											*physical = (pte0 << 2 & ~LOW_BITS_MASK(12)) | (address & LOW_BITS_MASK(12));
-										} else {
-											error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-										}
-									} else {
-										error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+						if ( 0 == (pte1 & BIT_NUM_TO_MASK(0)) ) {
+							error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+						} else if ( (pte1 >> 1 & LOW_BITS_MASK(4)) >= 2 ) {
+							*p_physical = (pte1 << 2 & ~LOW_BITS_MASK(22)) | (address & LOW_BITS_MASK(22));
+							if ( p_bound ) {
+								*p_bound = BIT_NUM_TO_MASK(22) - (address & LOW_BITS_MASK(22));
+							}
+						} else {
+							uint32_t const base_0 = pte1 << 2 & ~LOW_BITS_MASK(12);
+							uint32_t const offset_bits0 = address >> 10 & offset_mask;
+							uint32_t pte0;
+							if ( ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, base_0 | offset_bits0, 4, 1, (uint8_t *)&pte0)) ) {
+								if ( 0 == (pte0 & BIT_NUM_TO_MASK(0)) || (pte0 >> 1 & LOW_BITS_MASK(4)) < 2 ) {
+									error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+								} else {
+									*p_physical = (pte0 << 2 & ~LOW_BITS_MASK(12)) | (address & LOW_BITS_MASK(12));
+									if ( p_bound ) {
+										*p_bound = BIT_NUM_TO_MASK(12) - (address & LOW_BITS_MASK(12));
 									}
 								}
 							}
-						} else {
-							error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 						}
 					}
 				}
@@ -3286,15 +3214,87 @@ static void virt_to_phis(target *p_target, uint32_t address, uint32_t *physical,
 	}
 }
 
-static int sc_rv32i__virt2phys(target *p_target, uint32_t address, uint32_t *physical)
+static int sc_rv32i__virt2phys(target *p_target, uint32_t address, uint32_t *p_physical)
 {
-	virt_to_phis(p_target, address, physical, false);
+	virt_to_phis(p_target, address, p_physical, NULL, false);
 	return error_code__get_and_clear(p_target);
 }
 
+static void read_memory_space(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* p_buffer, bool const instruction_space)
+{
+	assert(p_target);
+	if ( !(size == 1 || size == 2 || size == 4) ) {
+		LOG_ERROR("Invalid item size %d", size);
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+	} else if ( address % size != 0 ) {
+		LOG_ERROR("Unaligned access at 0x%08X, for item size %d", address, size);
+		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+	} else {
+		while ( 0 != count ) {
+			uint32_t physical;
+			uint32_t bound;
+			virt_to_phis(p_target, address, &physical, &bound, instruction_space);
+			if ( ERROR_OK != error_code__get(p_target) ) {
+				break;
+			}
+			uint32_t const page_count = size * count > bound ? bound / size : count;
+			assert(0 != page_count);
+			assert(p_buffer);
+			if ( ERROR_OK != error_code__update(p_target, target_read_phys_memory(p_target, physical, size, page_count, p_buffer)) ) {
+				break;
+			}
+			uint32_t const bytes = size * page_count;
+			p_buffer += bytes;
+			address += bytes;
+			count -= page_count;
+		}
+	}
+}
 
-static int
-sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
+static void write_memory_space(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* p_buffer, bool const instruction_space)
+{
+	assert(p_target);
+	if ( !(size == 1 || size == 2 || size == 4) ) {
+		LOG_ERROR("Invalid item size %d", size);
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+	} else if ( address % size != 0 ) {
+		LOG_ERROR("Unaligned access at 0x%08X, for item size %d", address, size);
+		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+	} else {
+		while ( 0 != count ) {
+			uint32_t physical;
+			uint32_t bound;
+			virt_to_phis(p_target, address, &physical, &bound, instruction_space);
+			if ( ERROR_OK != error_code__get(p_target) ) {
+				break;
+			}
+			uint32_t const page_count = size * count > bound ? bound / size : count;
+			assert(0 != page_count);
+			assert(p_buffer);
+			if ( ERROR_OK != error_code__update(p_target, target_write_phys_memory(p_target, physical, size, page_count, p_buffer)) ) {
+				break;
+			}
+			uint32_t const bytes = size * page_count;
+			p_buffer += bytes;
+			address += bytes;
+			count -= page_count;
+		}
+	}
+}
+
+static int sc_rv32i__read_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
+{
+	read_memory_space(p_target, address, size, count, buffer, false);
+	return error_code__get_and_clear(p_target);
+}
+
+static int sc_rv32i__write_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
+{
+	write_memory_space(p_target, address, size, count, buffer, false);
+	return error_code__get_and_clear(p_target);
+}
+
+static int sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
 {
 	assert(p_target);
 	assert(buffer);
@@ -3304,108 +3304,104 @@ sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t co
 		LOG_ERROR("Invalid item size %d", size);
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return error_code__get_and_clear(p_target);
-	}
-
-	/// Check for alignment
-	if ( address % size != 0 ) {
+	} else if ( address % size != 0 ) {
 		LOG_ERROR("Unaligned access at 0x%08X, for item size %d", address, size);
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__get_and_clear(p_target);
-	}
-
-	/// Check that target halted
-	check_that_target_halted(p_target);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return error_code__get_and_clear(p_target);
-	}
-
-	/// Reserve work register
-	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
-	assert(p_wrk_reg);
-
-	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
-	if ( error_code__get(p_target) == ERROR_OK ) {
-		/// Define opcode for load item to register
-		uint32_t const load_OP =
-			size == 4 ? RV_LW(p_wrk_reg->number, p_wrk_reg->number, 0) :
-			size == 2 ? RV_LH(p_wrk_reg->number, p_wrk_reg->number, 0) :
-			/*size == 1*/RV_LB(p_wrk_reg->number, p_wrk_reg->number, 0);
-
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
-		assert(p_arch);
-		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-		if ( p_arch->use_pc_advmt_dsbl_bit ) {
-			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
+	} else {
+		/// Check that target halted
+		check_that_target_halted(p_target);
+		if ( error_code__get(p_target) != ERROR_OK ) {
+			return error_code__get_and_clear(p_target);
 		}
-		/// Setup exec operations mode
-		exec__setup(p_target);
-		int advance_pc_counter = 0;
+
+		/// Reserve work register
+		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+		assert(p_wrk_reg);
+
+		uint32_t const pc_sample_1 = get_PC_to_check(p_target);
 		if ( error_code__get(p_target) == ERROR_OK ) {
-			/// For count number of items do loop
-			while ( count-- ) {
-				/// Set address to CSR
-				exec__set_csr_data(p_target, address);
-				if ( error_code__get(p_target) != ERROR_OK ) {
-					break;
+			/// Define opcode for load item to register
+			uint32_t const load_OP =
+				size == 4 ? RV_LW(p_wrk_reg->number, p_wrk_reg->number, 0) :
+				size == 2 ? RV_LH(p_wrk_reg->number, p_wrk_reg->number, 0) :
+				/*size == 1*/RV_LB(p_wrk_reg->number, p_wrk_reg->number, 0);
+
+			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			assert(p_arch);
+			size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
+			if ( p_arch->use_pc_advmt_dsbl_bit ) {
+				HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
+			}
+			/// Setup exec operations mode
+			exec__setup(p_target);
+			int advance_pc_counter = 0;
+			if ( error_code__get(p_target) == ERROR_OK ) {
+				/// For count number of items do loop
+				while ( count-- ) {
+					/// Set address to CSR
+					exec__set_csr_data(p_target, address);
+					if ( error_code__get(p_target) != ERROR_OK ) {
+						break;
+					}
+
+					/// Load address to work register
+					(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
+					advance_pc_counter += instr_step;
+					if ( error_code__get(p_target) != ERROR_OK ) {
+						break;
+					}
+
+					/// Exec load item to register
+					(void)exec__step(p_target, load_OP);
+					advance_pc_counter += instr_step;
+					if ( error_code__get(p_target) != ERROR_OK ) {
+						break;
+					}
+
+					/// Exec store work register to csr
+					(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
+					advance_pc_counter += instr_step;
+
+					/// get data from csr and jump back to correct pc
+					assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
+					uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+					advance_pc_counter = 0;
+					if ( error_code__get(p_target) != ERROR_OK ) {
+						break;
+					}
+
+					/// store read data to buffer
+					buf_set_u32(buffer, 0, 8 * size, value);
+
+					/// advance src/dst pointers
+					address += size;
+					buffer += size;
 				}
-
-				/// Load address to work register
-				(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
-				advance_pc_counter += instr_step;
-				if ( error_code__get(p_target) != ERROR_OK ) {
-					break;
-				}
-
-				/// Exec load item to register
-				(void)exec__step(p_target, load_OP);
-				advance_pc_counter += instr_step;
-				if ( error_code__get(p_target) != ERROR_OK ) {
-					break;
-				}
-
-				/// Exec store work register to csr
-				(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
-				advance_pc_counter += instr_step;
-
-				/// get data from csr and jump back to correct pc
-				assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-				uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
-				advance_pc_counter = 0;
-				if ( error_code__get(p_target) != ERROR_OK ) {
-					break;
-				}
-
-				/// store read data to buffer
-				buf_set_u32(buffer, 0, 8 * size, value);
-
-				/// advance src/dst pointers
-				address += size;
-				buffer += size;
+			}
+			if ( p_arch->use_pc_advmt_dsbl_bit ) {
+				HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 			}
 		}
-		if ( p_arch->use_pc_advmt_dsbl_bit ) {
-			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
+
+		if ( error_code__get(p_target) != ERROR_OK ) {
+			LOG_DEBUG("update_status");
+			update_status(p_target);
 		}
+
+		check_PC_unchanged(p_target, pc_sample_1);
+
+		/// restore temporary register
+		int const old_err_code = error_code__get_and_clear(p_target);
+		error_code__update(p_target, reg_x__store(p_wrk_reg));
+		error_code__prepend(p_target, old_err_code);
+		assert(!p_wrk_reg->dirty);
+
+		return error_code__get_and_clear(p_target);
 	}
-
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		LOG_DEBUG("update_status");
-		update_status(p_target);
-	}
-
-	check_PC_unchanged(p_target, pc_sample_1);
-
-	/// restore temporary register
-	int const old_err_code = error_code__get_and_clear(p_target);
-	error_code__update(p_target, reg_x__store(p_wrk_reg));
-	error_code__prepend(p_target, old_err_code);
-	assert(!p_wrk_reg->dirty);
-
-	return error_code__get_and_clear(p_target);
 }
 
-static int
-sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
+static int sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
 {
 	assert(p_target);
 	assert(buffer);
@@ -3605,56 +3601,41 @@ sc_rv32i__add_breakpoint(target* const p_target, struct breakpoint* const p_brea
 	if ( p_breakpoint->type != BKPT_SOFT ) {
 		LOG_ERROR("Only software breakpoins available");
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
-		return error_code__get_and_clear(p_target);
-	}
-
-	check_that_target_halted(p_target);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return error_code__get_and_clear(p_target);
-	}
-
-	bool const RVC_enable = is_RVC_enable(p_target);
-	if ( !(p_breakpoint->length == NUM_BITS_TO_SIZE(ILEN) || (RVC_enable && p_breakpoint->length == 2)) ) {
-		LOG_ERROR("Invalid breakpoint size: %d", p_breakpoint->length);
-		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
-		return error_code__get_and_clear(p_target);
-	}
-
-	if ( p_breakpoint->address % (RVC_enable ? 2 : 4) != 0 ) {
-		LOG_ERROR("Unaligned breakpoint: 0x%08X", p_breakpoint->address);
-		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
-		return error_code__get_and_clear(p_target);
-	}
-
-	uint32_t phys_address;
-	virt_to_phis(p_target, p_breakpoint->address, &phys_address, true);
-	if ( ERROR_OK == error_code__get(p_target) ) {
-		assert(p_breakpoint->orig_instr);
-		error_code__update(p_target, target_read_phys_memory(p_target, phys_address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr));
-		if ( error_code__get(p_target) != ERROR_OK ) {
-			LOG_ERROR("Can't save original instruction");
-			return error_code__get_and_clear(p_target);
-		}
-
-		{
-			uint8_t buffer[4];
-			if ( p_breakpoint->length == 4 ) {
-				target_buffer_set_u32(p_target, buffer, RV_EBREAK());
-			} else if ( p_breakpoint->length == 2 ) {
-				target_buffer_set_u16(p_target, buffer, RV_C_EBREAK());
+	} else {
+		check_that_target_halted(p_target);
+		if ( ERROR_OK == error_code__get(p_target)) {
+			bool const RVC_enable = is_RVC_enable(p_target);
+			if ( !(p_breakpoint->length == NUM_BITS_TO_SIZE(ILEN) || (RVC_enable && p_breakpoint->length == 2)) ) {
+				LOG_ERROR("Invalid breakpoint size: %d", p_breakpoint->length);
+				error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+			} else if ( p_breakpoint->address % (RVC_enable ? 2 : 4) != 0 ) {
+				LOG_ERROR("Unaligned breakpoint: 0x%08X", p_breakpoint->address);
+				error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 			} else {
-				assert(/*logic_error:Bad breakpoint size*/ 0);
-			}
-			if ( ERROR_OK != error_code__update(p_target, target_write_phys_memory(p_target, phys_address, 2, p_breakpoint->length / 2, buffer)) ) {
-				LOG_ERROR("Can't write EBREAK");
-				return error_code__get_and_clear(p_target);
+				read_memory_space(p_target, p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true);
+				if ( ERROR_OK != error_code__get(p_target) ) {
+					LOG_ERROR("Can't save original instruction");
+				} else {
+					uint8_t buffer[4];
+					if ( p_breakpoint->length == 4 ) {
+						target_buffer_set_u32(p_target, buffer, RV_EBREAK());
+					} else if ( p_breakpoint->length == 2 ) {
+						target_buffer_set_u16(p_target, buffer, RV_C_EBREAK());
+					} else {
+						assert(/*logic_error:Bad breakpoint size*/ 0);
+					}
+
+					write_memory_space(p_target, p_breakpoint->address, 2, p_breakpoint->length / 2, buffer, true);
+					if ( ERROR_OK != error_code__get(p_target) ) {
+						LOG_ERROR("Can't write EBREAK");
+					} else {
+						/// @todo check set values
+						p_breakpoint->set = 1;
+					}
+				}
 			}
 		}
-
-		/// @todo check set values
-		p_breakpoint->set = 1;
 	}
-
 	return error_code__get_and_clear(p_target);
 }
 
@@ -3663,28 +3644,23 @@ sc_rv32i__remove_breakpoint(target* const p_target, struct breakpoint* const p_b
 {
 	assert(p_target);
 	assert(p_breakpoint);
-	if ( p_breakpoint->length == 4 || p_breakpoint->length == 2 ) {
-		if ( (p_breakpoint->address % 2) == 0 ) {
-			if ( p_breakpoint->type == BKPT_SOFT && p_breakpoint->set ) {
-				assert(p_target);
-				check_that_target_halted(p_target);
-				if ( error_code__get(p_target) == ERROR_OK ) {
-					assert(p_breakpoint->orig_instr);
-					LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)", p_breakpoint->address, p_breakpoint->length, (p_breakpoint->length == 4 ? *(uint32_t const*)p_breakpoint->orig_instr : (uint32_t)(*(uint16_t const*)p_breakpoint->orig_instr)));
-					uint32_t phys_address;
-					virt_to_phis(p_target, p_breakpoint->address, &phys_address, true);
-					if ( error_code__update(p_target, target_write_phys_memory(p_target, phys_address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr)) == ERROR_OK ) {
-						p_breakpoint->set = 0;
-					}
-				}
-			} else {
-				error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
-			}
-		} else {
-			error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
-		}
-	} else {
+	if ( (p_breakpoint->length == 4 || p_breakpoint->length == 2) ) {
 		error_code__update(p_target, ERROR_TARGET_INVALID);
+	} else if ( 0 != p_breakpoint->address % 2 ) {
+		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+	} else if ( !(p_breakpoint->type == BKPT_SOFT && p_breakpoint->set) ) {
+		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+	} else {
+		assert(p_target);
+		check_that_target_halted(p_target);
+		if ( error_code__get(p_target) == ERROR_OK ) {
+			assert(p_breakpoint->orig_instr);
+			LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)", p_breakpoint->address, p_breakpoint->length, (p_breakpoint->length == 4 ? *(uint32_t const*)p_breakpoint->orig_instr : (uint32_t)(*(uint16_t const*)p_breakpoint->orig_instr)));
+			write_memory_space(p_target, p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true);
+			if ( ERROR_OK == error_code__get(p_target) ) {
+				p_breakpoint->set = 0;
+			}
+		}
 	}
 	return error_code__get_and_clear(p_target);
 }
@@ -3733,8 +3709,8 @@ struct target_type syntacore_riscv32i_target =
 
 	.get_gdb_reg_list = sc_rv32i__get_gdb_reg_list,
 
-	.read_memory = sc_rv32i__read_phys_memory,
-	.write_memory = sc_rv32i__write_phys_memory,
+	.read_memory = sc_rv32i__read_memory,
+	.write_memory = sc_rv32i__write_memory,
 
 	.read_buffer = NULL,
 	.write_buffer = NULL,
@@ -3769,9 +3745,8 @@ struct target_type syntacore_riscv32i_target =
 	.deinit_target = sc_rv32i__deinit_target,
 
 	.virt2phys = sc_rv32i__virt2phys,
-	// Default implementation is to call read_memory.
-	.read_phys_memory = NULL,
-	.write_phys_memory = NULL,
+	.read_phys_memory = sc_rv32i__read_phys_memory,
+	.write_phys_memory = sc_rv32i__write_phys_memory,
 
 	.mmu = sc_rv32i__mmu,
 	.check_reset = NULL,
