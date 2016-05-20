@@ -2604,22 +2604,21 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 
 			if ( p_next_bkp ) {
 				// If next instruction is replaced by breakpoint, then execute saved instruction
-				uint32_t const instruction = buf_get_u32(p_next_bkp->orig_instr, 0, p_next_bkp->length * 8);
 				sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 				assert(p_arch);
 				if ( p_arch->use_resume_at_sw_breakpoint_emulates_saved_instruction ) {
+					uint32_t const instruction = buf_get_u32(p_next_bkp->orig_instr, 0, p_next_bkp->length * 8);
 					exec__setup(p_target);
 					exec__step(p_target, instruction);
 					// If HART in single step mode
 				} else {
-					error_code__update(p_target, p_next_bkp->length == NUM_BITS_TO_SIZE(ILEN) ? target_write_u32(p_target, p_next_bkp->address, instruction) : target_write_u16(p_target, p_next_bkp->address, instruction));
-
+					struct breakpoint next_bkp = *p_next_bkp;
+					error_code__update(p_target, target_remove_breakpoint(p_target, &next_bkp));
 					reg_cache__chain_invalidate(p_target->reg_cache);
 					set_DEMODE_ENBL(p_target, dmode_enabled | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT));
 					DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 					(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
-
-					error_code__update(p_target, p_next_bkp->length == NUM_BITS_TO_SIZE(ILEN) ? target_write_u32(p_target, p_next_bkp->address, RV_EBREAK()) : target_write_u16(p_target, p_next_bkp->address, RV_C_EBREAK()));
+					error_code__update(p_target, target_add_breakpoint(p_target, &next_bkp));
 				}
 				if ( dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT) ) {
 					// then single step already done
