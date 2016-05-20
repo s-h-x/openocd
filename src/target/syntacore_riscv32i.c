@@ -26,9 +26,9 @@ Syntacore RISC-V target
 #include <limits.h>
 
 /// Don't make irscan if IR is the same
-#define USE_IR_SELECT_CACHE 1
+#define USE_IR_SELECT_CACHE 0
 /// Don't write DAP_CONTROL if it is the same 
-#define USE_DAP_CONTROL_CACHE 1
+#define USE_DAP_CONTROL_CACHE 0
 /// Verify value of DAP_CONTROL after write
 #define USE_VERIFY_DAP_CONTROL 1
 /// Using PC_SAMPLE register instead AUIPC/CSRRW chain of instruction 
