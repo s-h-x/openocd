@@ -926,7 +926,7 @@ error_code__update(target const* const p_target, int const a_error_code)
 	assert(p_target);
 	sc_rv32i__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (ERROR_OK == error_code__get(p_target) && ERROR_OK != a_error_code) {
+	if ( ERROR_OK == error_code__get(p_target) && ERROR_OK != a_error_code ) {
 		LOG_DEBUG("Set new error code: %d", a_error_code);
 		p_arch->error_code = a_error_code;
 	}
@@ -990,11 +990,11 @@ IR_select(target const* const p_target, enum TAP_IR_e const new_instr)
 	assert(p_target);
 	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->use_ir_select_cache) {
+	if ( p_arch->use_ir_select_cache ) {
 		assert(p_target->tap);
 		assert(p_target->tap->ir_length == TAP_IR_LEN);
 		/// Skip IR scan if IR is the same
-		if (buf_get_u32(p_target->tap->cur_instr, 0u, p_target->tap->ir_length) == new_instr) {
+		if ( buf_get_u32(p_target->tap->cur_instr, 0u, p_target->tap->ir_length) == new_instr ) {
 			return;
 		}
 	}
@@ -1015,7 +1015,7 @@ read_only_32_bits_regs(target const* const p_target, enum TAP_IR_e ir)
 	int const old_err_code = error_code__get_and_clear(p_target);
 	/// Error state can be updated in IR_select
 	IR_select(p_target, ir);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		/// and it is the general error that does not allow further data retrieving.
 		error_code__prepend(p_target, old_err_code);
 		/// @todo some invalid data pattern should be returned (c++ boost::optional candidate?)
@@ -1033,7 +1033,7 @@ read_only_32_bits_regs(target const* const p_target, enum TAP_IR_e ir)
 
 	// enforce jtag_execute_queue() to obtain result
 	error_code__update(p_target, jtag_execute_queue());
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		/// Error state can be updated in DR scan
 		LOG_ERROR("JTAG error %d", error_code__get(p_target));
 	}
@@ -1085,7 +1085,7 @@ DBG_STATUS_get(target const* const p_target)
 		BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) |
 		BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
 	static uint32_t const good_result = BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
-	if ((result & result_mask) != (good_result & result_mask)) {
+	if ( (result & result_mask) != (good_result & result_mask) ) {
 		LOG_WARNING("DBG_STATUS == 0x%08X", result);
 	}
 	return result;
@@ -1098,7 +1098,7 @@ DAP_CTRL_REG_set_force(target const* const p_target, uint8_t const set_dap_unit_
 	assert(p_target);
 	int const old_err_code = error_code__get_and_clear(p_target);
 	IR_select(p_target, TAP_INSTR_DAP_CTRL);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		error_code__prepend(p_target, old_err_code);
 		return;
 	}
@@ -1126,13 +1126,13 @@ DAP_CTRL_REG_set_force(target const* const p_target, uint8_t const set_dap_unit_
 	// enforce jtag_execute_queue() to get status
 	int const jtag_status = jtag_execute_queue();
 	LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
-	if (jtag_status != ERROR_OK) {
+	if ( jtag_status != ERROR_OK ) {
 		uint32_t const dbg_status = DBG_STATUS_get(p_target);
 		static uint32_t const dbg_status_check_value = BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
 		static uint32_t const dbg_status_mask =
 			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) |
 			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
-		if ((dbg_status & dbg_status_mask) != (dbg_status_check_value & dbg_status_mask)) {
+		if ( (dbg_status & dbg_status_mask) != (dbg_status_check_value & dbg_status_mask) ) {
 			LOG_ERROR("JTAG error %d, operation_status=0x%1X, dbg_status=0x%08X", jtag_status, (uint32_t)status, dbg_status);
 			error_code__update(p_target, jtag_status);
 		} else {
@@ -1154,7 +1154,7 @@ DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_gro
 	p_arch->last_DAP_ctrl = DAP_CTRL_INVALID_CODE;
 	int const old_err_code = error_code__get_and_clear(p_target);
 	IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		error_code__prepend(p_target, old_err_code);
 		return;
 	}
@@ -1172,8 +1172,8 @@ DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_gro
 	jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
 	error_code__update(p_target, jtag_execute_queue());
 	LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
-	if (error_code__get(p_target) == ERROR_OK) {
-		if (get_dap_unit_group == set_dap_unit_group) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
+		if ( get_dap_unit_group == set_dap_unit_group ) {
 			p_arch->last_DAP_ctrl = get_dap_unit_group;
 		} else {
 			LOG_ERROR("Unit/Group verification error: set 0x%1X, but get 0x%1X!", set_dap_unit_group, get_dap_unit_group);
@@ -1189,7 +1189,7 @@ DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uint32_t co
 	assert(p_target);
 	int const old_err_code = error_code__get_and_clear(p_target);
 	IR_select(p_target, TAP_INSTR_DAP_CMD);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		error_code__prepend(p_target, old_err_code);
 		return 0xBADC0DE2u;
 	}
@@ -1228,8 +1228,8 @@ DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uint32_t co
 	// enforse jtag_execute_queue() to get values
 	error_code__update(p_target, jtag_execute_queue());
 	LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X ; # %08X %1X", p_target->cmd_name, fields[0].num_bits, dap_opcode_ext, fields[1].num_bits, dap_opcode, DBG_DATA, DAP_OPSTATUS);
-	if (error_code__get(p_target) == ERROR_OK) {
-		if ((DAP_OPSTATUS & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
+		if ( (DAP_OPSTATUS & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK ) {
 			LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 		}
@@ -1437,8 +1437,8 @@ DAP_CTRL_REG_set(target const* const p_target, enum type_dbgc_unit_id_e const da
 
 	sc_rv32i__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->use_dap_control_cache) {
-		if (p_arch->last_DAP_ctrl == set_dap_unit_group) {
+	if ( p_arch->use_dap_control_cache ) {
+		if ( p_arch->last_DAP_ctrl == set_dap_unit_group ) {
 			return;
 		}
 		LOG_DEBUG("DAP_CTRL_REG of %s reset to 0x%1X", p_target->cmd_name, set_dap_unit_group);
@@ -1449,10 +1449,10 @@ DAP_CTRL_REG_set(target const* const p_target, enum type_dbgc_unit_id_e const da
 
 	int const old_err_code = error_code__get_and_clear(p_target);
 	DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
-	if (p_arch->use_verify_dap_control) {
+	if ( p_arch->use_verify_dap_control ) {
 		error_code__get_and_clear(p_target);
 		DAP_CTRL_REG_verify(p_target, set_dap_unit_group);
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			p_arch->last_DAP_ctrl = set_dap_unit_group;
 		}
 	}
@@ -1464,7 +1464,7 @@ REGTRANS_write(target const* const p_target, enum type_dbgc_unit_id_e a_unit, ui
 {
 	assert(p_target);
 	DAP_CTRL_REG_set(p_target, a_unit, a_fgrp);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		LOG_WARNING("DAP_CTRL_REG_set error");
 		return;
 	}
@@ -1476,7 +1476,7 @@ REGTRANS_read(target const* const p_target, enum type_dbgc_unit_id_e const a_uni
 {
 	assert(p_target);
 	DAP_CTRL_REG_set(p_target, a_unit, a_fgrp);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		LOG_WARNING("DAP_CTRL_REG_set error");
 		return 0xBADC0DE3u;
 	}
@@ -1507,12 +1507,12 @@ HART_REGTRANS_write_and_check(target const* const p_target, enum type_dbgc_regbl
 {
 	assert(p_target);
 	HART_REGTRANS_write(p_target, index, set_value);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
-		if (p_arch->use_verify_hart_regtrans_write) {
+		if ( p_arch->use_verify_hart_regtrans_write ) {
 			uint32_t const get_value = HART_REGTRANS_read(p_target, index);
-			if (get_value != set_value) {
+			if ( get_value != set_value ) {
 				LOG_ERROR("Write HART_REGTRANS #%d with value 0x%08X, but re-read value is 0x%08X", (uint32_t)index, set_value, get_value);
 				error_code__update(p_target, ERROR_TARGET_FAILURE);
 			}
@@ -1538,7 +1538,7 @@ static inline void
 exec__setup(target const* const p_target)
 {
 	assert(p_target);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 	}
 }
@@ -1547,7 +1547,7 @@ static inline void
 exec__set_csr_data(target const* const p_target, uint32_t const csr_data)
 {
 	assert(p_target);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR, csr_data);
 	}
 }
@@ -1556,7 +1556,7 @@ static inline uint32_t
 exec__step(target const* const p_target, uint32_t instruction)
 {
 	assert(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return 0xBADC0DE9u;
 	}
 	return DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC, instruction);
@@ -1568,7 +1568,7 @@ get_PC_to_check(target const* const p_target)
 	assert(p_target);
 	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->use_check_pc_unchanged && p_arch->use_pc_from_pc_sample) {
+	if ( p_arch->use_check_pc_unchanged && p_arch->use_pc_from_pc_sample ) {
 		return HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
 	} else {
 		return 0xFFFFFFFFu;
@@ -1581,9 +1581,9 @@ check_PC_unchanged(target const* const p_target, uint32_t const pc_sample_1)
 	assert(p_target);
 	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->use_check_pc_unchanged && p_arch->use_pc_from_pc_sample) {
+	if ( p_arch->use_check_pc_unchanged && p_arch->use_pc_from_pc_sample ) {
 		uint32_t const pc_sample_2 = get_PC_to_check(p_target);
-		if (pc_sample_2 != pc_sample_1) {
+		if ( pc_sample_2 != pc_sample_1 ) {
 			LOG_ERROR("pc changed from 0x%08X to 0x%08X", pc_sample_1, pc_sample_2);
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 		}
@@ -1603,13 +1603,13 @@ HART_status_bits_to_target_state(target const* const p_target, uint32_t const st
 		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_DBGCMD_NACK_BIT) |
 		BIT_NUM_TO_MASK(DBGC_HART_HDSR_LOCK_STKY_BIT);
 
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return TARGET_UNKNOWN;
-	} else if (status & err_bits) {
+	} else if ( status & err_bits ) {
 		return TARGET_UNKNOWN;
-	} else if (status & BIT_NUM_TO_MASK(DBGC_HART_HDSR_RST_BIT)) {
+	} else if ( status & BIT_NUM_TO_MASK(DBGC_HART_HDSR_RST_BIT) ) {
 		return TARGET_RESET;
-	} else if (status & BIT_NUM_TO_MASK(DBGC_HART_HDSR_DMODE_BIT)) {
+	} else if ( status & BIT_NUM_TO_MASK(DBGC_HART_HDSR_DMODE_BIT) ) {
 		return TARGET_HALTED;
 	} else {
 		return TARGET_RUNNING;
@@ -1621,16 +1621,16 @@ read_debug_cause(target* const p_target)
 {
 	assert(p_target);
 	uint32_t const value = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_CAUSE);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return DBG_REASON_UNDEFINED;
 	}
-	if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_ENFORCE_BIT)) {
+	if ( value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_ENFORCE_BIT) ) {
 		return DBG_REASON_DBGRQ;
-	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SINGLE_STEP_BIT)) {
+	} else if ( value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SINGLE_STEP_BIT) ) {
 		return DBG_REASON_SINGLESTEP;
-	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SW_BRKPT_BIT)) {
+	} else if ( value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SW_BRKPT_BIT) ) {
 		return DBG_REASON_BREAKPOINT;
-	} else if (value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_RST_BREAK_BIT)) {
+	} else if ( value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_RST_BREAK_BIT) ) {
 		return DBG_REASON_DBGRQ;
 	} else {
 		return DBG_REASON_UNDEFINED;
@@ -1642,7 +1642,7 @@ update_debug_reason(target* const p_target)
 {
 	assert(p_target);
 	enum target_debug_reason const debug_reason = read_debug_cause(p_target);
-	if (debug_reason != p_target->debug_reason) {
+	if ( debug_reason != p_target->debug_reason ) {
 		LOG_DEBUG("New debug reason: 0x%08X", (uint32_t)debug_reason);
 		p_target->debug_reason = debug_reason;
 	}
@@ -1652,14 +1652,14 @@ static uint32_t
 try_to_get_ready(target* const p_target)
 {
 	uint32_t core_status = DBG_STATUS_get(p_target);
-	if ((core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) != 0) {
+	if ( (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) != 0 ) {
 		return core_status;
 	}
 	static unsigned const max_retries = 10u;
-	for (unsigned i = 2; i <= max_retries; ++i) {
+	for ( unsigned i = 2; i <= max_retries; ++i ) {
 		error_code__get_and_clear(p_target);
 		core_status = DBG_STATUS_get(p_target);
-		if ((core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) != 0) {
+		if ( (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) != 0 ) {
 			LOG_DEBUG("Ready: 0x%08X after %d requests", core_status, i);
 			return core_status;
 		}
@@ -1684,10 +1684,10 @@ update_status(target* const p_target)
 	{
 		uint32_t core_status = try_to_get_ready(p_target);
 		LOG_DEBUG("Check core_status for lock: 0x%08X", core_status);
-		if (0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT))) {
+		if ( 0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) ) {
 			LOG_WARNING("Lock detected: 0x%08X", core_status);
 			uint32_t const lock_context = debug_controller__unlock(p_target);
-			if (error_code__get(p_target) != ERROR_OK) {
+			if ( error_code__get(p_target) != ERROR_OK ) {
 				/// return with error_code != ERROR_OK if unlock was unsuccsesful
 				LOG_ERROR("Unlock unsucsessful with lock_context=0x%8X", lock_context);
 				error_code__prepend(p_target, old_err_code);
@@ -1697,7 +1697,7 @@ update_status(target* const p_target)
 			LOG_WARNING("Lock with lock_context=0x%8X fixed: 0x%08X", lock_context, core_status);
 		}
 		LOG_DEBUG("Core_status: 0x%08X", core_status);
-		if ((core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT))) != BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) {
+		if ( (core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT))) != BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT) ) {
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 			return;
 		}
@@ -1705,7 +1705,7 @@ update_status(target* const p_target)
 		uint32_t const hart0_err_bits =
 			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT) |
 			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_STKY_BIT);
-		if (core_status & hart0_err_bits) {
+		if ( core_status & hart0_err_bits ) {
 			LOG_WARNING("Hart errors detected: 0x%08X", core_status);
 			HART0_clear_sticky(p_target);
 			error_code__get_and_clear(p_target);
@@ -1718,7 +1718,7 @@ update_status(target* const p_target)
 			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_HWCORE_BIT) |
 			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_FSMBUSY_BIT) |
 			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_DAP_OPCODE_BIT);
-		if (core_status & cdsr_err_bits) {
+		if ( core_status & cdsr_err_bits ) {
 			LOG_WARNING("Core errors detected: 0x%08X", core_status);
 			error_code__get_and_clear(p_target);
 			core_clear_errors(p_target);
@@ -1734,9 +1734,9 @@ update_status(target* const p_target)
 	uint32_t const HART_status = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DBG_STS);
 	enum target_state const new_state = HART_status_bits_to_target_state(p_target, HART_status);
 	enum target_state const old_state = p_target->state;
-	if (new_state != old_state) {
+	if ( new_state != old_state ) {
 		p_target->state = new_state;
-		switch (new_state) {
+		switch ( new_state ) {
 		case TARGET_HALTED:
 			update_debug_reason(p_target);
 			LOG_DEBUG("TARGET_EVENT_HALTED");
@@ -1766,8 +1766,8 @@ static inline void
 reg__invalidate(reg* const p_reg)
 {
 	assert(p_reg);
-	if (p_reg->exist) {
-		if (p_reg->dirty) {
+	if ( p_reg->exist ) {
+		if ( p_reg->dirty ) {
 			LOG_ERROR("Invalidate dirty register: %s", p_reg->name);
 			target* const p_target = p_reg->arch_info;
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
@@ -1817,10 +1817,10 @@ reg__set_new_cache_value(reg* const p_reg, uint8_t* const buf)
 static inline bool
 reg__check(reg const* const p_reg)
 {
-	if (!p_reg->exist) {
+	if ( !p_reg->exist ) {
 		LOG_ERROR("Register %s not available", p_reg->name);
 		return false;
-	} else if (p_reg->dirty && !p_reg->valid) {
+	} else if ( p_reg->dirty && !p_reg->valid ) {
 		LOG_ERROR("Register %s dirty but not valid", p_reg->name);
 		return false;
 	} else {
@@ -1834,9 +1834,9 @@ reg_cache__invalidate(reg_cache const* const p_reg_cache)
 	assert(p_reg_cache);
 
 	assert(!(p_reg_cache->num_regs && !p_reg_cache->reg_list));
-	for (size_t i = 0; i < p_reg_cache->num_regs; ++i) {
+	for ( size_t i = 0; i < p_reg_cache->num_regs; ++i ) {
 		reg * const p_reg = &p_reg_cache->reg_list[i];
-		if (p_reg->exist) {
+		if ( p_reg->exist ) {
 			assert(reg__check(&p_reg_cache->reg_list[i]));
 			reg__invalidate(&p_reg_cache->reg_list[i]);
 		}
@@ -1846,7 +1846,7 @@ reg_cache__invalidate(reg_cache const* const p_reg_cache)
 static void
 reg_cache__chain_invalidate(reg_cache* p_reg_cache)
 {
-	for (; p_reg_cache; p_reg_cache = p_reg_cache->next) {
+	for ( ; p_reg_cache; p_reg_cache = p_reg_cache->next ) {
 		reg_cache__invalidate(p_reg_cache);
 	}
 }
@@ -1856,8 +1856,8 @@ check_that_target_halted(target* const p_target)
 {
 	LOG_DEBUG("update_status");
 	update_status(p_target);
-	if (error_code__get(p_target) == ERROR_OK) {
-		if (p_target->state != TARGET_HALTED) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
+		if ( p_target->state != TARGET_HALTED ) {
 			LOG_ERROR("Target not halted");
 			error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
 		}
@@ -1871,7 +1871,7 @@ reg_x__operation_conditions_check(reg const* const p_reg)
 	assert(reg__check(p_reg));
 	target* p_target = p_reg->arch_info;
 	assert(p_target);
-	if (!(p_reg->number < NUMBER_OF_X_REGS)) {
+	if ( !(p_reg->number < NUMBER_OF_X_REGS) ) {
 		LOG_WARNING("Bad GP register %s id=%d", p_reg->name, p_reg->number);
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return;
@@ -1886,13 +1886,13 @@ reg_x__get(reg* const p_reg)
 	reg_x__operation_conditions_check(p_reg);
 	target* p_target = p_reg->arch_info;
 	assert(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
-	if (p_reg->valid) {
+	if ( p_reg->valid ) {
 		// register cache already valid
-		if (p_reg->dirty) {
+		if ( p_reg->dirty ) {
 			LOG_WARNING("Try re-read dirty cache register %s", p_reg->name);
 		} else {
 			LOG_DEBUG("Try re-read cache register %s", p_reg->name);
@@ -1900,22 +1900,22 @@ reg_x__get(reg* const p_reg)
 	}
 
 	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
 		}
 		exec__setup(p_target);
 		int advance_pc_counter = 0;
-		if (error_code__get(p_target) != ERROR_OK) {
+		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
 		}
 		// Save p_reg->number register to CSR_DBG_SCRATCH CSR
 		(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_reg->number));
 		advance_pc_counter += instr_step;
-		if (error_code__get(p_target) != ERROR_OK) {
+		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
 		}
 
@@ -1923,11 +1923,11 @@ reg_x__get(reg* const p_reg)
 		assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
 		uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
 		advance_pc_counter = 0;
-		if (error_code__get(p_target) != ERROR_OK) {
+		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
 		}
 		reg__set_valid_value_to_cache(p_reg, value);
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 		}
 	}
@@ -1943,13 +1943,13 @@ reg_x__store(reg* const p_reg)
 	assert(p_target);
 	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
 
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-	if (p_arch->use_pc_advmt_dsbl_bit) {
+	if ( p_arch->use_pc_advmt_dsbl_bit ) {
 		HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
 	}
 	exec__setup(p_target);
@@ -1957,7 +1957,7 @@ reg_x__store(reg* const p_reg)
 
 	assert(p_reg->value);
 	exec__set_csr_data(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 	assert(p_reg->valid);
@@ -1968,7 +1968,7 @@ reg_x__store(reg* const p_reg)
 
 	LOG_DEBUG("Store register value 0x%08X from cache to register %s", buf_get_u32(p_reg->value, 0, p_reg->size), p_reg->name);
 
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -1981,7 +1981,7 @@ reg_x__store(reg* const p_reg)
 	assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
 #if VERIFY_REG_WRITE
 	uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
-	if (buf_get_u32(p_reg->value, 0, p_reg->size) != value) {
+	if ( buf_get_u32(p_reg->value, 0, p_reg->size) != value ) {
 		LOG_ERROR("Register %s write error: write 0x%08X, but re-read 0x%08X", p_reg->name, buf_get_u32(p_reg->value, 0, p_reg->size), value);
 	}
 #else
@@ -1989,7 +1989,7 @@ reg_x__store(reg* const p_reg)
 #endif
 	advance_pc_counter = 0;
 
-	if (p_arch->use_pc_advmt_dsbl_bit) {
+	if ( p_arch->use_pc_advmt_dsbl_bit ) {
 		HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 	}
 	assert(reg__check(p_reg));
@@ -2006,7 +2006,7 @@ reg_x__set(reg* const p_reg, uint8_t* const buf)
 	reg_x__operation_conditions_check(p_reg);
 	target* p_target = p_reg->arch_info;
 	assert(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -2046,24 +2046,24 @@ prepare_temporary_GP_register(target const* const p_target, int const after_reg)
 	assert(p_target->reg_cache->num_regs >= NUMBER_OF_X_REGS);
 	reg* p_valid = NULL;
 	reg* p_dirty = NULL;
-	for (size_t i = after_reg + 1; i < NUMBER_OF_X_REGS; ++i) {
+	for ( size_t i = after_reg + 1; i < NUMBER_OF_X_REGS; ++i ) {
 		assert(reg__check(&p_reg_list[i]));
-		if (p_reg_list[i].valid) {
-			if (p_reg_list[i].dirty) {
+		if ( p_reg_list[i].valid ) {
+			if ( p_reg_list[i].dirty ) {
 				p_dirty = &p_reg_list[i];
 				p_valid = p_dirty;
 				break;
-			} else if (!p_valid) {
+			} else if ( !p_valid ) {
 				p_valid = &p_reg_list[i];
 			}
 		}
 	}
 
-	if (!p_dirty) {
-		if (!p_valid) {
+	if ( !p_dirty ) {
+		if ( !p_valid ) {
 			assert(after_reg + 1 < NUMBER_OF_X_REGS);
 			p_valid = &p_reg_list[after_reg + 1];
-			if (error_code__update(p_target, reg_x__get(p_valid)) != ERROR_OK) {
+			if ( error_code__update(p_target, reg_x__get(p_valid)) != ERROR_OK ) {
 				return NULL;
 			}
 		}
@@ -2085,30 +2085,30 @@ static uint32_t csr_get_value(target* const p_target, uint32_t const csr_number)
 	uint32_t value = 0xBADBAD;
 	assert(p_target);
 	check_that_target_halted(p_target);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		/// Find temporary GP register
 		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
 		assert(p_wrk_reg);
 
 		uint32_t const pc_sample_1 = get_PC_to_check(p_target);
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
 			size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-			if (p_arch->use_pc_advmt_dsbl_bit) {
+			if ( p_arch->use_pc_advmt_dsbl_bit ) {
 				HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
 			}
 			exec__setup(p_target);
 			int advance_pc_counter = 0;
-			if (error_code__get(p_target) == ERROR_OK) {
+			if ( error_code__get(p_target) == ERROR_OK ) {
 				/// Copy values to temporary register
 				(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, csr_number));
 				advance_pc_counter += instr_step;
-				if (error_code__get(p_target) == ERROR_OK) {
+				if ( error_code__get(p_target) == ERROR_OK ) {
 					/// and store temporary register to CSR_DBG_SCRATCH CSR.
 					(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
 					advance_pc_counter += instr_step;
-					if (error_code__get(p_target) == ERROR_OK) {
+					if ( error_code__get(p_target) == ERROR_OK ) {
 						/// Correct pc by jump 2 instructions back and get previous command result.
 						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
 						value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
@@ -2116,12 +2116,12 @@ static uint32_t csr_get_value(target* const p_target, uint32_t const csr_number)
 					}
 				}
 			}
-			if (p_arch->use_pc_advmt_dsbl_bit) {
+			if ( p_arch->use_pc_advmt_dsbl_bit ) {
 				HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 			}
 		}
 
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			update_status(p_target);
 		}
 		check_PC_unchanged(p_target, pc_sample_1);
@@ -2154,41 +2154,41 @@ reg_pc__get(reg* const p_reg)
 	assert(p_target);
 	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	if (p_arch->use_pc_from_pc_sample) {
+	if ( p_arch->use_pc_from_pc_sample ) {
 		uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			reg__set_valid_value_to_cache(p_reg, pc_sample);
 		} else {
 			reg__invalidate(p_reg);
 		}
 	} else {
 		check_that_target_halted(p_target);
-		if (error_code__get(p_target) != ERROR_OK) {
+		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
 		}
 		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
 		assert(p_wrk_reg);
 
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
 		}
 		exec__setup(p_target);
 		int advance_pc_counter = 0;
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			/// Copy pc to temporary register by AUIPC instruction
 			(void)exec__step(p_target, RV_AUIPC(p_wrk_reg->number, 0));
 			advance_pc_counter += instr_step;
-			if (error_code__get(p_target) == ERROR_OK) {
+			if ( error_code__get(p_target) == ERROR_OK ) {
 				/// and store temporary register to CSR_DBG_SCRATCH CSR.
 				(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
 				advance_pc_counter += instr_step;
-				if (error_code__get(p_target) == ERROR_OK) {
+				if ( error_code__get(p_target) == ERROR_OK ) {
 					/// Correct pc by jump 2 instructions back and get previous command result.
 					assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
 					uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
 					advance_pc_counter = 0;
-					if (error_code__get(p_target) == ERROR_OK) {
+					if ( error_code__get(p_target) == ERROR_OK ) {
 						reg__set_valid_value_to_cache(p_reg, value);
 						uint32_t const pc_sample = HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
 						LOG_DEBUG("pc_sample = 0x%08X", pc_sample);
@@ -2196,7 +2196,7 @@ reg_pc__get(reg* const p_reg)
 				}
 			}
 		}
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 		}
 		// restore temporary register
@@ -2214,24 +2214,24 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 	assert(p_reg);
 	assert(p_reg->number == REG_PC_NUMBER);
 	assert(reg__check(p_reg));
-	if (!p_reg->valid) {
+	if ( !p_reg->valid ) {
 		LOG_DEBUG("force rewriting of pc register before read");
 	}
 
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
 	check_that_target_halted(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
 	uint32_t const new_pc = buf_get_u32(buf, 0, p_reg->size);
 	/// @note odd address is valid for pc, bit 0 value is ignored.
-	if (0 != (new_pc & (1u << 1))) {
+	if ( 0 != (new_pc & (1u << 1)) ) {
 		bool const RVC_enable = is_RVC_enable(p_target);
-		if (error_code__get(p_target) != ERROR_OK) {
+		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
-		} else if (!RVC_enable) {
+		} else if ( !RVC_enable ) {
 			LOG_ERROR("Unaligned PC: 0x%08X", new_pc);
 			error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 			return error_code__get_and_clear(p_target);
@@ -2246,22 +2246,22 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-	if (p_arch->use_pc_advmt_dsbl_bit) {
+	if ( p_arch->use_pc_advmt_dsbl_bit ) {
 		HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
 	}
 	// Update to HW
 	exec__setup(p_target);
 	int advance_pc_counter = 0;
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		assert(p_reg->value);
 		exec__set_csr_data(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			// set temporary register value to restoring pc value
 			(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
 			advance_pc_counter += instr_step;
-			if (error_code__get(p_target) == ERROR_OK) {
+			if ( error_code__get(p_target) == ERROR_OK ) {
 				assert(p_wrk_reg->dirty);
-				if (p_arch->use_pc_advmt_dsbl_bit) {
+				if ( p_arch->use_pc_advmt_dsbl_bit ) {
 					HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 					exec__setup(p_target);
 				}
@@ -2276,7 +2276,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 	}
 
 #if 0
-	if (p_arch->use_pc_advmt_dsbl_bit) {
+	if ( p_arch->use_pc_advmt_dsbl_bit ) {
 		HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 	}
 #endif
@@ -2294,7 +2294,7 @@ reg_f__get(reg* const p_reg)
 {
 	assert(p_reg);
 	assert(p_reg->number < NUMBER_OF_F_REGS);
-	if (!p_reg->exist) {
+	if ( !p_reg->exist ) {
 		LOG_WARNING("FP register %s (#%d) is unavailable", p_reg->name, p_reg->number);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
@@ -2305,7 +2305,7 @@ reg_f__get(reg* const p_reg)
 	assert(p_target);
 
 	check_that_target_halted(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -2315,35 +2315,35 @@ reg_f__get(reg* const p_reg)
 	assert(p_wrk_reg);
 
 	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
 		}
 		exec__setup(p_target);
 		int advance_pc_counter = 0;
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			/// Copy values to temporary register
 			(void)exec__step(p_target, RV_FMV_X_S(p_wrk_reg->number, p_reg->number));
 			advance_pc_counter += instr_step;
-			if (error_code__get(p_target) == ERROR_OK) {
+			if ( error_code__get(p_target) == ERROR_OK ) {
 				/// and store temporary register to CSR_DBG_SCRATCH CSR.
 				(void)exec__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
 				advance_pc_counter += instr_step;
-				if (error_code__get(p_target) == ERROR_OK) {
+				if ( error_code__get(p_target) == ERROR_OK ) {
 					/// Correct pc by jump 2 instructions back and get previous command result.
 					assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
 					uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
 					advance_pc_counter = 0;
-					if (error_code__get(p_target) == ERROR_OK) {
+					if ( error_code__get(p_target) == ERROR_OK ) {
 						reg__set_valid_value_to_cache(p_reg, value);
 					}
 				}
 			}
 		}
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 		}
 	}
@@ -2352,7 +2352,7 @@ reg_f__get(reg* const p_reg)
 
 	// restore temporary register
 	int const old_err_code = error_code__get_and_clear(p_target);
-	if (error_code__update(p_target, reg_x__store(p_wrk_reg)) == ERROR_OK) {
+	if ( error_code__update(p_target, reg_x__store(p_wrk_reg)) == ERROR_OK ) {
 		assert(!p_wrk_reg->dirty);
 	}
 	error_code__prepend(p_target, old_err_code);
@@ -2365,7 +2365,7 @@ reg_f__set(reg* const p_reg, uint8_t* const buf)
 {
 	assert(p_reg);
 	assert(p_reg->number < NUMBER_OF_F_REGS);
-	if (!p_reg->exist) {
+	if ( !p_reg->exist ) {
 		LOG_WARNING("Register %s is unavailable", p_reg->name);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
@@ -2376,7 +2376,7 @@ reg_f__set(reg* const p_reg, uint8_t* const buf)
 	assert(p_target);
 
 	check_that_target_halted(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -2386,32 +2386,32 @@ reg_f__set(reg* const p_reg, uint8_t* const buf)
 	assert(p_wrk_reg);
 
 	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
 		}
 		exec__setup(p_target);
 		int advance_pc_counter = 0;
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			reg__set_new_cache_value(p_reg, buf);
 
 			exec__set_csr_data(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
-			if (error_code__get(p_target) == ERROR_OK) {
+			if ( error_code__get(p_target) == ERROR_OK ) {
 				// set temporary register value to restoring pc value
 				(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
 				advance_pc_counter += instr_step;
-				if (error_code__get(p_target) == ERROR_OK) {
+				if ( error_code__get(p_target) == ERROR_OK ) {
 					assert(p_wrk_reg->dirty);
 					assert(0 < p_wrk_reg->number && p_wrk_reg->number < NUMBER_OF_F_REGS);
 					(void)exec__step(p_target, RV_FMV_S_X(p_reg->number, p_wrk_reg->number));
 					advance_pc_counter += instr_step;
-					if (error_code__get(p_target) == ERROR_OK) {
+					if ( error_code__get(p_target) == ERROR_OK ) {
 						/// Correct pc by jump 2 instructions back and get previous command result.
 						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-						if (advance_pc_counter) {
+						if ( advance_pc_counter ) {
 							(void)exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
 						}
 						advance_pc_counter = 0;
@@ -2423,7 +2423,7 @@ reg_f__set(reg* const p_reg, uint8_t* const buf)
 				}
 			}
 		}
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 		}
 	}
@@ -2443,7 +2443,7 @@ reg_csr__get(reg* const p_reg)
 	assert(p_reg);
 	uint32_t const csr_number = p_reg->number;
 	assert(csr_number < 4096u);
-	if (!p_reg->exist) {
+	if ( !p_reg->exist ) {
 		LOG_WARNING("CSR %s (#%d) is unavailable", p_reg->name, csr_number);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
@@ -2452,7 +2452,7 @@ reg_csr__get(reg* const p_reg)
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
 	uint32_t const value = csr_get_value(p_target, csr_number);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		reg__set_valid_value_to_cache(p_reg, value);
 	}
 	return error_code__get_and_clear(p_target);
@@ -2463,7 +2463,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 {
 	assert(p_reg);
 	assert(p_reg->number < 4096u);
-	if (!p_reg->exist) {
+	if ( !p_reg->exist ) {
 		LOG_WARNING("Register %s is unavailable", p_reg->name);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
@@ -2474,7 +2474,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 	assert(p_target);
 
 	check_that_target_halted(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -2484,32 +2484,32 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 	assert(p_wrk_reg);
 
 	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
 		}
 		exec__setup(p_target);
 		int advance_pc_counter = 0;
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			reg__set_new_cache_value(p_reg, buf);
 
 			exec__set_csr_data(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
-			if (error_code__get(p_target) == ERROR_OK) {
+			if ( error_code__get(p_target) == ERROR_OK ) {
 				// set temporary register value
 				(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
 				advance_pc_counter += instr_step;
-				if (error_code__get(p_target) == ERROR_OK) {
+				if ( error_code__get(p_target) == ERROR_OK ) {
 					assert(p_wrk_reg->dirty);
 					assert(p_wrk_reg->number < NUMBER_OF_X_REGS);
 					(void)exec__step(p_target, RV_CSRW(p_reg->number, p_wrk_reg->number));
 					advance_pc_counter += instr_step;
-					if (error_code__get(p_target) == ERROR_OK) {
+					if ( error_code__get(p_target) == ERROR_OK ) {
 						/// Correct pc by jump 2 instructions back and get previous command result.
 						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-						if (advance_pc_counter) {
+						if ( advance_pc_counter ) {
 							(void)exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
 						}
 						advance_pc_counter = 0;
@@ -2521,7 +2521,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 				}
 			}
 		}
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 		}
 	}
@@ -2544,7 +2544,7 @@ reg_cache__create(char const* name, reg const regs_templates[], size_t const num
 	reg* const p_dst_array = calloc(num_regs, sizeof(reg));
 	reg* p_dst_iter = &p_dst_array[0];
 	reg const* p_src_iter = &regs_templates[0];
-	for (size_t i = 0; i < num_regs; ++i) {
+	for ( size_t i = 0; i < num_regs; ++i ) {
 		*p_dst_iter = *p_src_iter;
 		p_dst_iter->value = calloc(1, NUM_BITS_TO_SIZE(p_src_iter->size));
 		p_dst_iter->arch_info = p_arch_info;
@@ -2576,40 +2576,40 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 {
 	assert(p_target);
 	check_that_target_halted(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
 	/// @todo multiple caches
 	reg* const p_pc = &p_target->reg_cache->reg_list[NUMBER_OF_X_REGS];
-	if (!current) {
+	if ( !current ) {
 		uint8_t buf[sizeof address];
 		buf_set_u32(buf, 0, XLEN, address);
 		error_code__update(p_target, reg_pc__set(p_pc, buf));
-		if (error_code__get(p_target) != ERROR_OK) {
+		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
 		}
 		assert(!p_pc->dirty);
 	}
-	if (handle_breakpoints) {
-		if (current) {
+	if ( handle_breakpoints ) {
+		if ( current ) {
 			// Find breakpoint for current instruction
 			error_code__update(p_target, reg_pc__get(p_pc));
 			assert(p_pc->value);
 			uint32_t const pc = buf_get_u32(p_pc->value, 0, XLEN);
 			struct breakpoint* p_next_bkp = p_target->breakpoints;
-			for (; p_next_bkp; p_next_bkp = p_next_bkp->next) {
-				if (p_next_bkp->set && (p_next_bkp->address == pc)) {
+			for ( ; p_next_bkp; p_next_bkp = p_next_bkp->next ) {
+				if ( p_next_bkp->set && (p_next_bkp->address == pc) ) {
 					break;
 				}
 			}
 
-			if (p_next_bkp) {
+			if ( p_next_bkp ) {
 				// If next instruction is replaced by breakpoint, then execute saved instruction
 				uint32_t const instruction = buf_get_u32(p_next_bkp->orig_instr, 0, p_next_bkp->length * 8);
 				sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 				assert(p_arch);
-				if (p_arch->use_resume_at_sw_breakpoint_emulates_saved_instruction) {
+				if ( p_arch->use_resume_at_sw_breakpoint_emulates_saved_instruction ) {
 					exec__setup(p_target);
 					exec__step(p_target, instruction);
 					// If HART in single step mode
@@ -2623,7 +2623,7 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 
 					error_code__update(p_target, p_next_bkp->length == NUM_BITS_TO_SIZE(ILEN) ? target_write_u32(p_target, p_next_bkp->address, RV_EBREAK()) : target_write_u16(p_target, p_next_bkp->address, RV_C_EBREAK()));
 				}
-				if (dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT)) {
+				if ( dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT) ) {
 					// then single step already done
 					reg_cache__chain_invalidate(p_target->reg_cache);
 					set_DEMODE_ENBL(p_target, dmode_enabled);
@@ -2647,17 +2647,17 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 
 	reg_cache__chain_invalidate(p_target->reg_cache);
 	set_DEMODE_ENBL(p_target, dmode_enabled);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 	DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		LOG_WARNING("DAP_CTRL_REG_set error");
 		return error_code__get_and_clear(p_target);
 	}
 
 	(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -2667,7 +2667,7 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 
 	LOG_DEBUG("update_status");
 	update_status(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -2679,21 +2679,21 @@ reset__set(target* const p_target, bool const active)
 {
 	assert(p_target);
 	DAP_CTRL_REG_set(p_target, DBGC_UNIT_ID_CORE, DBGC_FGRP_CORE_REGTRANS);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		uint32_t const get_old_value1 = core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			static uint32_t const bit_mask = BIT_NUM_TO_MASK(DBGC_CORE_CDCR_HART0_RST_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDCR_RST_BIT);
 			uint32_t const set_value = (get_old_value1 & ~bit_mask) | (active ? bit_mask : 0u);
 			core_REGTRANS_write(p_target, DBGC_CORE_REGS_DBG_CTRL, set_value);
-			if (error_code__get(p_target) == ERROR_OK) {
+			if ( error_code__get(p_target) == ERROR_OK ) {
 				sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 				assert(p_arch);
-				if (p_arch->use_verify_core_regtrans_write) {
+				if ( p_arch->use_verify_core_regtrans_write ) {
 					uint32_t const get_new_value2 = core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
-					if (error_code__get(p_target) != ERROR_OK) {
+					if ( error_code__get(p_target) != ERROR_OK ) {
 						return error_code__get_and_clear(p_target);
 					}
-					if ((get_new_value2 & bit_mask) != (set_value & bit_mask)) {
+					if ( (get_new_value2 & bit_mask) != (set_value & bit_mask) ) {
 						LOG_ERROR("Fail to verify write: set 0x%08X, but get 0x%08X", set_value, get_new_value2);
 						error_code__update(p_target, ERROR_TARGET_FAILURE);
 						return error_code__get_and_clear(p_target);
@@ -2701,15 +2701,15 @@ reset__set(target* const p_target, bool const active)
 				}
 				LOG_DEBUG("update_status");
 				update_status(p_target);
-				if (error_code__get(p_target) == ERROR_OK) {
-					if (active) {
-						if (p_target->state != TARGET_RESET) {
+				if ( error_code__get(p_target) == ERROR_OK ) {
+					if ( active ) {
+						if ( p_target->state != TARGET_RESET ) {
 							/// issue error if we are still running
 							LOG_ERROR("Target is not resetting after reset assert");
 							error_code__update(p_target, ERROR_TARGET_FAILURE);
 						}
 					} else {
-						if (p_target->state == TARGET_RESET) {
+						if ( p_target->state == TARGET_RESET ) {
 							LOG_ERROR("Target is still in reset after reset deassert");
 							error_code__update(p_target, ERROR_TARGET_FAILURE);
 						}
@@ -2908,19 +2908,19 @@ static void
 sc_rv32i__deinit_target(target* const p_target)
 {
 	assert(p_target);
-	while (p_target->reg_cache) {
+	while ( p_target->reg_cache ) {
 		reg_cache* const p_reg_cache = p_target->reg_cache;
 		p_target->reg_cache = p_target->reg_cache->next;
 		reg* const reg_list = p_reg_cache->reg_list;
 		assert(!p_reg_cache->num_regs || reg_list);
-		for (unsigned i = 0; i < p_reg_cache->num_regs; ++i) {
+		for ( unsigned i = 0; i < p_reg_cache->num_regs; ++i ) {
 			free(reg_list[i].value);
 		}
 		free(reg_list);
 
 		free(p_reg_cache);
 	}
-	if (p_target->arch_info) {
+	if ( p_target->arch_info ) {
 		free(p_target->arch_info);
 		p_target->arch_info = NULL;
 	}
@@ -2937,17 +2937,17 @@ static int
 sc_rv32i__examine(target* const p_target)
 {
 	assert(p_target);
-	for (int i = 0; i < 10; ++i) {
+	for ( int i = 0; i < 10; ++i ) {
 		error_code__get_and_clear(p_target);
 		LOG_DEBUG("update_status");
 		update_status(p_target);
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			break;
 		}
 		LOG_DEBUG("update_status error, retry");
 	}
 
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		uint32_t const IDCODE = IDCODE_get(p_target);
 		uint32_t const DBG_ID = DBG_ID_get(p_target);
 		LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE, DBG_ID, BLD_ID_get(p_target));
@@ -2957,7 +2957,7 @@ sc_rv32i__examine(target* const p_target)
 		assert((DBG_ID & DBG_ID_SUBVERSION_MASK) >= (EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK));
 #endif
 		set_DEMODE_ENBL(p_target, NORMAL_DEBUG_ENABLE_MASK);
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			LOG_DEBUG("Examined OK");
 			target_set_examined(p_target);
 		}
@@ -2972,7 +2972,7 @@ sc_rv32i__poll(target* const p_target)
 	assert(p_target);
 	LOG_DEBUG("update_status");
 	update_status(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 	return error_code__get_and_clear(p_target);
@@ -2995,11 +2995,11 @@ sc_rv32i__halt(target* const p_target)
 	{
 		LOG_DEBUG("update_status");
 		update_status(p_target);
-		if (error_code__get(p_target) != ERROR_OK) {
+		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
 		}
 
-		if (p_target->state == TARGET_HALTED) {
+		if ( p_target->state == TARGET_HALTED ) {
 			LOG_WARNING("Halt request when target is already in halted state");
 			return error_code__get_and_clear(p_target);
 		}
@@ -3008,26 +3008,26 @@ sc_rv32i__halt(target* const p_target)
 	// Try to halt
 	{
 		DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
-		if (error_code__get(p_target) != ERROR_OK) {
+		if ( error_code__get(p_target) != ERROR_OK ) {
 			LOG_WARNING("DAP_CTRL_REG_set error");
 			return error_code__get_and_clear(p_target);
 		}
 
 		(void)DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_HALT) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
-		if (error_code__get(p_target) != ERROR_OK) {
+		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
 		}
 	}
 
 	LOG_DEBUG("update_status");
 	update_status(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
 	// Verify that in debug mode
 	check_that_target_halted(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -3074,15 +3074,23 @@ sc_rv32i__soft_reset_halt(target* const p_target)
 	LOG_DEBUG("Soft reset called");
 	assert(p_target);
 	reset__set(p_target, true);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		set_DEMODE_ENBL(p_target, NORMAL_DEBUG_ENABLE_MASK | BIT_NUM_TO_MASK(DBGC_HART_HDMER_RST_EXIT_BRK_BIT));
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			reset__set(p_target, false);
 		}
 	}
 
 	return error_code__get_and_clear(p_target);
 }
+
+enum Privilege
+{
+	Priv_U = 0x0,
+	Priv_S = 0x1,
+	Priv_H = 0x2,
+	Priv_M = 0x3,
+};
 
 enum VM_mode
 {
@@ -3108,21 +3116,21 @@ typedef struct VM_region_map_struct
 static VM_region_map virt_2_phis_map(target *p_target, uint32_t vbase, uint32_t size, bool instruction)
 {
 	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
 		uint32_t const VM = PRV == 0x3 ? VM_Mbare : (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
 		VM_region_map const bad_map = {.count = 0,.p_chunks = NULL};
-		switch (VM) {
+		switch ( VM ) {
 		case VM_Mbb:
 			{
 				uint32_t const mbound = csr_get_value(p_target, CSR_mbound);
-				if (error_code__get(p_target) != ERROR_OK) {
+				if ( error_code__get(p_target) != ERROR_OK ) {
 					return bad_map;
-				} else if (!(vbase + size <= mbound)) {
+				} else if ( !(vbase + size <= mbound) ) {
 					return bad_map;
 				} else {
 					uint32_t const mbase = csr_get_value(p_target, CSR_mbase);
-					if (error_code__get(p_target) != ERROR_OK) {
+					if ( error_code__get(p_target) != ERROR_OK ) {
 						return bad_map;
 					} else {
 						VM_chunk const chunk = {.virt = vbase,.phys = vbase + mbase,.size = size};
@@ -3138,13 +3146,13 @@ static VM_region_map virt_2_phis_map(target *p_target, uint32_t vbase, uint32_t 
 		case VM_Mbbid:
 			{
 				uint32_t const mbound = csr_get_value(p_target, instruction ? CSR_mibound : CSR_mdbound);
-				if (error_code__get(p_target) != ERROR_OK) {
+				if ( error_code__get(p_target) != ERROR_OK ) {
 					return bad_map;
-				} else if (!(vbase + size <= mbound)) {
+				} else if ( !(vbase + size <= mbound) ) {
 					return bad_map;
 				} else {
 					uint32_t const mbase = csr_get_value(p_target, instruction ? CSR_mibase : CSR_mdbase);
-					if (error_code__get(p_target) != ERROR_OK) {
+					if ( error_code__get(p_target) != ERROR_OK ) {
 						return bad_map;
 					} else {
 						VM_chunk const chunk = {.virt = vbase,.phys = vbase + mbase,.size = size};
@@ -3179,13 +3187,13 @@ static VM_region_map virt_2_phis_map(target *p_target, uint32_t vbase, uint32_t 
 static int sc_rv32i__mmu(target *p_target, int *p_mmu_enabled)
 {
 	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
-		if (PRV == 0x3) {
+		if ( PRV == Priv_M || PRV == Priv_H ) {
 			*p_mmu_enabled = 0;
 		} else {
 			uint32_t const VM = (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
-			switch (VM) {
+			switch ( VM ) {
 			case VM_Mbb:
 			case VM_Mbbid:
 			case VM_Sv32:
@@ -3193,6 +3201,7 @@ static int sc_rv32i__mmu(target *p_target, int *p_mmu_enabled)
 			case VM_Sv48:
 				*p_mmu_enabled = 1;
 				break;
+
 			case VM_Mbare:
 			default:
 				*p_mmu_enabled = 0;
@@ -3203,79 +3212,68 @@ static int sc_rv32i__mmu(target *p_target, int *p_mmu_enabled)
 	return error_code__get_and_clear(p_target);
 }
 
-static void virt_to_phis(target * p_target, uint32_t address, uint32_t * physical, bool const instruction)
+static void virt_to_phis(target *p_target, uint32_t address, uint32_t *physical, bool const instruction)
 {
 	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
-		uint32_t const VM = PRV == 0x3 ? VM_Mbare : (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
-		switch (VM) {
+		uint32_t const VM = PRV == Priv_M || PRV == Priv_H ? VM_Mbare : (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
+		switch ( VM ) {
+		case VM_Mbare:
+			*physical = address;
+			break;
+
 		case VM_Mbb:
+		case VM_Mbbid:
 			{
-				uint32_t const mbound = csr_get_value(p_target, CSR_mbound);
-				if (error_code__get(p_target) == ERROR_OK) {
-					if (!(address <= mbound)) {
-						error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-					} else {
-						uint32_t const mbase = csr_get_value(p_target, CSR_mbase);
-						if (error_code__get(p_target) == ERROR_OK) {
-							*physical = address + mbase;
+				uint32_t const bound = csr_get_value(p_target, VM == VM_Mbb ? CSR_mbound : /*VM == VM_Mbbid*/instruction ? CSR_mibound : CSR_mdbound);
+				if ( error_code__get(p_target) == ERROR_OK ) {
+					if ( address <= bound ) {
+						uint32_t const base = csr_get_value(p_target, VM_Mbb ? CSR_mbase : /*VM == VM_Mbbid*/instruction ? CSR_mibase : CSR_mdbase);
+						if ( error_code__get(p_target) == ERROR_OK ) {
+							*physical = address + base;
 						}
+					} else {
+						error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 					}
 				}
 			}
 			break;
 
-		case VM_Mbbid:
-			{
-				uint32_t const mbound = csr_get_value(p_target, instruction ? CSR_mibound : CSR_mdbound);
-				if (error_code__get(p_target) == ERROR_OK) {
-					if (!(address <= mbound)) {
-						error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-					} else {
-						uint32_t const mbase = csr_get_value(p_target, instruction ? CSR_mibase : CSR_mdbase);
-						if (error_code__get(p_target) == ERROR_OK) {
-							*physical = address + mbase;
-						}
-					}
-				}
-			}
-			break;
 		case VM_Sv32:
 			{
-				uint32_t const sptbr = csr_get_value(p_target, CSR_sptbr);
-				if (error_code__get(p_target) == ERROR_OK) {
+				static uint32_t const offset_mask = LOW_BITS_MASK(10) << 2;
+				uint32_t const main_page = csr_get_value(p_target, CSR_sptbr);
+				if ( error_code__get(p_target) == ERROR_OK ) {
+					// lower bits should be zeros
+					assert(0 == (main_page & LOW_BITS_MASK(12)));
+					uint32_t const offset_bits1 = address >> 20 & offset_mask;
 					uint32_t pte1;
-					if (ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, ((address >> 20) & (~(~0u << 10) << 2)) | sptbr, 4, 1, (uint8_t *)&pte1))) {
-						if (0 == (pte1 & 1)) {
-							error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-						} else {
-							uint32_t const pte1_type = ((pte1 >> 1) & LOW_BITS_MASK(4));
-							if (pte1_type >= 2) {
-								*physical = ((pte1 << 2) & (~0 << 22)) | (address & LOW_BITS_MASK(22));
+					if ( ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, main_page | offset_bits1, 4, 1, (uint8_t *)&pte1)) ) {
+						if ( 0 != (pte1 & BIT_NUM_TO_MASK(0)) ) {
+							if ( (pte1 >> 1 & LOW_BITS_MASK(4)) >= 2 ) {
+								*physical = (pte1 << 2 & ~LOW_BITS_MASK(22)) | (address & LOW_BITS_MASK(22));
 							} else {
+								uint32_t const base_0 = pte1 << 2 & ~LOW_BITS_MASK(12);
+								uint32_t const offset_bits0 = address >> 10 & offset_mask;
 								uint32_t pte0;
-								if (ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, (pte1 << 2) & (~0 << 12), 4, 1, (uint8_t *)&pte0))) {
-									if (0 == (pte0 & 1)) {
-										error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-									} else {
-										uint32_t const pte0_type = ((pte0 >> 1) & LOW_BITS_MASK(4));
-										if (pte0_type >= 2) {
-											*physical = ((pte0 << 2) & (~0 << 12)) | (address & LOW_BITS_MASK(12));
+								if ( ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, base_0 | offset_bits0, 4, 1, (uint8_t *)&pte0)) ) {
+									if ( 0 != (pte0 & BIT_NUM_TO_MASK(0)) ) {
+										if ( (pte0 >> 1 & LOW_BITS_MASK(4)) >= 2 ) {
+											*physical = (pte0 << 2 & ~LOW_BITS_MASK(12)) | (address & LOW_BITS_MASK(12));
 										} else {
 											error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 										}
+									} else {
+										error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 									}
 								}
 							}
+						} else {
+							error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 						}
 					}
 				}
-			}
-			break;
-		case VM_Mbare:
-			{
-				*physical = address;
 			}
 			break;
 
@@ -3302,14 +3300,14 @@ sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t co
 	assert(buffer);
 	LOG_DEBUG("Read_memory at 0x%08X, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
 	/// Check for size
-	if (!(size == 1 || size == 2 || size == 4)) {
+	if ( !(size == 1 || size == 2 || size == 4) ) {
 		LOG_ERROR("Invalid item size %d", size);
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return error_code__get_and_clear(p_target);
 	}
 
 	/// Check for alignment
-	if (address % size != 0) {
+	if ( address % size != 0 ) {
 		LOG_ERROR("Unaligned access at 0x%08X, for item size %d", address, size);
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__get_and_clear(p_target);
@@ -3317,7 +3315,7 @@ sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t co
 
 	/// Check that target halted
 	check_that_target_halted(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -3326,7 +3324,7 @@ sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t co
 	assert(p_wrk_reg);
 
 	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		/// Define opcode for load item to register
 		uint32_t const load_OP =
 			size == 4 ? RV_LW(p_wrk_reg->number, p_wrk_reg->number, 0) :
@@ -3336,32 +3334,32 @@ sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t co
 		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
 		}
 		/// Setup exec operations mode
 		exec__setup(p_target);
 		int advance_pc_counter = 0;
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			/// For count number of items do loop
-			while (count--) {
+			while ( count-- ) {
 				/// Set address to CSR
 				exec__set_csr_data(p_target, address);
-				if (error_code__get(p_target) != ERROR_OK) {
+				if ( error_code__get(p_target) != ERROR_OK ) {
 					break;
 				}
 
 				/// Load address to work register
 				(void)exec__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
 				advance_pc_counter += instr_step;
-				if (error_code__get(p_target) != ERROR_OK) {
+				if ( error_code__get(p_target) != ERROR_OK ) {
 					break;
 				}
 
 				/// Exec load item to register
 				(void)exec__step(p_target, load_OP);
 				advance_pc_counter += instr_step;
-				if (error_code__get(p_target) != ERROR_OK) {
+				if ( error_code__get(p_target) != ERROR_OK ) {
 					break;
 				}
 
@@ -3373,7 +3371,7 @@ sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t co
 				assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
 				uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
 				advance_pc_counter = 0;
-				if (error_code__get(p_target) != ERROR_OK) {
+				if ( error_code__get(p_target) != ERROR_OK ) {
 					break;
 				}
 
@@ -3385,12 +3383,12 @@ sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t co
 				buffer += size;
 			}
 		}
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 		}
 	}
 
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		LOG_DEBUG("update_status");
 		update_status(p_target);
 	}
@@ -3413,25 +3411,25 @@ sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t c
 	assert(buffer);
 	LOG_DEBUG("Write_memory at 0x%08X, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
 	/// Check for size
-	if (!(size == 1 || size == 2 || size == 4)) {
+	if ( !(size == 1 || size == 2 || size == 4) ) {
 		LOG_ERROR("Invalid item size %d", size);
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return error_code__get_and_clear(p_target);
 	}
 
 	/// Check for alignment
-	if (address % size != 0) {
+	if ( address % size != 0 ) {
 		LOG_ERROR("Unaligned access at 0x%08X, for item size %d", address, size);
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__get_and_clear(p_target);
 	}
 
-	if (count == 0) {
+	if ( count == 0 ) {
 		return error_code__get_and_clear(p_target);
 	}
 
 	check_that_target_halted(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
@@ -3443,20 +3441,20 @@ sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t c
 	assert(p_data_reg);
 	assert(p_addr_reg->number != p_data_reg->number);
 
-	if (error_code__get(p_target) == ERROR_OK) {
+	if ( error_code__get(p_target) == ERROR_OK ) {
 		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
 		}
 		/// Setup exec operations mode
 		exec__setup(p_target);
 		size_t advance_pc_counter = 0;
-		if (error_code__get(p_target) == ERROR_OK) {
+		if ( error_code__get(p_target) == ERROR_OK ) {
 			// Set address to CSR
 			exec__set_csr_data(p_target, address);
-			if (error_code__get(p_target) == ERROR_OK) {
+			if ( error_code__get(p_target) == ERROR_OK ) {
 				/// Load address to work register
 				(void)exec__step(p_target, RV_CSRR(p_addr_reg->number, CSR_DBG_SCRATCH));
 				advance_pc_counter += instr_step;
@@ -3471,7 +3469,7 @@ sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t c
 				};
 
 				static uint32_t max_pc_offset = (((1u << 20) - 1u) / NUM_BITS_TO_SIZE(XLEN)) * NUM_BITS_TO_SIZE(XLEN);
-				if (p_arch->use_queuing_for_dr_scans) {
+				if ( p_arch->use_queuing_for_dr_scans ) {
 					uint8_t DAP_OPSTATUS = 0;
 					uint8_t const data_wr_opcode[1] = {DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR};
 					scan_field const data_scan_opcode_field = {
@@ -3501,32 +3499,32 @@ sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t c
 					LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
 						data_scan_fields[0].num_bits, buf_get_u32(data_scan_fields[0].out_value, 0, data_scan_fields[0].num_bits),
 						data_scan_fields[1].num_bits, buf_get_u32(data_scan_fields[1].out_value, 0, data_scan_fields[1].num_bits));
-					for (unsigned i = 0; i < ARRAY_LEN(instr_fields); ++i) {
+					for ( unsigned i = 0; i < ARRAY_LEN(instr_fields); ++i ) {
 						LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
 							instr_fields[i][0].num_bits, buf_get_u32(instr_fields[i][0].out_value, 0, instr_fields[i][0].num_bits),
 							instr_fields[i][1].num_bits, buf_get_u32(instr_fields[i][1].out_value, 0, instr_fields[i][1].num_bits));
 					}
 
 					size_t count1 = 0;
-					while (error_code__get(p_target) == ERROR_OK && count--) {
+					while ( error_code__get(p_target) == ERROR_OK && count-- ) {
 						assert(p_target->tap);
 						data_scan_fields[0].out_value = (uint8_t const*)buffer;
 						jtag_add_dr_scan_check(p_target->tap, ARRAY_LEN(data_scan_fields), data_scan_fields, TAP_IDLE);
-						for (unsigned i = 0; i < ARRAY_LEN(instr_fields); ++i) {
+						for ( unsigned i = 0; i < ARRAY_LEN(instr_fields); ++i ) {
 							jtag_add_dr_scan_check(p_target->tap, TAP_NUM_FIELDS_DAP_CMD, instr_fields[i], TAP_IDLE);
 							advance_pc_counter += instr_step;
 						}
 						buffer += size;
-						if (++count1 >= WRITE_BUFFER_THRESHOLD) {
+						if ( ++count1 >= WRITE_BUFFER_THRESHOLD ) {
 							LOG_DEBUG("Force jtag_execute_queue_noclear()");
 							jtag_execute_queue_noclear();
 							count1 = 0;
 						}
 					}
 					LOG_DEBUG("End loop");
-					if (!p_arch->use_pc_advmt_dsbl_bit) {
+					if ( !p_arch->use_pc_advmt_dsbl_bit ) {
 						assert(advance_pc_counter % NUM_BITS_TO_SIZE(XLEN) == 0);
-						while (advance_pc_counter) {
+						while ( advance_pc_counter ) {
 							uint32_t const step_back = advance_pc_counter > max_pc_offset ? max_pc_offset : advance_pc_counter;
 							advance_pc_counter -= step_back;
 							assert(advance_pc_counter % NUM_BITS_TO_SIZE(XLEN) == 0);
@@ -3540,30 +3538,30 @@ sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t c
 						assert(advance_pc_counter == 0);
 					}
 					error_code__update(p_target, jtag_execute_queue());
-					if ((DAP_OPSTATUS & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK) {
+					if ( (DAP_OPSTATUS & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK ) {
 						LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
 						error_code__update(p_target, ERROR_TARGET_FAILURE);
 					}
 				} else {
-					while ((error_code__get(p_target) == ERROR_OK) && count--) {
+					while ( (error_code__get(p_target) == ERROR_OK) && count-- ) {
 						/// Set data to CSR
 						exec__set_csr_data(p_target, buf_get_u32(buffer, 0, 8 * size));
-						if (error_code__get(p_target) != ERROR_OK) {
+						if ( error_code__get(p_target) != ERROR_OK ) {
 							break;
 						}
 
-						for (unsigned i = 0; i < ARRAY_LEN(instructions); ++i) {
+						for ( unsigned i = 0; i < ARRAY_LEN(instructions); ++i ) {
 							(void)exec__step(p_target, instructions[i]);
-							if (error_code__get(p_target) != ERROR_OK) {
+							if ( error_code__get(p_target) != ERROR_OK ) {
 								break;
 							}
 							advance_pc_counter += instr_step;
 						}
 						buffer += size;
 					}
-					if (!p_arch->use_pc_advmt_dsbl_bit) {
+					if ( !p_arch->use_pc_advmt_dsbl_bit ) {
 						assert(advance_pc_counter % NUM_BITS_TO_SIZE(XLEN) == 0);
-						while ((error_code__get(p_target) == ERROR_OK) && (advance_pc_counter != 0)) {
+						while ( (error_code__get(p_target) == ERROR_OK) && (advance_pc_counter != 0) ) {
 							uint32_t const step_back = advance_pc_counter > max_pc_offset ? max_pc_offset : advance_pc_counter;
 							advance_pc_counter -= step_back;
 							assert(advance_pc_counter % NUM_BITS_TO_SIZE(XLEN) == 0);
@@ -3574,12 +3572,12 @@ sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t c
 				}
 			}
 		}
-		if (p_arch->use_pc_advmt_dsbl_bit) {
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 		}
 	}
 
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		LOG_DEBUG("update_status");
 		update_status(p_target);
 	}
@@ -3600,81 +3598,83 @@ sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t c
 }
 
 static	int
-sc_rv32i__add_breakpoint(target* const p_target, struct breakpoint* const breakpoint)
+sc_rv32i__add_breakpoint(target* const p_target, struct breakpoint* const p_breakpoint)
 {
 	assert(p_target);
-	assert(breakpoint);
-	if (breakpoint->type != BKPT_SOFT) {
+	assert(p_breakpoint);
+	if ( p_breakpoint->type != BKPT_SOFT ) {
 		LOG_ERROR("Only software breakpoins available");
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return error_code__get_and_clear(p_target);
 	}
 
 	check_that_target_halted(p_target);
-	if (error_code__get(p_target) != ERROR_OK) {
+	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
 	bool const RVC_enable = is_RVC_enable(p_target);
-	if (!(breakpoint->length == NUM_BITS_TO_SIZE(ILEN) || (RVC_enable && breakpoint->length == 2))) {
-		LOG_ERROR("Invalid breakpoint size: %d", breakpoint->length);
+	if ( !(p_breakpoint->length == NUM_BITS_TO_SIZE(ILEN) || (RVC_enable && p_breakpoint->length == 2)) ) {
+		LOG_ERROR("Invalid breakpoint size: %d", p_breakpoint->length);
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__get_and_clear(p_target);
 	}
 
-	if (breakpoint->address % (RVC_enable ? 2 : 4) != 0) {
-		LOG_ERROR("Unaligned breakpoint: 0x%08X", breakpoint->address);
+	if ( p_breakpoint->address % (RVC_enable ? 2 : 4) != 0 ) {
+		LOG_ERROR("Unaligned breakpoint: 0x%08X", p_breakpoint->address);
 		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return error_code__get_and_clear(p_target);
 	}
 
-	assert(breakpoint->orig_instr);
-	error_code__update(p_target, target_read_buffer(p_target, breakpoint->address, breakpoint->length, breakpoint->orig_instr));
-	if (error_code__get(p_target) != ERROR_OK) {
-		LOG_ERROR("Can't save original instruction");
-		return error_code__get_and_clear(p_target);
-	}
-
-	/// Write EBREAK opcode
-	if (breakpoint->length == 4) {
-		if (0 == breakpoint->address % 4) {
-			error_code__update(p_target, target_write_u32(p_target, breakpoint->address, RV_EBREAK()));
-		} else {
-			uint32_t const instr = RV_EBREAK();
-			error_code__update(p_target, target_write_u16(p_target, breakpoint->address, (uint16_t)instr));
-			error_code__update(p_target, target_write_u16(p_target, breakpoint->address + 2, (uint16_t)(instr >> 16)));
+	uint32_t phys_address;
+	virt_to_phis(p_target, p_breakpoint->address, &phys_address, true);
+	if ( ERROR_OK == error_code__get(p_target) ) {
+		assert(p_breakpoint->orig_instr);
+		error_code__update(p_target, target_read_phys_memory(p_target, phys_address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr));
+		if ( error_code__get(p_target) != ERROR_OK ) {
+			LOG_ERROR("Can't save original instruction");
+			return error_code__get_and_clear(p_target);
 		}
-	} else if (breakpoint->length == 2) {
-		error_code__update(p_target, target_write_u16(p_target, breakpoint->address, RV_C_EBREAK()));
-	} else {
-		assert(/*logic_error:Bad breakpoint size*/ 0);
-	}
-	if (error_code__get(p_target) != ERROR_OK) {
-		LOG_ERROR("Can't write EBREAK");
-		return error_code__get_and_clear(p_target);
-	}
 
-	/// @todo check set values
-	breakpoint->set = 1;
+		{
+			uint8_t buffer[4];
+			if ( p_breakpoint->length == 4 ) {
+				target_buffer_set_u32(p_target, buffer, RV_EBREAK());
+			} else if ( p_breakpoint->length == 2 ) {
+				target_buffer_set_u16(p_target, buffer, RV_C_EBREAK());
+			} else {
+				assert(/*logic_error:Bad breakpoint size*/ 0);
+			}
+			if ( ERROR_OK != error_code__update(p_target, target_write_phys_memory(p_target, phys_address, 2, p_breakpoint->length / 2, buffer)) ) {
+				LOG_ERROR("Can't write EBREAK");
+				return error_code__get_and_clear(p_target);
+			}
+		}
+
+		/// @todo check set values
+		p_breakpoint->set = 1;
+	}
 
 	return error_code__get_and_clear(p_target);
 }
 
 static int
-sc_rv32i__remove_breakpoint(target* const p_target, struct breakpoint* const breakpoint)
+sc_rv32i__remove_breakpoint(target* const p_target, struct breakpoint* const p_breakpoint)
 {
 	assert(p_target);
-	assert(breakpoint);
-	if (breakpoint->length == 4 || breakpoint->length == 2) {
-		if ((breakpoint->address % 2) == 0) {
-			if (breakpoint->type == BKPT_SOFT && breakpoint->set) {
+	assert(p_breakpoint);
+	if ( p_breakpoint->length == 4 || p_breakpoint->length == 2 ) {
+		if ( (p_breakpoint->address % 2) == 0 ) {
+			if ( p_breakpoint->type == BKPT_SOFT && p_breakpoint->set ) {
 				assert(p_target);
 				check_that_target_halted(p_target);
-				if (error_code__get(p_target) == ERROR_OK) {
-					assert(breakpoint->orig_instr);
-					LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)", breakpoint->address, breakpoint->length, (breakpoint->length == 4 ? *(uint32_t const*)breakpoint->orig_instr : (uint32_t)(*(uint16_t const*)breakpoint->orig_instr)));
-					if (error_code__update(p_target, target_write_buffer(p_target, breakpoint->address, breakpoint->length, breakpoint->orig_instr)) == ERROR_OK) {
-						breakpoint->set = 0;
+				if ( error_code__get(p_target) == ERROR_OK ) {
+					assert(p_breakpoint->orig_instr);
+					LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)", p_breakpoint->address, p_breakpoint->length, (p_breakpoint->length == 4 ? *(uint32_t const*)p_breakpoint->orig_instr : (uint32_t)(*(uint16_t const*)p_breakpoint->orig_instr)));
+					uint32_t phys_address;
+					virt_to_phis(p_target, p_breakpoint->address, &phys_address, true);
+					if ( error_code__update(p_target, target_write_phys_memory(p_target, phys_address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr)) == ERROR_OK ) {
+						p_breakpoint->set = 0;
 					}
 				}
 			} else {
@@ -3701,9 +3701,9 @@ sc_rv32i__get_gdb_reg_list(target* const p_target, reg **reg_list[], int* const 
 	reg** const p_reg_array = calloc(num_regs, sizeof(reg*));
 	reg** p_reg_iter = p_reg_array;
 	size_t regs_left = num_regs;
-	for (reg_cache * p_reg_cache = p_target->reg_cache; p_reg_cache && regs_left; p_reg_cache = p_reg_cache->next) {
+	for ( reg_cache * p_reg_cache = p_target->reg_cache; p_reg_cache && regs_left; p_reg_cache = p_reg_cache->next ) {
 		reg *p_reg_list = p_reg_cache->reg_list;
-		for (size_t i = 0; i < p_reg_cache->num_regs && regs_left; ++i, --regs_left) {
+		for ( size_t i = 0; i < p_reg_cache->num_regs && regs_left; ++i, --regs_left ) {
 			*p_reg_iter++ = &p_reg_list[i];
 		}
 	}
