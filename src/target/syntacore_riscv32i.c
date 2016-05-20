@@ -25,7 +25,7 @@ Syntacore RISC-V target
 #include <memory.h>
 #include <limits.h>
 
-/// Don't make irscan if IR uis the same
+/// Don't make irscan if IR is the same
 #define USE_IR_SELECT_CACHE 1
 /// Don't write DAP_CONTROL if it is the same 
 #define USE_DAP_CONTROL_CACHE 1
@@ -2478,8 +2478,6 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 		return error_code__get_and_clear(p_target);
 	}
 
-	/// @todo check that FPU is enabled
-	/// Find temporary GP register
 	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
 	assert(p_wrk_reg);
 
@@ -3629,7 +3627,6 @@ sc_rv32i__add_breakpoint(target* const p_target, struct breakpoint* const p_brea
 					if ( ERROR_OK != error_code__get(p_target) ) {
 						LOG_ERROR("Can't write EBREAK");
 					} else {
-						/// @todo check set values
 						p_breakpoint->set = 1;
 					}
 				}
