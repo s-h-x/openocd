@@ -2946,17 +2946,23 @@ sc_rv32i__examine(target* const p_target)
 
 	if ( error_code__get(p_target) == ERROR_OK ) {
 		uint32_t const IDCODE = IDCODE_get(p_target);
-		uint32_t const DBG_ID = DBG_ID_get(p_target);
-		LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE, DBG_ID, BLD_ID_get(p_target));
-		assert(IDCODE == EXPECTED_IDCODE);
-		assert((DBG_ID & DBG_ID_VERSION_MASK) == (DBG_ID_VERSION_MASK & EXPECTED_DBG_ID));
-#if EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK
-		assert((DBG_ID & DBG_ID_SUBVERSION_MASK) >= (EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK));
-#endif
-		set_DEMODE_ENBL(p_target, NORMAL_DEBUG_ENABLE_MASK);
-		if ( error_code__get(p_target) == ERROR_OK ) {
-			LOG_DEBUG("Examined OK");
-			target_set_examined(p_target);
+		if ( IDCODE != EXPECTED_IDCODE ) {
+			LOG_ERROR("Invalid IDCODE=0x%08X!", IDCODE);
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+		} else {
+			uint32_t const DBG_ID = DBG_ID_get(p_target);
+			if ( (DBG_ID & DBG_ID_VERSION_MASK) != (DBG_ID_VERSION_MASK & EXPECTED_DBG_ID) ||
+				(DBG_ID & DBG_ID_SUBVERSION_MASK) < (EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK) ) {
+				LOG_ERROR("Unsupported DBG_ID=0x%08X!", DBG_ID);
+				error_code__update(p_target, ERROR_TARGET_FAILURE);
+			} else {
+				LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE, DBG_ID, BLD_ID_get(p_target));
+				set_DEMODE_ENBL(p_target, NORMAL_DEBUG_ENABLE_MASK);
+				if ( error_code__get(p_target) == ERROR_OK ) {
+					LOG_DEBUG("Examined OK");
+					target_set_examined(p_target);
+				}
+			}
 		}
 	}
 
