@@ -12,4 +12,5 @@ RISCV_SRC = \
 noinst_HEADERS = \
 	riscv.h \
 	Syntacore_RV_DC.h \
-	sc_rv32i__Arch.h
+	sc_rv32i__Arch.h \
+	static_assert.h

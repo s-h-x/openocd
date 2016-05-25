@@ -21,6 +21,7 @@ Syntacore RISC-V target
 #include "helper/binarybuffer.h"
 #include "helper/types.h"
 #include "jtag/jtag.h"
+#include "static_assert.h"
 
 #include <stdbool.h>
 #include <limits.h>
@@ -28,23 +29,11 @@ Syntacore RISC-V target
 #include <limits.h>
 
 /// TAP IDCODE expected
-#define EXPECTED_IDCODE (0xC0DEDEB1u)
 #define FP_enabled !!1
 #define VERIFY_REG_WRITE 1
 #define WRITE_BUFFER_THRESHOLD (1u << 18)
-/// Lowest required DBG_ID
-#define EXPECTED_DBG_ID        (0x00800001u)
-/// Mask of DBG_ID version.
-/// Required and provided masked values should be equal.
-#define DBG_ID_VERSION_MASK    (0xFFFFFF00u)
-/// Mask of DBG_ID subversion.
-/// Required value should be less or equal to provided subversion.
-#define DBG_ID_SUBVERSION_MASK (0x000000FFu)
 /// Utility macros
 ///@{
-#define STATIC_ASSERT2(COND,LINE) enum {static_assertion_at_line_##LINE= 1 / !!(COND)}
-#define STATIC_ASSERT1(COND,LINE) STATIC_ASSERT2(COND,LINE)
-#define STATIC_ASSERT(COND)  STATIC_ASSERT1(COND,__LINE__)
 
 #define LOW_BITS_MASK(n) (~(~0 << (n)))
 #define MAKE_TYPE_FIELD(TYPE, bits, first_bit, last_bit)     ((((TYPE)(bits)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
@@ -62,7 +51,6 @@ enum
 	NUMBER_OF_GP_REGS = NUMBER_OF_X_REGS + 1u,
 	NUMBER_OF_F_REGS = 32u,
 	NUMBER_OF_CSR_REGS = 1u,
-	TOTAL_NUMBER_OF_REGS = NUMBER_OF_GP_REGS + NUMBER_OF_F_REGS,
 };
 
 enum arch_bits_numbers
@@ -77,187 +65,6 @@ enum arch_bits_numbers
 
 static uint8_t const DAP_OPSTATUS_GOOD = DAP_OPSTATUS_OK;
 static uint8_t const DAP_STATUS_MASK = DAP_OPSTATUS_MASK;
-
-static inline uint32_t get_PC_to_check(struct target const* const p_target)
-{
-	assert(p_target);
-	struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
-	assert(p_arch);
-	if ( p_arch->use_check_pc_unchanged && p_arch->use_pc_from_pc_sample ) {
-		return sc_rv32_HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
-	} else {
-		return 0xFFFFFFFFu;
-	}
-}
-static inline void check_PC_unchanged(struct target const* const p_target, uint32_t const pc_sample_1)
-{
-	assert(p_target);
-	struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
-	assert(p_arch);
-	if ( p_arch->use_check_pc_unchanged && p_arch->use_pc_from_pc_sample ) {
-		uint32_t const pc_sample_2 = get_PC_to_check(p_target);
-		if ( pc_sample_2 != pc_sample_1 ) {
-			LOG_ERROR("pc changed from 0x%08X to 0x%08X", pc_sample_1, pc_sample_2);
-			error_code__update(p_target, ERROR_TARGET_FAILURE);
-		}
-	}
-}
-static inline enum target_state HART_status_bits_to_target_state(uint32_t const status)
-{
-	static uint32_t const err_bits =
-		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_BIT) |
-		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_BIT) |
-		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_HWTHREAD_BIT) |
-		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_DAP_OPCODE_BIT) |
-		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_DBGCMD_NACK_BIT) |
-		BIT_NUM_TO_MASK(DBGC_HART_HDSR_LOCK_STKY_BIT);
-
-	if ( status & err_bits ) {
-		return TARGET_UNKNOWN;
-	} else if ( status & BIT_NUM_TO_MASK(DBGC_HART_HDSR_RST_BIT) ) {
-		return TARGET_RESET;
-	} else if ( status & BIT_NUM_TO_MASK(DBGC_HART_HDSR_DMODE_BIT) ) {
-		return TARGET_HALTED;
-	} else {
-		return TARGET_RUNNING;
-	}
-}
-static enum target_debug_reason read_debug_cause(struct target* const p_target)
-{
-	assert(p_target);
-	uint32_t const value = sc_rv32_HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_CAUSE);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return DBG_REASON_UNDEFINED;
-	}
-	if ( value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_ENFORCE_BIT) ) {
-		return DBG_REASON_DBGRQ;
-	} else if ( value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SINGLE_STEP_BIT) ) {
-		return DBG_REASON_SINGLESTEP;
-	} else if ( value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SW_BRKPT_BIT) ) {
-		return DBG_REASON_BREAKPOINT;
-	} else if ( value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_RST_BREAK_BIT) ) {
-		return DBG_REASON_DBGRQ;
-	} else {
-		return DBG_REASON_UNDEFINED;
-	}
-}
-static void update_debug_reason(struct target* const p_target)
-{
-	assert(p_target);
-	enum target_debug_reason const debug_reason = read_debug_cause(p_target);
-	if ( debug_reason != p_target->debug_reason ) {
-		LOG_DEBUG("New debug reason: 0x%08X", (uint32_t)debug_reason);
-		p_target->debug_reason = debug_reason;
-	}
-}
-static uint32_t try_to_get_ready(struct target* const p_target)
-{
-	uint32_t core_status = sc_rv32_DBG_STATUS_get(p_target);
-	if ( (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) != 0 ) {
-		return core_status;
-	}
-	static unsigned const max_retries = 10u;
-	for ( unsigned i = 2; i <= max_retries; ++i ) {
-		error_code__get_and_clear(p_target);
-		core_status = sc_rv32_DBG_STATUS_get(p_target);
-		if ( (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) != 0 ) {
-			LOG_DEBUG("Ready: 0x%08X after %d requests", core_status, i);
-			return core_status;
-		}
-	}
-	LOG_ERROR("Not ready: 0x%08X after %d requests", core_status, max_retries);
-	return core_status;
-}
-static void update_status(struct target* const p_target)
-{
-	assert(p_target);
-	error_code__get_and_clear(p_target);
-	int const old_err_code = ERROR_OK;
-	{
-		// Reset protection
-		jtag_add_tlr();
-		uint32_t const IDCODE = sc_rv32_IDCODE_get(p_target);
-		assert(IDCODE == EXPECTED_IDCODE);
-	}
-
-	{
-		uint32_t core_status = try_to_get_ready(p_target);
-		LOG_DEBUG("Check core_status for lock: 0x%08X", core_status);
-		if ( 0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) ) {
-			LOG_WARNING("Lock detected: 0x%08X", core_status);
-			uint32_t const lock_context = sc_rv32_DC__unlock(p_target);
-			if ( error_code__get(p_target) != ERROR_OK ) {
-				/// return with error_code != ERROR_OK if unlock was unsuccsesful
-				LOG_ERROR("Unlock unsucsessful with lock_context=0x%8X", lock_context);
-				error_code__prepend(p_target, old_err_code);
-				return;
-			}
-			core_status = sc_rv32_DBG_STATUS_get(p_target);
-			LOG_WARNING("Lock with lock_context=0x%8X fixed: 0x%08X", lock_context, core_status);
-		}
-		LOG_DEBUG("Core_status: 0x%08X", core_status);
-		if ( (core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT))) != BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT) ) {
-			error_code__update(p_target, ERROR_TARGET_FAILURE);
-			return;
-		}
-
-		uint32_t const hart0_err_bits =
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT) |
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_STKY_BIT);
-		if ( core_status & hart0_err_bits ) {
-			LOG_WARNING("Hart errors detected: 0x%08X", core_status);
-			sc_rv32_HART0_clear_sticky(p_target);
-			error_code__get_and_clear(p_target);
-			core_status = sc_rv32_DBG_STATUS_get(p_target);
-			LOG_WARNING("Hart errors %s: 0x%08X", core_status & hart0_err_bits ? "not fixed!" : "fixed", core_status);
-		}
-
-		uint32_t const cdsr_err_bits =
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_BIT) |
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_HWCORE_BIT) |
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_FSMBUSY_BIT) |
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_DAP_OPCODE_BIT);
-		if ( core_status & cdsr_err_bits ) {
-			LOG_WARNING("Core errors detected: 0x%08X", core_status);
-			error_code__get_and_clear(p_target);
-			sc_rv32_CORE_clear_errors(p_target);
-			error_code__get_and_clear(p_target);
-			core_status = sc_rv32_DBG_STATUS_get(p_target);
-			LOG_WARNING("Core errors %s: 0x%08X", core_status & cdsr_err_bits ? "not fixed!" : "fixed", core_status);
-		}
-	}
-
-	/// Only 1 HART available
-	assert(p_target->coreid == 0);
-
-	uint32_t const HART_status = sc_rv32_HART_REGTRANS_read(p_target, DBGC_HART_REGS_DBG_STS);
-	enum target_state const new_state = ERROR_OK == error_code__get(p_target) ? HART_status_bits_to_target_state(HART_status) : TARGET_UNKNOWN;
-	enum target_state const old_state = p_target->state;
-	if ( new_state != old_state ) {
-		p_target->state = new_state;
-		switch ( new_state ) {
-		case TARGET_HALTED:
-			update_debug_reason(p_target);
-			LOG_DEBUG("TARGET_EVENT_HALTED");
-			target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
-			break;
-		case TARGET_RESET:
-			update_debug_reason(p_target);
-			LOG_DEBUG("TARGET_EVENT_RESET_ASSERT");
-			target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
-			break;
-		case TARGET_RUNNING:
-			LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_NOTHALTED);
-			p_target->debug_reason = DBG_REASON_NOTHALTED;
-			LOG_DEBUG("TARGET_EVENT_RESUMED");
-			target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
-		case TARGET_UNKNOWN:
-		default:
-			break;
-		}
-	}
-	error_code__prepend(p_target, old_err_code);
-}
 
 /// GP registers accessors
 ///@{
@@ -338,17 +145,6 @@ static void reg_cache__chain_invalidate(struct reg_cache* p_reg_cache)
 		reg_cache__invalidate(p_reg_cache);
 	}
 }
-static void check_that_target_halted(struct target* const p_target)
-{
-	LOG_DEBUG("update_status");
-	update_status(p_target);
-	if ( error_code__get(p_target) == ERROR_OK ) {
-		if ( p_target->state != TARGET_HALTED ) {
-			LOG_ERROR("Target not halted");
-			error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
-		}
-	}
-}
 static void reg_x__operation_conditions_check(struct reg const* const p_reg)
 {
 	assert(p_reg);
@@ -360,7 +156,7 @@ static void reg_x__operation_conditions_check(struct reg const* const p_reg)
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return;
 	}
-	check_that_target_halted(p_target);
+	sc_rv32_check_that_target_halted(p_target);
 }
 static int reg_x__get(struct reg* const p_reg)
 {
@@ -381,7 +177,7 @@ static int reg_x__get(struct reg* const p_reg)
 		}
 	}
 
-	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 	if ( error_code__get(p_target) == ERROR_OK ) {
 		struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
@@ -413,7 +209,7 @@ static int reg_x__get(struct reg* const p_reg)
 			sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 		}
 	}
-	check_PC_unchanged(p_target, pc_sample_1);
+	sc_rv32_check_PC_value(p_target, pc_sample_1);
 	return error_code__get_and_clear(p_target);
 }
 static int reg_x__store(struct reg* const p_reg)
@@ -421,7 +217,7 @@ static int reg_x__store(struct reg* const p_reg)
 	assert(p_reg);
 	struct target* p_target = p_reg->arch_info;
 	assert(p_target);
-	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
@@ -473,7 +269,7 @@ static int reg_x__store(struct reg* const p_reg)
 		sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 	}
 	assert(reg__check(p_reg));
-	check_PC_unchanged(p_target, pc_sample_1);
+	sc_rv32_check_PC_value(p_target, pc_sample_1);
 
 	return error_code__get_and_clear(p_target);
 }
@@ -555,13 +351,13 @@ static uint32_t csr_get_value(struct target* const p_target, uint32_t const csr_
 {
 	uint32_t value = 0xBADBAD;
 	assert(p_target);
-	check_that_target_halted(p_target);
+	sc_rv32_check_that_target_halted(p_target);
 	if ( error_code__get(p_target) == ERROR_OK ) {
 		/// Find temporary GP register
 		struct reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 		assert(p_wrk_reg);
 
-		uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+		uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 		if ( error_code__get(p_target) == ERROR_OK ) {
 			struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
@@ -593,9 +389,9 @@ static uint32_t csr_get_value(struct target* const p_target, uint32_t const csr_
 		}
 
 		if ( error_code__get(p_target) == ERROR_OK ) {
-			update_status(p_target);
+			sc_rv32_update_status(p_target);
 		}
-		check_PC_unchanged(p_target, pc_sample_1);
+		sc_rv32_check_PC_value(p_target, pc_sample_1);
 
 		// restore temporary register
 		int const old_err_code = error_code__get_and_clear(p_target);
@@ -630,7 +426,7 @@ static int reg_pc__get(struct reg* const p_reg)
 			reg__invalidate(p_reg);
 		}
 	} else {
-		check_that_target_halted(p_target);
+		sc_rv32_check_that_target_halted(p_target);
 		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
 		}
@@ -686,7 +482,7 @@ static int reg_pc__set(struct reg* const p_reg, uint8_t* const buf)
 
 	struct target* const p_target = p_reg->arch_info;
 	assert(p_target);
-	check_that_target_halted(p_target);
+	sc_rv32_check_that_target_halted(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
@@ -768,7 +564,7 @@ static int reg_f__get(struct reg* const p_reg)
 	struct target* const p_target = p_reg->arch_info;
 	assert(p_target);
 
-	check_that_target_halted(p_target);
+	sc_rv32_check_that_target_halted(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
@@ -778,7 +574,7 @@ static int reg_f__get(struct reg* const p_reg)
 	struct reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 	assert(p_wrk_reg);
 
-	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 	if ( error_code__get(p_target) == ERROR_OK ) {
 		struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
@@ -812,7 +608,7 @@ static int reg_f__get(struct reg* const p_reg)
 		}
 	}
 
-	check_PC_unchanged(p_target, pc_sample_1);
+	sc_rv32_check_PC_value(p_target, pc_sample_1);
 
 	// restore temporary register
 	int const old_err_code = error_code__get_and_clear(p_target);
@@ -837,7 +633,7 @@ static int reg_f__set(struct reg* const p_reg, uint8_t* const buf)
 	struct target* const p_target = p_reg->arch_info;
 	assert(p_target);
 
-	check_that_target_halted(p_target);
+	sc_rv32_check_that_target_halted(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
@@ -847,7 +643,7 @@ static int reg_f__set(struct reg* const p_reg, uint8_t* const buf)
 	struct reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 	assert(p_wrk_reg);
 
-	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 	if ( error_code__get(p_target) == ERROR_OK ) {
 		struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
@@ -890,7 +686,7 @@ static int reg_f__set(struct reg* const p_reg, uint8_t* const buf)
 		}
 	}
 
-	check_PC_unchanged(p_target, pc_sample_1);
+	sc_rv32_check_PC_value(p_target, pc_sample_1);
 	// restore temporary register
 	int const old_err_code = error_code__get_and_clear(p_target);
 	error_code__update(p_target, reg_x__store(p_wrk_reg));
@@ -931,7 +727,7 @@ static int reg_csr__set(struct reg* const p_reg, uint8_t* const buf)
 	struct target* const p_target = p_reg->arch_info;
 	assert(p_target);
 
-	check_that_target_halted(p_target);
+	sc_rv32_check_that_target_halted(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
@@ -939,7 +735,7 @@ static int reg_csr__set(struct reg* const p_reg, uint8_t* const buf)
 	struct reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 	assert(p_wrk_reg);
 
-	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 	if ( error_code__get(p_target) == ERROR_OK ) {
 		struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
@@ -982,7 +778,7 @@ static int reg_csr__set(struct reg* const p_reg, uint8_t* const buf)
 		}
 	}
 
-	check_PC_unchanged(p_target, pc_sample_1);
+	sc_rv32_check_PC_value(p_target, pc_sample_1);
 	// restore temporary register
 	int const old_err_code = error_code__get_and_clear(p_target);
 	error_code__update(p_target, reg_x__store(p_wrk_reg));
@@ -1025,7 +821,7 @@ static void set_DEMODE_ENBL(struct target* const p_target, uint32_t const set_va
 static int resume_common(struct target* const p_target, uint32_t dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	assert(p_target);
-	check_that_target_halted(p_target);
+	sc_rv32_check_that_target_halted(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
@@ -1080,7 +876,7 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 					target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
 #endif
 					LOG_DEBUG("update_status");
-					update_status(p_target);
+					sc_rv32_update_status(p_target);
 #if 1
 					LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_SINGLESTEP);
 					p_target->debug_reason = DBG_REASON_SINGLESTEP;
@@ -1115,7 +911,7 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
 
 	LOG_DEBUG("update_status");
-	update_status(p_target);
+	sc_rv32_update_status(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
@@ -1147,7 +943,7 @@ static int reset__set(struct target* const p_target, bool const active)
 					}
 				}
 				LOG_DEBUG("update_status");
-				update_status(p_target);
+				sc_rv32_update_status(p_target);
 				if ( error_code__get(p_target) == ERROR_OK ) {
 					if ( active ) {
 						if ( p_target->state != TARGET_RESET ) {
@@ -1332,8 +1128,7 @@ static struct reg const def_CSR_regs_array[] = {
 };
 #undef DEF_ITEM
 
-static int
-sc_rv32i__init_target(struct command_context *cmd_ctx, struct target* const p_target)
+static void sc_rv32_init_regs_cache(struct target* const p_target)
 {
 	assert(p_target);
 	struct reg_cache* p_reg_cache_last = p_target->reg_cache = reg_cache__section_create(def_GP_regs_name, def_GP_regs_array, ARRAY_LEN(def_GP_regs_array), p_target);
@@ -1342,6 +1137,11 @@ sc_rv32i__init_target(struct command_context *cmd_ctx, struct target* const p_ta
 	assert(p_reg_cache_last);
 	p_reg_cache_last = p_reg_cache_last->next = reg_cache__section_create(def_CSR_regs_name, def_CSR_regs_array, ARRAY_LEN(def_CSR_regs_array), p_target);
 	assert(p_reg_cache_last);
+}
+
+static int sc_rv32i__init_target(struct command_context *cmd_ctx, struct target* const p_target)
+{
+	sc_rv32_init_regs_cache(p_target);
 
 	struct sc_rv32i__Arch* p_arch_info = calloc(1, sizeof(struct sc_rv32i__Arch));
 	assert(p_arch_info);
@@ -1350,9 +1150,7 @@ sc_rv32i__init_target(struct command_context *cmd_ctx, struct target* const p_ta
 	p_target->arch_info = p_arch_info;
 	return ERROR_OK;
 }
-
-static void
-sc_rv32i__deinit_target(struct target* const p_target)
+static void sc_rv32i__deinit_target(struct target* const p_target)
 {
 	assert(p_target);
 	while ( p_target->reg_cache ) {
@@ -1372,22 +1170,18 @@ sc_rv32i__deinit_target(struct target* const p_target)
 		p_target->arch_info = NULL;
 	}
 }
-
-static int
-sc_rv32i__target_create(struct target* const p_target, struct Jim_Interp *interp)
+static int sc_rv32i__target_create(struct target* const p_target, struct Jim_Interp *interp)
 {
 	assert(p_target);
 	return ERROR_OK;
 }
-
-static int
-sc_rv32i__examine(struct target* const p_target)
+static int sc_rv32i__examine(struct target* const p_target)
 {
 	assert(p_target);
 	for ( int i = 0; i < 10; ++i ) {
 		error_code__get_and_clear(p_target);
 		LOG_DEBUG("update_status");
-		update_status(p_target);
+		sc_rv32_update_status(p_target);
 		if ( error_code__get(p_target) == ERROR_OK ) {
 			break;
 		}
@@ -1418,36 +1212,30 @@ sc_rv32i__examine(struct target* const p_target)
 
 	return error_code__get_and_clear(p_target);
 }
-
-static int
-sc_rv32i__poll(struct target* const p_target)
+static int sc_rv32i__poll(struct target* const p_target)
 {
 	assert(p_target);
 	LOG_DEBUG("update_status");
-	update_status(p_target);
+	sc_rv32_update_status(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 	return error_code__get_and_clear(p_target);
 }
-
-static int
-sc_rv32i__arch_state(struct target* const p_target)
+static int sc_rv32i__arch_state(struct target* const p_target)
 {
 	assert(p_target);
 	LOG_DEBUG("update_status");
-	update_status(p_target);
+	sc_rv32_update_status(p_target);
 	return error_code__get_and_clear(p_target);
 }
-
-static int
-sc_rv32i__halt(struct target* const p_target)
+static int sc_rv32i__halt(struct target* const p_target)
 {
 	assert(p_target);
 	// May be already halted?
 	{
 		LOG_DEBUG("update_status");
-		update_status(p_target);
+		sc_rv32_update_status(p_target);
 		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
 		}
@@ -1473,56 +1261,46 @@ sc_rv32i__halt(struct target* const p_target)
 	}
 
 	LOG_DEBUG("update_status");
-	update_status(p_target);
+	sc_rv32_update_status(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
 	// Verify that in debug mode
-	check_that_target_halted(p_target);
+	sc_rv32_check_that_target_halted(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
 	return error_code__get_and_clear(p_target);
 }
-
-static int
-sc_rv32i__resume(struct target* const p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
+static int sc_rv32i__resume(struct target* const p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	LOG_DEBUG("resume: current=%d address=0x%08x handle_breakpoints=%d debug_execution=%d", current, address, handle_breakpoints, debug_execution);
 	assert(p_target);
 	uint32_t const dmode_enabled = NORMAL_DEBUG_ENABLE_MASK;
 	return resume_common(p_target, dmode_enabled, current, address, handle_breakpoints, debug_execution);
 }
-
-static int
-sc_rv32i__step(struct target* const p_target, int const current, uint32_t const address, int const handle_breakpoints)
+static int sc_rv32i__step(struct target* const p_target, int const current, uint32_t const address, int const handle_breakpoints)
 {
 	LOG_DEBUG("step: current=%d address=0x%08x handle_breakpoints=%d", current, address, handle_breakpoints);
 	assert(p_target);
 	uint32_t const dmode_enabled = (NORMAL_DEBUG_ENABLE_MASK & ~BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT)) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
 	return resume_common(p_target, dmode_enabled, current, address, handle_breakpoints, false);
 }
-
-static int
-sc_rv32i__assert_reset(struct target* const p_target)
+static int sc_rv32i__assert_reset(struct target* const p_target)
 {
 	LOG_DEBUG("Reset control");
 	assert(p_target);
 	return reset__set(p_target, true);
 }
-
-static int
-sc_rv32i__deassert_reset(struct target* const p_target)
+static int sc_rv32i__deassert_reset(struct target* const p_target)
 {
 	LOG_DEBUG("Reset control");
 	assert(p_target);
 	return reset__set(p_target, false);
 }
-
-static int
-sc_rv32i__soft_reset_halt(struct target* const p_target)
+static int sc_rv32i__soft_reset_halt(struct target* const p_target)
 {
 	LOG_DEBUG("Soft reset called");
 	assert(p_target);
@@ -1536,25 +1314,6 @@ sc_rv32i__soft_reset_halt(struct target* const p_target)
 
 	return error_code__get_and_clear(p_target);
 }
-
-enum Privilege
-{
-	Priv_U = 0x0,
-	Priv_S = 0x1,
-	Priv_H = 0x2,
-	Priv_M = 0x3,
-};
-
-enum VM_mode
-{
-	VM_Mbare = 0,
-	VM_Mbb = 1,
-	VM_Mbbid = 2,
-	VM_Sv32 = 8,
-	VM_Sv39 = 9,
-	VM_Sv48 = 10,
-};
-
 static int sc_rv32i__mmu(struct target *p_target, int *p_mmu_enabled)
 {
 	assert(p_target);
@@ -1584,7 +1343,6 @@ static int sc_rv32i__mmu(struct target *p_target, int *p_mmu_enabled)
 	}
 	return error_code__get_and_clear(p_target);
 }
-
 static void virt_to_phis(struct target *p_target, uint32_t address, uint32_t *p_physical, uint32_t* p_bound, bool const instruction_space)
 {
 	assert(p_target);
@@ -1666,13 +1424,11 @@ static void virt_to_phis(struct target *p_target, uint32_t address, uint32_t *p_
 		}
 	}
 }
-
 static int sc_rv32i__virt2phys(struct target *p_target, uint32_t address, uint32_t *p_physical)
 {
 	virt_to_phis(p_target, address, p_physical, NULL, false);
 	return error_code__get_and_clear(p_target);
 }
-
 static void read_memory_space(struct target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* p_buffer, bool const instruction_space)
 {
 	assert(p_target);
@@ -1703,7 +1459,6 @@ static void read_memory_space(struct target* const p_target, uint32_t address, u
 		}
 	}
 }
-
 static void write_memory_space(struct target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* p_buffer, bool const instruction_space)
 {
 	assert(p_target);
@@ -1734,19 +1489,16 @@ static void write_memory_space(struct target* const p_target, uint32_t address, 
 		}
 	}
 }
-
 static int sc_rv32i__read_memory(struct target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
 {
 	read_memory_space(p_target, address, size, count, buffer, false);
 	return error_code__get_and_clear(p_target);
 }
-
 static int sc_rv32i__write_memory(struct target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
 {
 	write_memory_space(p_target, address, size, count, buffer, false);
 	return error_code__get_and_clear(p_target);
 }
-
 static int sc_rv32i__read_phys_memory(struct target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
 {
 	assert(p_target);
@@ -1763,7 +1515,7 @@ static int sc_rv32i__read_phys_memory(struct target* const p_target, uint32_t ad
 		return error_code__get_and_clear(p_target);
 	} else {
 		/// Check that target halted
-		check_that_target_halted(p_target);
+		sc_rv32_check_that_target_halted(p_target);
 		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
 		}
@@ -1772,7 +1524,7 @@ static int sc_rv32i__read_phys_memory(struct target* const p_target, uint32_t ad
 		struct reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 		assert(p_wrk_reg);
 
-		uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+		uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 		if ( error_code__get(p_target) == ERROR_OK ) {
 			/// Define opcode for load item to register
 			uint32_t const load_OP =
@@ -1839,10 +1591,10 @@ static int sc_rv32i__read_phys_memory(struct target* const p_target, uint32_t ad
 
 		if ( error_code__get(p_target) != ERROR_OK ) {
 			LOG_DEBUG("update_status");
-			update_status(p_target);
+			sc_rv32_update_status(p_target);
 		}
 
-		check_PC_unchanged(p_target, pc_sample_1);
+		sc_rv32_check_PC_value(p_target, pc_sample_1);
 
 		/// restore temporary register
 		int const old_err_code = error_code__get_and_clear(p_target);
@@ -1853,7 +1605,6 @@ static int sc_rv32i__read_phys_memory(struct target* const p_target, uint32_t ad
 		return error_code__get_and_clear(p_target);
 	}
 }
-
 static int sc_rv32i__write_phys_memory(struct target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
 {
 	assert(p_target);
@@ -1877,12 +1628,12 @@ static int sc_rv32i__write_phys_memory(struct target* const p_target, uint32_t a
 		return error_code__get_and_clear(p_target);
 	}
 
-	check_that_target_halted(p_target);
+	sc_rv32_check_that_target_halted(p_target);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
 
-	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
+	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 	/// Reserve work register
 	struct reg* const p_addr_reg = prepare_temporary_GP_register(p_target, 0);
 	assert(p_addr_reg);
@@ -2028,10 +1779,10 @@ static int sc_rv32i__write_phys_memory(struct target* const p_target, uint32_t a
 
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		LOG_DEBUG("update_status");
-		update_status(p_target);
+		sc_rv32_update_status(p_target);
 	}
 
-	check_PC_unchanged(p_target, pc_sample_1);
+	sc_rv32_check_PC_value(p_target, pc_sample_1);
 
 	/// restore temporary registers
 	int const old_err_code = error_code__get_and_clear(p_target);
@@ -2045,9 +1796,7 @@ static int sc_rv32i__write_phys_memory(struct target* const p_target, uint32_t a
 
 	return error_code__get_and_clear(p_target);
 }
-
-static	int
-sc_rv32i__add_breakpoint(struct target* const p_target, struct breakpoint* const p_breakpoint)
+static	int sc_rv32i__add_breakpoint(struct target* const p_target, struct breakpoint* const p_breakpoint)
 {
 	assert(p_target);
 	assert(p_breakpoint);
@@ -2055,7 +1804,7 @@ sc_rv32i__add_breakpoint(struct target* const p_target, struct breakpoint* const
 		LOG_ERROR("Only software breakpoins available");
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 	} else {
-		check_that_target_halted(p_target);
+		sc_rv32_check_that_target_halted(p_target);
 		if ( ERROR_OK == error_code__get(p_target) ) {
 			bool const RVC_enable = is_RVC_enable(p_target);
 			if ( !(p_breakpoint->length == NUM_BITS_TO_SIZE(ILEN) || (RVC_enable && p_breakpoint->length == 2)) ) {
@@ -2090,9 +1839,7 @@ sc_rv32i__add_breakpoint(struct target* const p_target, struct breakpoint* const
 	}
 	return error_code__get_and_clear(p_target);
 }
-
-static int
-sc_rv32i__remove_breakpoint(struct target* const p_target, struct breakpoint* const p_breakpoint)
+static int sc_rv32i__remove_breakpoint(struct target* const p_target, struct breakpoint* const p_breakpoint)
 {
 	assert(p_target);
 	assert(p_breakpoint);
@@ -2104,7 +1851,7 @@ sc_rv32i__remove_breakpoint(struct target* const p_target, struct breakpoint* co
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 	} else {
 		assert(p_target);
-		check_that_target_halted(p_target);
+		sc_rv32_check_that_target_halted(p_target);
 		if ( error_code__get(p_target) == ERROR_OK ) {
 			assert(p_breakpoint->orig_instr);
 			LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)", p_breakpoint->address, p_breakpoint->length, (p_breakpoint->length == 4 ? *(uint32_t const*)p_breakpoint->orig_instr : (uint32_t)(*(uint16_t const*)p_breakpoint->orig_instr)));
@@ -2117,15 +1864,22 @@ sc_rv32i__remove_breakpoint(struct target* const p_target, struct breakpoint* co
 	return error_code__get_and_clear(p_target);
 }
 
+static size_t total_number_of_regs(struct reg_cache const *p_reg_cache)
+{
+	size_t total = 0;
+	for ( ; p_reg_cache; p_reg_cache = p_reg_cache->next ) {
+		total += p_reg_cache->num_regs;
+	}
+	return total;
+}
 /// gdb_server expects valid reg values and will use set method for updating reg values
-static int
-sc_rv32i__get_gdb_reg_list(struct target* const p_target, struct reg **reg_list[], int* const reg_list_size, enum target_register_class const reg_class)
+static int sc_rv32i__get_gdb_reg_list(struct target* const p_target, struct reg **reg_list[], int* const reg_list_size, enum target_register_class const reg_class)
 {
 	assert(p_target);
 	assert(reg_list_size);
 	assert(reg_class == REG_CLASS_ALL || reg_class == REG_CLASS_GENERAL);
 
-	size_t const num_regs = reg_class == REG_CLASS_ALL ? TOTAL_NUMBER_OF_REGS : NUMBER_OF_GP_REGS;
+	size_t const num_regs = reg_class == REG_CLASS_ALL ? total_number_of_regs(p_target->reg_cache) : NUMBER_OF_GP_REGS;
 	struct reg** const p_reg_array = calloc(num_regs, sizeof(struct reg*));
 	struct reg** p_reg_iter = p_reg_array;
 	size_t regs_left = num_regs;
@@ -2141,7 +1895,6 @@ sc_rv32i__get_gdb_reg_list(struct target* const p_target, struct reg **reg_list[
 	*reg_list_size = num_regs - regs_left;
 	return error_code__get_and_clear(p_target);
 }
-
 /// @todo make const
 struct target_type syntacore_riscv32i_target =
 {

@@ -3,6 +3,16 @@
 
 #include <stdint.h>
 
+#define EXPECTED_IDCODE (0xC0DEDEB1u)
+/// Lowest required DBG_ID
+#define EXPECTED_DBG_ID        (0x00800001u)
+/// Mask of DBG_ID version.
+/// Required and provided masked values should be equal.
+#define DBG_ID_VERSION_MASK    (0xFFFFFF00u)
+/// Mask of DBG_ID subversion.
+/// Required value should be less or equal to provided subversion.
+#define DBG_ID_SUBVERSION_MASK (0x000000FFu)
+
 #ifndef BIT_NUM_TO_MASK
 #define BIT_NUM_TO_MASK(bit_num) (1u << (bit_num))
 #endif  // BIT_NUM_TO_MASK
@@ -262,5 +272,10 @@ void sc_rv32_EXEC__setup(struct target const* const p_target);
 void sc_rv32_EXEC__push_data_to_CSR(struct target const* const p_target, uint32_t const csr_data);
 uint32_t sc_rv32_EXEC__step(struct target const* const p_target, uint32_t instruction);
 /// @}
+
+uint32_t sc_rv32_get_PC(struct target const* const p_target);
+void sc_rv32_check_PC_value(struct target const* const p_target, uint32_t const pc_sample_1);
+void sc_rv32_update_status(struct target* const p_target);
+void sc_rv32_check_that_target_halted(struct target* const p_target);
 
 #endif  // SYNTACORE_RV_DC_H_

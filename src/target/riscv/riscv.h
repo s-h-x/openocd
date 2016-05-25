@@ -253,7 +253,23 @@ enum mstatus_context_field_e
 	ext_clean = 2,
 	ext_dirty = 3,
 };
+enum Privilege
+{
+	Priv_U = 0x0,
+	Priv_S = 0x1,
+	Priv_H = 0x2,
+	Priv_M = 0x3,
+};
 
+enum VM_mode
+{
+	VM_Mbare = 0,
+	VM_Mbb = 1,
+	VM_Mbbid = 2,
+	VM_Sv32 = 8,
+	VM_Sv39 = 9,
+	VM_Sv48 = 10,
+};
 
 /// RISC-V opcodes
 ///@{

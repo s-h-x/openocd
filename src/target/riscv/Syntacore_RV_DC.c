@@ -7,6 +7,7 @@
 #include "target/target.h"
 #include "helper/log.h"
 #include "jtag/jtag.h"
+#include "static_assert.h"
 
 #include <assert.h>
 
@@ -18,10 +19,6 @@
 #endif
 #define LOW_BITS_MASK(n) (~(~0 << (n)))
 #define MAKE_TYPE_FIELD(TYPE, bits, first_bit, last_bit)     ((((TYPE)(bits)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
-
-#define STATIC_ASSERT2(COND,LINE) enum {static_assertion_at_line_##LINE= 1 / !!(COND)}
-#define STATIC_ASSERT1(COND,LINE) STATIC_ASSERT2(COND,LINE)
-#define STATIC_ASSERT(COND)  STATIC_ASSERT1(COND,__LINE__)
 
 /// IR id
 enum TAP_IR_e
@@ -604,4 +601,202 @@ uint32_t sc_rv32_EXEC__step(struct target const* const p_target, uint32_t instru
 		return 0xBADC0DE9u;
 	}
 	return sc_rv32_DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC, instruction);
+}
+
+uint32_t sc_rv32_get_PC(struct target const* const p_target)
+{
+	assert(p_target);
+	struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	assert(p_arch);
+	if ( p_arch->use_check_pc_unchanged && p_arch->use_pc_from_pc_sample ) {
+		return sc_rv32_HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
+	} else {
+		return 0xFFFFFFFFu;
+	}
+}
+
+void sc_rv32_check_PC_value(struct target const* const p_target, uint32_t const pc_sample_1)
+{
+	assert(p_target);
+	struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	assert(p_arch);
+	if ( p_arch->use_check_pc_unchanged && p_arch->use_pc_from_pc_sample ) {
+		uint32_t const pc_sample_2 = sc_rv32_get_PC(p_target);
+		if ( pc_sample_2 != pc_sample_1 ) {
+			LOG_ERROR("pc changed from 0x%08X to 0x%08X", pc_sample_1, pc_sample_2);
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+		}
+	}
+}
+
+static enum target_state HART_status_bits_to_target_state(uint32_t const status)
+{
+	static uint32_t const err_bits =
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_BIT) |
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_BIT) |
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_HWTHREAD_BIT) |
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_DAP_OPCODE_BIT) |
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_DBGCMD_NACK_BIT) |
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_LOCK_STKY_BIT);
+
+	if ( status & err_bits ) {
+		return TARGET_UNKNOWN;
+	} else if ( status & BIT_NUM_TO_MASK(DBGC_HART_HDSR_RST_BIT) ) {
+		return TARGET_RESET;
+	} else if ( status & BIT_NUM_TO_MASK(DBGC_HART_HDSR_DMODE_BIT) ) {
+		return TARGET_HALTED;
+	} else {
+		return TARGET_RUNNING;
+	}
+}
+
+static enum target_debug_reason read_debug_cause(struct target* const p_target)
+{
+	assert(p_target);
+	uint32_t const value = sc_rv32_HART_REGTRANS_read(p_target, DBGC_HART_REGS_DMODE_CAUSE);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return DBG_REASON_UNDEFINED;
+	}
+	if ( value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_ENFORCE_BIT) ) {
+		return DBG_REASON_DBGRQ;
+	} else if ( value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SINGLE_STEP_BIT) ) {
+		return DBG_REASON_SINGLESTEP;
+	} else if ( value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_SW_BRKPT_BIT) ) {
+		return DBG_REASON_BREAKPOINT;
+	} else if ( value & BIT_NUM_TO_MASK(DBGC_HART_HDMCR_RST_BREAK_BIT) ) {
+		return DBG_REASON_DBGRQ;
+	} else {
+		return DBG_REASON_UNDEFINED;
+	}
+}
+static void update_debug_reason(struct target* const p_target)
+{
+	assert(p_target);
+	enum target_debug_reason const debug_reason = read_debug_cause(p_target);
+	if ( debug_reason != p_target->debug_reason ) {
+		LOG_DEBUG("New debug reason: 0x%08X", (uint32_t)debug_reason);
+		p_target->debug_reason = debug_reason;
+	}
+}
+
+static uint32_t try_to_get_ready(struct target* const p_target)
+{
+	uint32_t core_status = sc_rv32_DBG_STATUS_get(p_target);
+	if ( (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) != 0 ) {
+		return core_status;
+	}
+	static unsigned const max_retries = 10u;
+	for ( unsigned i = 2; i <= max_retries; ++i ) {
+		error_code__get_and_clear(p_target);
+		core_status = sc_rv32_DBG_STATUS_get(p_target);
+		if ( (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT)) != 0 ) {
+			LOG_DEBUG("Ready: 0x%08X after %d requests", core_status, i);
+			return core_status;
+		}
+	}
+	LOG_ERROR("Not ready: 0x%08X after %d requests", core_status, max_retries);
+	return core_status;
+}
+
+void sc_rv32_update_status(struct target* const p_target)
+{
+	assert(p_target);
+	error_code__get_and_clear(p_target);
+	int const old_err_code = ERROR_OK;
+	{
+		// Reset protection
+		jtag_add_tlr();
+		uint32_t const IDCODE = sc_rv32_IDCODE_get(p_target);
+		assert(IDCODE == EXPECTED_IDCODE);
+	}
+
+	{
+		uint32_t core_status = try_to_get_ready(p_target);
+		LOG_DEBUG("Check core_status for lock: 0x%08X", core_status);
+		if ( 0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) ) {
+			LOG_WARNING("Lock detected: 0x%08X", core_status);
+			uint32_t const lock_context = sc_rv32_DC__unlock(p_target);
+			if ( error_code__get(p_target) != ERROR_OK ) {
+				/// return with error_code != ERROR_OK if unlock was unsuccsesful
+				LOG_ERROR("Unlock unsucsessful with lock_context=0x%8X", lock_context);
+				error_code__prepend(p_target, old_err_code);
+				return;
+			}
+			core_status = sc_rv32_DBG_STATUS_get(p_target);
+			LOG_WARNING("Lock with lock_context=0x%8X fixed: 0x%08X", lock_context, core_status);
+		}
+		LOG_DEBUG("Core_status: 0x%08X", core_status);
+		if ( (core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT))) != BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT) ) {
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+			return;
+		}
+
+		uint32_t const hart0_err_bits =
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT) |
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_STKY_BIT);
+		if ( core_status & hart0_err_bits ) {
+			LOG_WARNING("Hart errors detected: 0x%08X", core_status);
+			sc_rv32_HART0_clear_sticky(p_target);
+			error_code__get_and_clear(p_target);
+			core_status = sc_rv32_DBG_STATUS_get(p_target);
+			LOG_WARNING("Hart errors %s: 0x%08X", core_status & hart0_err_bits ? "not fixed!" : "fixed", core_status);
+		}
+
+		uint32_t const cdsr_err_bits =
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_BIT) |
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_HWCORE_BIT) |
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_FSMBUSY_BIT) |
+			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_DAP_OPCODE_BIT);
+		if ( core_status & cdsr_err_bits ) {
+			LOG_WARNING("Core errors detected: 0x%08X", core_status);
+			error_code__get_and_clear(p_target);
+			sc_rv32_CORE_clear_errors(p_target);
+			error_code__get_and_clear(p_target);
+			core_status = sc_rv32_DBG_STATUS_get(p_target);
+			LOG_WARNING("Core errors %s: 0x%08X", core_status & cdsr_err_bits ? "not fixed!" : "fixed", core_status);
+		}
+	}
+
+	/// Only 1 HART available
+	assert(p_target->coreid == 0);
+
+	uint32_t const HART_status = sc_rv32_HART_REGTRANS_read(p_target, DBGC_HART_REGS_DBG_STS);
+	enum target_state const new_state = ERROR_OK == error_code__get(p_target) ? HART_status_bits_to_target_state(HART_status) : TARGET_UNKNOWN;
+	enum target_state const old_state = p_target->state;
+	if ( new_state != old_state ) {
+		p_target->state = new_state;
+		switch ( new_state ) {
+		case TARGET_HALTED:
+			update_debug_reason(p_target);
+			LOG_DEBUG("TARGET_EVENT_HALTED");
+			target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
+			break;
+		case TARGET_RESET:
+			update_debug_reason(p_target);
+			LOG_DEBUG("TARGET_EVENT_RESET_ASSERT");
+			target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
+			break;
+		case TARGET_RUNNING:
+			LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_NOTHALTED);
+			p_target->debug_reason = DBG_REASON_NOTHALTED;
+			LOG_DEBUG("TARGET_EVENT_RESUMED");
+			target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
+		case TARGET_UNKNOWN:
+		default:
+			break;
+		}
+	}
+	error_code__prepend(p_target, old_err_code);
+}
+
+void sc_rv32_check_that_target_halted(struct target* const p_target)
+{
+	LOG_DEBUG("update_status");
+	sc_rv32_update_status(p_target);
+	if ( error_code__get(p_target) == ERROR_OK ) {
+		if ( p_target->state != TARGET_HALTED ) {
+			LOG_ERROR("Target not halted");
+			error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
+		}
+	}
 }
