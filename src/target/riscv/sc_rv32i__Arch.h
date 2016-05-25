@@ -23,6 +23,7 @@ enum
 {
 	DAP_CTRL_INVALID_CODE = 0xFFu,
 };
+extern struct sc_rv32i__Arch const sc_rv32_initial_arch;
 
 struct target;
 /// Error code handling

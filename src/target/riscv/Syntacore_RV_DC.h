@@ -239,28 +239,28 @@ enum type_dbgc_core_dbg_ctrl_reg_bits_e
 struct target;
 /// TAPs methods
 /// @{
-uint32_t IDCODE_get(struct target const* const p_target);
-uint32_t DBG_ID_get(struct target const* const p_target);
-uint32_t BLD_ID_get(struct target const* const p_target);
-uint32_t DBG_STATUS_get(struct target const* const p_target);
-uint32_t DAP_CMD_scan(struct target const* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT);
+uint32_t sc_rv32_IDCODE_get(struct target const* const p_target);
+uint32_t sc_rv32_DBG_ID_get(struct target const* const p_target);
+uint32_t sc_rv32_BLD_ID_get(struct target const* const p_target);
+uint32_t sc_rv32_DBG_STATUS_get(struct target const* const p_target);
+uint32_t sc_rv32_DAP_CMD_scan(struct target const* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT);
 /**
 @brief Try to unlock debug controller
 
 @warning Clear previous error_code and set ERROR_TARGET_FAILURE if unlock was unsuccsesful
 @return lock context
 */
-uint32_t debug_controller__unlock(struct target const* const p_target);
-void HART0_clear_sticky(struct target* const p_target);
-void core_clear_errors(struct target* const p_target);
-void DAP_CTRL_REG_set(struct target const* const p_target, enum type_dbgc_unit_id_e const dap_unit, uint8_t const dap_group);
-uint32_t HART_REGTRANS_read(struct target const* const p_target, enum type_dbgc_regblock_hart_e const index);
-void HART_REGTRANS_write_and_check(struct target const* const p_target, enum type_dbgc_regblock_hart_e const index, uint32_t const set_value);
-uint32_t core_REGTRANS_read(struct target const* const p_target, enum type_dbgc_regblock_core_e const index);
-void core_REGTRANS_write(struct target const* const p_target, enum type_dbgc_regblock_core_e const index, uint32_t const data);
-void exec__setup(struct target const* const p_target);
-void exec__set_csr_data(struct target const* const p_target, uint32_t const csr_data);
-uint32_t exec__step(struct target const* const p_target, uint32_t instruction);
+uint32_t sc_rv32_DC__unlock(struct target const* const p_target);
+void sc_rv32_HART0_clear_sticky(struct target* const p_target);
+void sc_rv32_CORE_clear_errors(struct target* const p_target);
+void sc_rv32_DAP_CTRL_REG_set(struct target const* const p_target, enum type_dbgc_unit_id_e const dap_unit, uint8_t const dap_group);
+uint32_t sc_rv32_HART_REGTRANS_read(struct target const* const p_target, enum type_dbgc_regblock_hart_e const index);
+void sc_rv32_HART_REGTRANS_write_and_check(struct target const* const p_target, enum type_dbgc_regblock_hart_e const index, uint32_t const set_value);
+uint32_t sc_rv32_core_REGTRANS_read(struct target const* const p_target, enum type_dbgc_regblock_core_e const index);
+void sc_rv32_CORE_REGTRANS_write(struct target const* const p_target, enum type_dbgc_regblock_core_e const index, uint32_t const data);
+void sc_rv32_EXEC__setup(struct target const* const p_target);
+void sc_rv32_EXEC__push_data_to_CSR(struct target const* const p_target, uint32_t const csr_data);
+uint32_t sc_rv32_EXEC__step(struct target const* const p_target, uint32_t instruction);
 /// @}
 
 #endif  // SYNTACORE_RV_DC_H_
