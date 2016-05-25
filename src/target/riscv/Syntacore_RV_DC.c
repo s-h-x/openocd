@@ -51,7 +51,6 @@ static void IR_select_force(struct target const* const p_target, enum TAP_IR_e c
 	jtag_add_ir_scan(p_target->tap, &field, TAP_IDLE);
 	LOG_DEBUG("irscan %s %d", p_target->cmd_name, new_instr);
 }
-
 /** @brief Cached version of instruction register
 
 Method can update error_code, but ignore previous errors
@@ -73,7 +72,6 @@ static void IR_select(struct target const* const p_target, enum TAP_IR_e const n
 	/// or call real IR scan
 	IR_select_force(p_target, new_instr);
 }
-
 /** @brief Common method to retrieve data of read-only 32-bits TAPs
 
 Method store and update error_code, but ignore previous errors and
@@ -116,28 +114,24 @@ static uint32_t read_only_32_bits_regs(struct target const* const p_target, enum
 	error_code__prepend(p_target, old_err_code);
 	return result;
 }
-
 uint32_t sc_rv32_IDCODE_get(struct target const* const p_target)
 {
 	assert(p_target);
 	STATIC_ASSERT(TAP_LEN_IDCODE == TAP_LEN_RO_32);
 	return read_only_32_bits_regs(p_target, TAP_INSTR_IDCODE);
 }
-
 uint32_t sc_rv32_DBG_ID_get(struct target const* const p_target)
 {
 	assert(p_target);
 	STATIC_ASSERT(TAP_LEN_DBG_ID == TAP_LEN_RO_32);
 	return read_only_32_bits_regs(p_target, TAP_INSTR_DBG_ID);
 }
-
 uint32_t sc_rv32_BLD_ID_get(struct target const* const p_target)
 {
 	assert(p_target);
 	STATIC_ASSERT(TAP_LEN_BLD_ID == TAP_LEN_RO_32);
 	return read_only_32_bits_regs(p_target, TAP_INSTR_BLD_ID);
 }
-
 uint32_t sc_rv32_DBG_STATUS_get(struct target const* const p_target)
 {
 	assert(p_target);
@@ -157,7 +151,6 @@ uint32_t sc_rv32_DBG_STATUS_get(struct target const* const p_target)
 	}
 	return result;
 }
-
 /// set unit/group
 static void DAP_CTRL_REG_set_force(struct target const* const p_target, uint8_t const set_dap_unit_group)
 {
@@ -209,7 +202,6 @@ static void DAP_CTRL_REG_set_force(struct target const* const p_target, uint8_t 
 	}
 	error_code__prepend(p_target, old_err_code);
 }
-
 /// verify unit/group
 static void DAP_CTRL_REG_verify(struct target const* const p_target, uint8_t const set_dap_unit_group)
 {
@@ -247,7 +239,6 @@ static void DAP_CTRL_REG_verify(struct target const* const p_target, uint8_t con
 	}
 	error_code__prepend(p_target, old_err_code);
 }
-
 uint32_t sc_rv32_DAP_CMD_scan(struct target const* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT)
 {
 	assert(p_target);
@@ -302,7 +293,6 @@ uint32_t sc_rv32_DAP_CMD_scan(struct target const* const p_target, uint8_t const
 	error_code__prepend(p_target, old_err_code);
 	return DBG_DATA;
 }
-
 uint32_t sc_rv32_DC__unlock(struct target const* const p_target)
 {
 	assert(p_target);
@@ -372,7 +362,6 @@ uint32_t sc_rv32_DC__unlock(struct target const* const p_target)
 	LOG_DEBUG("%s context=0x%08X, status=0x%08X", ok ? "Unlock succsessful!" : "Unlock unsuccsessful!", lock_context, status);
 	return lock_context;
 }
-
 void sc_rv32_HART0_clear_sticky(struct target* const p_target)
 {
 	LOG_DEBUG("========= Try to clear HART0 errors ============");
@@ -416,13 +405,11 @@ void sc_rv32_HART0_clear_sticky(struct target* const p_target)
 		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
 	}
 }
-
 static uint8_t REGTRANS_scan_type(bool const write, uint8_t const index)
 {
 	assert((index & ~LOW_BITS_MASK(3)) == 0);
 	return MAKE_TYPE_FIELD(uint8_t, !!write, 3, 3) | MAKE_TYPE_FIELD(uint8_t, index, 0, 2);
 }
-
 void sc_rv32_CORE_clear_errors(struct target* const p_target)
 {
 	LOG_DEBUG("========= Try to clear core errors ============");
@@ -469,7 +456,6 @@ void sc_rv32_CORE_clear_errors(struct target* const p_target)
 		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name, fields[0].num_bits, dap_opcode_ext, fields[1].num_bits, dap_opcode);
 	}
 }
-
 void sc_rv32_DAP_CTRL_REG_set(struct target const* const p_target, enum type_dbgc_unit_id_e const dap_unit, uint8_t const dap_group)
 {
 	assert(p_target);
@@ -511,7 +497,6 @@ void sc_rv32_DAP_CTRL_REG_set(struct target const* const p_target, enum type_dbg
 	}
 	error_code__prepend(p_target, old_err_code);
 }
-
 static void REGTRANS_write(struct target const* const p_target, enum type_dbgc_unit_id_e a_unit, uint8_t const a_fgrp, uint8_t const index, uint32_t const data)
 {
 	assert(p_target);
@@ -522,7 +507,6 @@ static void REGTRANS_write(struct target const* const p_target, enum type_dbgc_u
 	}
 	(void)sc_rv32_DAP_CMD_scan(p_target, REGTRANS_scan_type(true, index), data);
 }
-
 static uint32_t REGTRANS_read(struct target const* const p_target, enum type_dbgc_unit_id_e const a_unit, uint8_t const a_fgrp, uint8_t const index)
 {
 	assert(p_target);
@@ -534,21 +518,18 @@ static uint32_t REGTRANS_read(struct target const* const p_target, enum type_dbg
 	(void)sc_rv32_DAP_CMD_scan(p_target, REGTRANS_scan_type(false, index), 0);
 	return sc_rv32_DAP_CMD_scan(p_target, REGTRANS_scan_type(false, index), 0);
 }
-
 uint32_t sc_rv32_HART_REGTRANS_read(struct target const* const p_target, enum type_dbgc_regblock_hart_e const index)
 {
 	assert(p_target);
 	enum type_dbgc_unit_id_e const unit = p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1;
 	return REGTRANS_read(p_target, unit, DBGC_FGRP_HART_REGTRANS, index);
 }
-
 static void HART_REGTRANS_write(struct target const* const p_target, enum type_dbgc_regblock_hart_e const index, uint32_t const set_value)
 {
 	assert(p_target);
 	enum type_dbgc_unit_id_e const unit = p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1;
 	REGTRANS_write(p_target, unit, DBGC_FGRP_HART_REGTRANS, index, set_value);
 }
-
 void sc_rv32_HART_REGTRANS_write_and_check(struct target const* const p_target, enum type_dbgc_regblock_hart_e const index, uint32_t const set_value)
 {
 	assert(p_target);
@@ -565,19 +546,16 @@ void sc_rv32_HART_REGTRANS_write_and_check(struct target const* const p_target, 
 		}
 	}
 }
-
 uint32_t sc_rv32_core_REGTRANS_read(struct target const* const p_target, enum type_dbgc_regblock_core_e const index)
 {
 	assert(p_target);
 	return REGTRANS_read(p_target, DBGC_UNIT_ID_CORE, DBGC_FGRP_CORE_REGTRANS, index);
 }
-
 void sc_rv32_CORE_REGTRANS_write(struct target const* const p_target, enum type_dbgc_regblock_core_e const index, uint32_t const data)
 {
 	assert(p_target);
 	REGTRANS_write(p_target, DBGC_UNIT_ID_CORE, DBGC_FGRP_CORE_REGTRANS, index, data);
 }
-
 void sc_rv32_EXEC__setup(struct target const* const p_target)
 {
 	assert(p_target);
@@ -585,7 +563,6 @@ void sc_rv32_EXEC__setup(struct target const* const p_target)
 		sc_rv32_DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 	}
 }
-
 void sc_rv32_EXEC__push_data_to_CSR(struct target const* const p_target, uint32_t const csr_data)
 {
 	assert(p_target);
@@ -593,7 +570,6 @@ void sc_rv32_EXEC__push_data_to_CSR(struct target const* const p_target, uint32_
 		sc_rv32_DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR, csr_data);
 	}
 }
-
 uint32_t sc_rv32_EXEC__step(struct target const* const p_target, uint32_t instruction)
 {
 	assert(p_target);
@@ -602,7 +578,6 @@ uint32_t sc_rv32_EXEC__step(struct target const* const p_target, uint32_t instru
 	}
 	return sc_rv32_DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_CORE_EXEC, instruction);
 }
-
 uint32_t sc_rv32_get_PC(struct target const* const p_target)
 {
 	assert(p_target);
@@ -614,7 +589,6 @@ uint32_t sc_rv32_get_PC(struct target const* const p_target)
 		return 0xFFFFFFFFu;
 	}
 }
-
 void sc_rv32_check_PC_value(struct target const* const p_target, uint32_t const pc_sample_1)
 {
 	assert(p_target);
@@ -628,7 +602,6 @@ void sc_rv32_check_PC_value(struct target const* const p_target, uint32_t const 
 		}
 	}
 }
-
 static enum target_state HART_status_bits_to_target_state(uint32_t const status)
 {
 	static uint32_t const err_bits =
@@ -649,7 +622,6 @@ static enum target_state HART_status_bits_to_target_state(uint32_t const status)
 		return TARGET_RUNNING;
 	}
 }
-
 static enum target_debug_reason read_debug_cause(struct target* const p_target)
 {
 	assert(p_target);
@@ -678,7 +650,6 @@ static void update_debug_reason(struct target* const p_target)
 		p_target->debug_reason = debug_reason;
 	}
 }
-
 static uint32_t try_to_get_ready(struct target* const p_target)
 {
 	uint32_t core_status = sc_rv32_DBG_STATUS_get(p_target);
@@ -697,7 +668,6 @@ static uint32_t try_to_get_ready(struct target* const p_target)
 	LOG_ERROR("Not ready: 0x%08X after %d requests", core_status, max_retries);
 	return core_status;
 }
-
 void sc_rv32_update_status(struct target* const p_target)
 {
 	assert(p_target);
@@ -742,7 +712,7 @@ void sc_rv32_update_status(struct target* const p_target)
 			LOG_WARNING("Hart errors %s: 0x%08X", core_status & hart0_err_bits ? "not fixed!" : "fixed", core_status);
 		}
 
-		uint32_t const cdsr_err_bits =
+		static uint32_t const cdsr_err_bits =
 			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_BIT) |
 			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_HWCORE_BIT) |
 			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_FSMBUSY_BIT) |
@@ -788,7 +758,6 @@ void sc_rv32_update_status(struct target* const p_target)
 	}
 	error_code__prepend(p_target, old_err_code);
 }
-
 void sc_rv32_check_that_target_halted(struct target* const p_target)
 {
 	LOG_DEBUG("update_status");

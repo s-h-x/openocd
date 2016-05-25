@@ -1135,7 +1135,7 @@ static void sc_rv32_init_regs_cache(struct target* const p_target)
 #endif
 	struct reg_cache* p_reg_cache_last = p_target->reg_cache = reg_cache__section_create(def_GP_regs_name, def_GP_regs_array, ARRAY_LEN(def_GP_regs_array), p_target);
 	p_reg_cache_last = p_reg_cache_last->next = reg_cache__section_create(def_FP_regs_name, def_FP_regs_array, ARRAY_LEN(def_FP_regs_array), p_target);
-	p_reg_cache_last = p_reg_cache_last->next = reg_cache__section_create(def_CSR_regs_name, def_CSR_regs_array, ARRAY_LEN(def_CSR_regs_array), p_target);
+	p_reg_cache_last->next = reg_cache__section_create(def_CSR_regs_name, def_CSR_regs_array, ARRAY_LEN(def_CSR_regs_array), p_target);
 }
 static int sc_rv32i__init_target(struct command_context *cmd_ctx, struct target* const p_target)
 {
