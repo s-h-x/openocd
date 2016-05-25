@@ -6,8 +6,8 @@ else
 OOCD_TRACE_FILES =
 endif
 
-SUBDIRS = openrisc
-libtarget_la_LIBADD = $(top_builddir)/src/target/openrisc/libopenrisc.la
+SUBDIRS = riscv openrisc
+libtarget_la_LIBADD = $(top_builddir)/src/target/riscv/libriscv.la $(top_builddir)/src/target/openrisc/libopenrisc.la
 
 BIN2C		= $(top_srcdir)/src/helper/bin2char.sh
 
@@ -40,8 +40,7 @@ libtarget_la_SOURCES = \
 	dsp563xx.c \
 	dsp563xx_once.c \
 	dsp5680xx.c \
-	hla_target.c \
-	syntacore_riscv32i.c
+	hla_target.c
 
 TARGET_CORE_SRC = \
 	algorithm.c \

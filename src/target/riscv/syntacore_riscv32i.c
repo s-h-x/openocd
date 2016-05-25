@@ -10,6 +10,7 @@ Syntacore RISC-V target
 #include "config.h"
 #endif
 
+#include "riscv.h"
 #include "target/target.h"
 #include "target/target_type.h"
 #include "target/breakpoints.h"
@@ -62,21 +63,19 @@ Syntacore RISC-V target
 #define STATIC_ASSERT1(COND,LINE) STATIC_ASSERT2(COND,LINE)
 #define STATIC_ASSERT(COND)  STATIC_ASSERT1(COND,__LINE__)
 
+
+#define LOW_BITS_MASK(n) (~(~0 << (n)))
+#define MAKE_TYPE_FIELD(TYPE, bits, first_bit, last_bit)     ((((TYPE)(bits)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
+
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
 
 #define BIT_NUM_TO_MASK(bit_num) (1u << (bit_num))
-#define LOW_BITS_MASK(n) (~(~0 << (n)))
 #define NUM_BITS_TO_SIZE(num_bits) ( ( (size_t)(num_bits) + (8 - 1) ) / 8 )
 ///@}
-
-#define EXTRACT_FIELD(bits, first_bit, last_bit) (((bits) >> (first_bit)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit)))
-#define MAKE_TYPE_FIELD(TYPE, bits, first_bit, last_bit)     ((((TYPE)(bits)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
 
 /// RISC-V GP registers id
 enum
 {
-	zero = 0u,
-	sp = 14u,
 	REG_PC_NUMBER = 0xFFFFFFFFu,
 	NUMBER_OF_X_REGS = 32u,
 	NUMBER_OF_GP_REGS = NUMBER_OF_X_REGS + 1u,
@@ -85,8 +84,6 @@ enum
 	TOTAL_NUMBER_OF_REGS = NUMBER_OF_GP_REGS + NUMBER_OF_F_REGS,
 };
 
-/// Type of instruction
-typedef uint32_t instr_type;
 enum arch_bits_numbers
 {
 	/// Size of RISC-V GP registers in bits
@@ -96,530 +93,6 @@ enum arch_bits_numbers
 	/// Size of RISC-V instruction
 	ILEN = 32u,
 };
-
-/// RISC-V opcodes
-///@{
-
-#define NORMALIZE_INT_FIELD(FLD, SIGN_BIT, ZEROS) ( ( ( ( -( ( (FLD) >> (SIGN_BIT) ) & LOW_BITS_MASK(1) ) ) << (SIGN_BIT) ) | (FLD) ) & ~LOW_BITS_MASK(ZEROS) )
-
-#define IS_VALID_UNSIFNED_FIELD(FLD,LEN) ((FLD & ~LOW_BITS_MASK(LEN)) == 0)
-#define IS_VALID_SIFNED_IMMEDIATE_FIELD(FLD, SIGN_BIT, LOW_ZEROS) ( (FLD) == NORMALIZE_INT_FIELD((FLD), (SIGN_BIT), (LOW_ZEROS)) )
-
-#define CHECK_OPCODE(OPCODE) assert(IS_VALID_UNSIFNED_FIELD(OPCODE,7) && (OPCODE & LOW_BITS_MASK(2)) == LOW_BITS_MASK(2) && (OPCODE & LOW_BITS_MASK(5)) != LOW_BITS_MASK(5))
-#define CHECK_REG(REG) assert(IS_VALID_UNSIFNED_FIELD(REG,5))
-#define CHECK_FUNC3(F) assert(IS_VALID_UNSIFNED_FIELD(F,3))
-#define CHECK_FUNC7(F) assert(IS_VALID_UNSIFNED_FIELD(F,7))
-#define CHECK_IMM_11_00(imm) assert(IS_VALID_SIFNED_IMMEDIATE_FIELD(imm, 11, 0));
-#define CHECK_IMM_12_01(imm) assert(IS_VALID_SIFNED_IMMEDIATE_FIELD(imm, 12, 1));
-#define CHECK_IMM_20_01(imm) assert(IS_VALID_SIFNED_IMMEDIATE_FIELD(imm, 20, 1));
-#define CHECK_IMM_31_12(imm) assert(IS_VALID_SIFNED_IMMEDIATE_FIELD(imm, 31, 12));
-
-/// Opcode format families
-///@{
-
-typedef uint8_t reg_num_type;
-typedef int32_t riscv_signed_type;
-typedef int16_t riscv_short_signed_type;
-typedef uint16_t csr_num_type;
-
-static inline instr_type
-RV_INSTR_R_TYPE(unsigned func7, reg_num_type rs2, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
-{
-	CHECK_OPCODE(opcode);
-	CHECK_FUNC3(func3);
-	CHECK_FUNC7(func7);
-	CHECK_REG(rs2);
-	CHECK_REG(rs1);
-	CHECK_REG(rd);
-	return
-		MAKE_TYPE_FIELD(instr_type, func7, 25, 31) |
-		MAKE_TYPE_FIELD(instr_type, rs2, 20, 24) |
-		MAKE_TYPE_FIELD(instr_type, rs1, 15, 19) |
-		MAKE_TYPE_FIELD(instr_type, func3, 12, 14) |
-		MAKE_TYPE_FIELD(instr_type, rd, 7, 11) |
-		MAKE_TYPE_FIELD(instr_type, opcode, 0, 6);
-}
-
-static inline instr_type
-RV_INSTR_I_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
-{
-	CHECK_OPCODE(opcode);
-	CHECK_REG(rd);
-	CHECK_REG(rs1);
-	CHECK_FUNC3(func3);
-	CHECK_IMM_11_00(imm_11_00);
-	return
-		MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD(imm_11_00, 0, 11), 20, 31) |
-		MAKE_TYPE_FIELD(instr_type, rs1, 15, 19) |
-		MAKE_TYPE_FIELD(instr_type, func3, 12, 14) |
-		MAKE_TYPE_FIELD(instr_type, rd, 7, 11) |
-		MAKE_TYPE_FIELD(instr_type, opcode, 0, 6);
-}
-
-static inline instr_type
-RV_INSTR_S_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
-{
-	CHECK_OPCODE(opcode);
-	CHECK_REG(rs2);
-	CHECK_REG(rs1);
-	CHECK_FUNC3(func3);
-	CHECK_IMM_11_00(imm_11_00);
-	return
-		MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD(imm_11_00, 5, 11), 25, 31) |
-		MAKE_TYPE_FIELD(instr_type, rs2, 20, 24) |
-		MAKE_TYPE_FIELD(instr_type, rs1, 15, 19) |
-		MAKE_TYPE_FIELD(instr_type, func3, 12, 14) |
-		MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD(imm_11_00, 0, 4), 7, 11) |
-		MAKE_TYPE_FIELD(instr_type, opcode, 0, 6);
-}
-
-static inline instr_type
-RV_INSTR_SB_TYPE(riscv_short_signed_type imm_01_12, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
-{
-	CHECK_OPCODE(opcode);
-	CHECK_FUNC3(func3);
-	CHECK_REG(rs1);
-	CHECK_REG(rs2);
-	CHECK_IMM_12_01(imm_01_12);
-	return
-		MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD(imm_01_12, 12, 12), 31, 31) |
-		MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD(imm_01_12, 5, 10), 25, 30) |
-		MAKE_TYPE_FIELD(instr_type, rs2, 20, 24) |
-		MAKE_TYPE_FIELD(instr_type, rs1, 15, 19) |
-		MAKE_TYPE_FIELD(instr_type, func3, 12, 14) |
-		MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD(imm_01_12, 1, 4), 8, 11) |
-		MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD(imm_01_12, 11, 11), 7, 7) |
-		MAKE_TYPE_FIELD(instr_type, opcode, 0, 6);
-}
-
-static inline instr_type
-RV_INSTR_U_TYPE(riscv_signed_type imm_31_12, reg_num_type rd, uint8_t opcode)
-{
-	CHECK_OPCODE(opcode);
-	CHECK_REG(rd);
-	CHECK_IMM_31_12(imm_31_12);
-	return
-		MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD(imm_31_12, 12, 31), 12, 31) |
-		MAKE_TYPE_FIELD(instr_type, rd, 7, 11) |
-		MAKE_TYPE_FIELD(instr_type, opcode, 0, 6);
-}
-
-static inline instr_type
-RV_INSTR_UJ_TYPE(riscv_signed_type imm_20_01, reg_num_type rd, uint8_t opcode)
-{
-	CHECK_OPCODE(opcode);
-	CHECK_REG(rd);
-	CHECK_IMM_20_01(imm_20_01);
-	return
-		MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD(imm_20_01, 20, 20), 31, 31) |
-		MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD(imm_20_01, 1, 10), 21, 30) |
-		MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD(imm_20_01, 11, 11), 20, 20) |
-		MAKE_TYPE_FIELD(instr_type, EXTRACT_FIELD(imm_20_01, 12, 19), 12, 19) |
-		MAKE_TYPE_FIELD(instr_type, rd, 7, 11) |
-		MAKE_TYPE_FIELD(instr_type, opcode, 0, 6);
-}
-///@} Opcode format families
-
-static inline instr_type
-RV_ADD(reg_num_type rd, reg_num_type rs1, reg_num_type rs2)
-{
-	return RV_INSTR_R_TYPE(0x00u, rs2, rs1, 0u, rd, 0x33u);
-}
-
-static inline instr_type
-RV_FMV_X_S(reg_num_type rd, reg_num_type rs1_fp)
-{
-	return RV_INSTR_R_TYPE(0x70u, 0u, rs1_fp, 0u, rd, 0x53u);
-}
-
-static inline instr_type
-RV_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1)
-{
-	return RV_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd_fp, 0x53u);
-}
-
-static inline instr_type
-RV_LB(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RV_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x03u);
-}
-
-static inline instr_type
-RV_LH(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RV_INSTR_I_TYPE(imm, rs1, 1u, rd, 0x03u);
-}
-
-static inline instr_type
-RV_LW(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RV_INSTR_I_TYPE(imm, rs1, 2u, rd, 0x03u);
-}
-
-static inline instr_type
-RV_LBU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RV_INSTR_I_TYPE(imm, rs1, 4u, rd, 0x03u);
-}
-
-static inline instr_type
-RV_LHU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RV_INSTR_I_TYPE(imm, rs1, 5u, rd, 0x03u);
-}
-
-static inline instr_type
-RV_ADDI(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RV_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x13u);
-}
-
-static inline instr_type
-RV_JALR(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RV_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x67u);
-}
-
-static inline riscv_short_signed_type
-csr_to_int(csr_num_type csr)
-{
-	return NORMALIZE_INT_FIELD(csr, 11, 0);
-}
-
-static inline instr_type
-RV_CSRRW(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
-{
-	return RV_INSTR_I_TYPE(csr_to_int(csr), rs1, 1u, rd, 0x73u);
-}
-
-static inline instr_type
-RV_CSRRS(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
-{
-	return RV_INSTR_I_TYPE(csr_to_int(csr), rs1, 2u, rd, 0x73u);
-}
-
-static inline instr_type
-RV_CSRRC(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
-{
-	return RV_INSTR_I_TYPE(csr_to_int(csr), rs1, 3u, rd, 0x73u);
-}
-
-static inline instr_type
-RV_CSRRWI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
-{
-	return RV_INSTR_I_TYPE(csr_to_int(csr), zimm, 5u, rd, 0x73u);
-}
-
-static inline instr_type
-RV_CSRRSI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
-{
-	return RV_INSTR_I_TYPE(csr_to_int(csr), zimm, 6u, rd, 0x73u);
-}
-
-static inline instr_type
-RV_CSRRCI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
-{
-	return RV_INSTR_I_TYPE(csr_to_int(csr), zimm, 7u, rd, 0x73u);
-}
-
-static inline instr_type
-RV_EBREAK(void)
-{
-	return RV_INSTR_I_TYPE(1, 0u, 0u, 0u, 0x73u);
-}
-
-static inline uint16_t
-RV_C_EBREAK(void)
-{
-	return 0x9002u;
-}
-
-static inline instr_type
-RV_SB(reg_num_type rs_data, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RV_INSTR_S_TYPE(imm, rs_data, rs1, 0u, 0x23);
-}
-
-static inline instr_type
-RV_SH(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RV_INSTR_S_TYPE(imm, rs, rs1, 1u, 0x23);
-}
-
-static inline instr_type
-RV_SW(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RV_INSTR_S_TYPE(imm, rs, rs1, 2u, 0x23);
-}
-
-static inline instr_type
-RV_AUIPC(reg_num_type rd, riscv_signed_type imm)
-{
-	return RV_INSTR_U_TYPE(imm, rd, 0x17u);
-}
-
-static inline instr_type
-RV_JAL(reg_num_type rd, riscv_signed_type imm_20_01)
-{
-	return RV_INSTR_UJ_TYPE(imm_20_01, rd, 0x6Fu);
-}
-
-static inline instr_type
-RV_NOP(void)
-{
-	return RV_ADDI(zero, zero, 0u);
-}
-
-static inline instr_type
-RV_CSRW(unsigned csr, reg_num_type rs1)
-{
-	return RV_CSRRW(zero, csr, rs1);
-}
-
-static inline instr_type
-RV_CSRR(reg_num_type rd, csr_num_type csr)
-{
-	return RV_CSRRS(rd, csr, zero);
-}
-///@]
-
-enum RISCV_CSR
-{
-	/// User Floating-Point CSRs
-	/// privilege: URW
-	/// @addtogroup floating_point_csrs
-	///@{
-	/// Floating-Point Accrued Exceptions.
-	CSR_fflags = 0x001u,
-	/// Floating-Point Dynamic Rounding Mode.
-	CSR_frm = 0x002u,
-	/// Floating-Point Control and Status Register (frm + fflags).
-	CSR_fcsr = 0x003u,
-	///@}
-
-	/// User Counter/Timers
-	/// privilege: URO
-	///@{
-	/// Cycle counter for RDCYCLE instruction
-	CSR_cycle = 0xC00u,
-	/// Timer for RDTIME instruction
-	CSR_time = 0xC01u,
-	/// Instructions-retired counter for RDINSTRET instruction
-	CSR_instret = 0xC02u,
-	/// Upper 32 bits of cycle, RV32I onl
-	CSR_cycleh = 0xC80u,
-	/// Upper 32 bits of time, RV32I only
-	CSR_timeh = 0xC81u,
-	///  Upper 32 bits of instret, RV32I only.
-	CSR_instreth = 0xC82u,
-	///@}
-
-	/// Supervisor Trap Setup
-	///@{
-	/// Supervisor status register
-	CSR_sstatus = 0x100u,
-	/// Supervisor trap handler base address
-	CSR_stvec = 0x101u,
-	/// Supervisor interrupt-enable register
-	CSR_sie = 0x104u,
-	/// Wall-clock timer compare val
-	CSR_stimecmp = 0x121u,
-	///@}
-
-	/// Supervisor Timer
-	///@{
-	/// Supervisor wall-clock time register.
-	CSR_stime = 0xD01u,
-	/// Upper 32 bits of stime, RV32I onl
-	CSR_stimeh = 0xD81u,
-	///@}
-
-	/// Supervisor Trap Handling
-	///@{
-	/// Scratch register for supervisor trap handlers
-	CSR_sscratch = 0x140u,
-	/// Supervisor exception program counter.
-	CSR_sepc = 0x141u,
-	/// Supervisor trap cause.
-	CSR_scause = 0xD42u,
-	/// Supervisor bad address.
-	CSR_sbadaddr = 0xD43u,
-	/// Supervisor interrupt pending
-	CSR_sip = 0x144u,
-	///@}
-
-	/// Supervisor Protection and Translation
-	///@{
-	/// Page-table base register
-	CSR_sptbr = 0x180u,
-	/// Address-space ID.
-	CSR_sasid = 0x181u,
-	///@}
-
-	/// Supervisor Read/Write Shadow of User Read-Only registers
-	///@{
-	/// Cycle counter for RDCYCLE instruction.
-	CSR_cyclew = 0x900u,
-	/// Timer for RDTIME instruction.
-	CSR_timew = 0x901u,
-	/// Instructions-retired counter for RDINSTRET instruction
-	CSR_instretw = 0x902u,
-	/// Upper 32 bits of cycle, RV32I only
-	CSR_cyclehw = 0x980u,
-	/// Upper 32 bits of time, RV32I only
-	CSR_timehw = 0x981u,
-	/// Upper 32 bits of CSR_instretw, RV32I only
-	CSR_instrethw = 0x982u,
-	///@}
-
-	/// Hypervisor Trap Setup
-	///@{
-	/// Hypervisor status register
-	CSR_hstatus = 0x200u,
-	/// Hypervisor trap handler base address
-	CSR_htvec = 0x201u,
-	/// Hypervisor trap delegation register.
-	CSR_htdeleg = 0x202u,
-	/// Hypervisor wall-clock timer compare value.
-	CSR_htimecmp = 0x221u,
-	///@}
-
-	/// Hypervisor Timer
-	///@{
-	CSR_htime = 0xE01u,
-	CSR_htimeh = 0xE81u,
-	///@}
-
-	/// Hypervisor Trap Handling
-	///@{
-	CSR_hscratch = 0x240u,
-	CSR_hepc = 0x241u,
-	CSR_hcause = 0x242u,
-	CSR_hbadaddr = 0x243u,
-	///@}
-
-	/// Hypervisor Read/Write Shadow of Supervisor Read-Only Registers
-	///@{
-	CSR_stimew = 0xA01u,
-	CSR_stimehw = 0xA81u,
-	///@}
-
-	/// Machine Information Registers
-	/// privilege: MRO
-	///@{
-	/// @brief CPU description
-	CSR_mcpuid = 0xF00u,
-
-	/// @brief Vendor ID and version number
-	CSR_mimpid = 0xF01u,
-
-	/// @brief Hardware thread ID
-	CSR_mhartid = 0xF10u,
-	///@}
-
-	/// Machine Trap Setup
-	/// privilege: MRW
-	///@{
-
-	/// @brief Machine status register
-	///< FS - bits 13:12
-	CSR_mstatus = 0x300u,
-
-	/// @brief Machine trap-handler base address
-	CSR_mtvec = 0x301u,
-
-	/// @brief Machine trap delegation register
-	CSR_mtdeleg = 0x302u,
-
-	/// @brief Machine interrupt-enable register
-	CSR_mie = 0x304u,
-
-	/// @brief Machine wall-clock timer compare value
-	CSR_mtimecmp = 0x321u,
-	///@}
-
-	/// Machine Timers and Counters
-	/// privilege: MRW
-	///@{
-
-	/// @brief Machine wall-clock time
-	CSR_mtime = 0x701u,
-
-	/// @brief Upper 32 bits of mtime, RV32I only
-	CSR_mtimeh = 0x741u,
-	///@}
-
-	/// Machine Trap Handling
-	/// privilege: MRW
-	///@{
-
-	/// @brief Scratch register for machine trap handlers.
-	CSR_mscratch = 0x340u,
-	/// @brief Machine exception program counter
-	CSR_mepc = 0x341u,
-	/// @brief Machine trap cause
-	CSR_mcause = 0x342u,
-	/// @brief Machine bad address
-	CSR_mbadaddr = 0x343u,
-	/// @brief Machine interrupt pending.
-	CSR_mip = 0x344u,
-	///@}
-
-	/// Machine Protection and Translation
-	/// privilege: MRW
-	///@{
-
-	/// @brief Base register
-	CSR_mbase = 0x380u,
-
-	/// @brief Base register
-	CSR_mbound = 0x381u,
-
-	/// @brief Bound register.
-	CSR_mibase = 0x382u,
-
-	/// @brief Instruction base register.
-	CSR_mibound = 0x383u,
-
-	/// @brief Data base register
-	CSR_mdbase = 0x384u,
-
-	/// @brief Data bound register
-	CSR_mdbound = 0x385u,
-	///@}
-
-	/// Machine Read-Write Shadow of Hypervisor Read-Only Registers
-	/// privilege: MRW
-	///@{
-
-	/// @brief Hypervisor wall-clock timer
-	CSR_htimew = 0xB01u,
-
-	/// @brief Upper 32 bits of hypervisor wall-clock timer, RV32I only.
-	CSR_htimehw = 0xB81u,
-	///@}
-
-	/// Machine Host-Target Interface (Non-Standard Berkeley Extension)
-	/// privilege: MRW
-	///@{
-	/// @brief Output register to host
-	CSR_mtohost = 0x780u,
-	/// @brief Input register from host.
-	CSR_mfromhost = 0x781u,
-	///@}
-
-	/// Debug CSR number
-	/// privilege: MRW
-	CSR_DBG_SCRATCH = 0x788u,
-};
-
-typedef enum mstatus_context_field_e
-{
-	ext_off = 0,
-	ext_initial = 1,
-	ext_clean = 2,
-	ext_dirty = 3,
-} mstatus_context_field_e;
 
 /// IR id
 enum TAP_IR_e
@@ -1921,7 +1394,7 @@ reg_x__get(reg* const p_reg)
 
 		// Exec jump back to previous instruction and get saved into CSR_DBG_SCRATCH CSR value
 		assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-		uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+		uint32_t const value = exec__step(p_target, RV_JAL(0, -advance_pc_counter));
 		advance_pc_counter = 0;
 		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
@@ -1980,12 +1453,12 @@ reg_x__store(reg* const p_reg)
 	/// Correct pc back after each instruction
 	assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
 #if VERIFY_REG_WRITE
-	uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+	uint32_t const value = exec__step(p_target, RV_JAL(0, -advance_pc_counter));
 	if ( buf_get_u32(p_reg->value, 0, p_reg->size) != value ) {
 		LOG_ERROR("Register %s write error: write 0x%08X, but re-read 0x%08X", p_reg->name, buf_get_u32(p_reg->value, 0, p_reg->size), value);
 	}
 #else
-	(void)exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+	(void)exec__step(p_target, RV_JAL(0, -advance_pc_counter));
 #endif
 	advance_pc_counter = 0;
 
@@ -2087,7 +1560,7 @@ static uint32_t csr_get_value(target* const p_target, uint32_t const csr_number)
 	check_that_target_halted(p_target);
 	if ( error_code__get(p_target) == ERROR_OK ) {
 		/// Find temporary GP register
-		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 		assert(p_wrk_reg);
 
 		uint32_t const pc_sample_1 = get_PC_to_check(p_target);
@@ -2111,7 +1584,7 @@ static uint32_t csr_get_value(target* const p_target, uint32_t const csr_number)
 					if ( error_code__get(p_target) == ERROR_OK ) {
 						/// Correct pc by jump 2 instructions back and get previous command result.
 						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-						value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+						value = exec__step(p_target, RV_JAL(0, -advance_pc_counter));
 						advance_pc_counter = 0;
 					}
 				}
@@ -2166,7 +1639,7 @@ reg_pc__get(reg* const p_reg)
 		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
 		}
-		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 		assert(p_wrk_reg);
 
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
@@ -2186,7 +1659,7 @@ reg_pc__get(reg* const p_reg)
 				if ( error_code__get(p_target) == ERROR_OK ) {
 					/// Correct pc by jump 2 instructions back and get previous command result.
 					assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-					uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+					uint32_t const value = exec__step(p_target, RV_JAL(0, -advance_pc_counter));
 					advance_pc_counter = 0;
 					if ( error_code__get(p_target) == ERROR_OK ) {
 						reg__set_valid_value_to_cache(p_reg, value);
@@ -2238,7 +1711,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 		}
 	}
 
-	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 	assert(p_wrk_reg);
 
 	reg__set_new_cache_value(p_reg, buf);
@@ -2266,7 +1739,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 					exec__setup(p_target);
 				}
 				/// and exec JARL to set pc
-				(void)exec__step(p_target, RV_JALR(zero, p_wrk_reg->number, 0));
+				(void)exec__step(p_target, RV_JALR(0, p_wrk_reg->number, 0));
 				advance_pc_counter = 0;
 				assert(p_reg->valid);
 				assert(p_reg->dirty);
@@ -2311,7 +1784,7 @@ reg_f__get(reg* const p_reg)
 
 	/// @todo check that FPU is enabled
 	/// Find temporary GP register
-	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 	assert(p_wrk_reg);
 
 	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
@@ -2335,7 +1808,7 @@ reg_f__get(reg* const p_reg)
 				if ( error_code__get(p_target) == ERROR_OK ) {
 					/// Correct pc by jump 2 instructions back and get previous command result.
 					assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-					uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+					uint32_t const value = exec__step(p_target, RV_JAL(0, -advance_pc_counter));
 					advance_pc_counter = 0;
 					if ( error_code__get(p_target) == ERROR_OK ) {
 						reg__set_valid_value_to_cache(p_reg, value);
@@ -2382,7 +1855,7 @@ reg_f__set(reg* const p_reg, uint8_t* const buf)
 
 	/// @todo check that FPU is enabled
 	/// Find temporary GP register
-	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 	assert(p_wrk_reg);
 
 	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
@@ -2412,7 +1885,7 @@ reg_f__set(reg* const p_reg, uint8_t* const buf)
 						/// Correct pc by jump 2 instructions back and get previous command result.
 						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
 						if ( advance_pc_counter ) {
-							(void)exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+							(void)exec__step(p_target, RV_JAL(0, -advance_pc_counter));
 						}
 						advance_pc_counter = 0;
 						assert(p_reg->valid);
@@ -2478,7 +1951,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 		return error_code__get_and_clear(p_target);
 	}
 
-	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 	assert(p_wrk_reg);
 
 	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
@@ -2508,7 +1981,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 						/// Correct pc by jump 2 instructions back and get previous command result.
 						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
 						if ( advance_pc_counter ) {
-							(void)exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+							(void)exec__step(p_target, RV_JAL(0, -advance_pc_counter));
 						}
 						advance_pc_counter = 0;
 						assert(p_reg->valid);
@@ -3319,7 +2792,7 @@ static int sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, 
 		}
 
 		/// Reserve work register
-		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, zero);
+		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 		assert(p_wrk_reg);
 
 		uint32_t const pc_sample_1 = get_PC_to_check(p_target);
@@ -3368,7 +2841,7 @@ static int sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, 
 
 					/// get data from csr and jump back to correct pc
 					assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-					uint32_t const value = exec__step(p_target, RV_JAL(zero, -advance_pc_counter));
+					uint32_t const value = exec__step(p_target, RV_JAL(0, -advance_pc_counter));
 					advance_pc_counter = 0;
 					if ( error_code__get(p_target) != ERROR_OK ) {
 						break;
@@ -3434,7 +2907,7 @@ static int sc_rv32i__write_phys_memory(target* const p_target, uint32_t address,
 
 	uint32_t const pc_sample_1 = get_PC_to_check(p_target);
 	/// Reserve work register
-	reg* const p_addr_reg = prepare_temporary_GP_register(p_target, zero);
+	reg* const p_addr_reg = prepare_temporary_GP_register(p_target, 0);
 	assert(p_addr_reg);
 	reg* const p_data_reg = prepare_temporary_GP_register(p_target, p_addr_reg->number);
 	assert(p_data_reg);
@@ -3527,7 +3000,7 @@ static int sc_rv32i__write_phys_memory(target* const p_target, uint32_t address,
 							uint32_t const step_back = advance_pc_counter > max_pc_offset ? max_pc_offset : advance_pc_counter;
 							advance_pc_counter -= step_back;
 							assert(advance_pc_counter % NUM_BITS_TO_SIZE(XLEN) == 0);
-							uint32_t const OP_correct_pc = RV_JAL(zero, -(int)(step_back));
+							uint32_t const OP_correct_pc = RV_JAL(0, -(int)(step_back));
 							scan_field const instr_pc_correct_fields[2] = {{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = (uint8_t const*)(&OP_correct_pc)}, instr_scan_opcode_field};
 							LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
 								instr_pc_correct_fields[0].num_bits, buf_get_u32(instr_pc_correct_fields[0].out_value, 0, instr_pc_correct_fields[0].num_bits),
@@ -3564,7 +3037,7 @@ static int sc_rv32i__write_phys_memory(target* const p_target, uint32_t address,
 							uint32_t const step_back = advance_pc_counter > max_pc_offset ? max_pc_offset : advance_pc_counter;
 							advance_pc_counter -= step_back;
 							assert(advance_pc_counter % NUM_BITS_TO_SIZE(XLEN) == 0);
-							uint32_t const OP_correct_pc = RV_JAL(zero, -(int)(step_back));
+							uint32_t const OP_correct_pc = RV_JAL(0, -(int)(step_back));
 							(void)exec__step(p_target, OP_correct_pc);
 						}
 					}
