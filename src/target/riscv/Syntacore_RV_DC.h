@@ -252,17 +252,7 @@ struct target;
 uint32_t sc_rv32_IDCODE_get(struct target const* const p_target);
 uint32_t sc_rv32_DBG_ID_get(struct target const* const p_target);
 uint32_t sc_rv32_BLD_ID_get(struct target const* const p_target);
-uint32_t sc_rv32_DBG_STATUS_get(struct target const* const p_target);
 uint32_t sc_rv32_DAP_CMD_scan(struct target const* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT);
-/**
-@brief Try to unlock debug controller
-
-@warning Clear previous error_code and set ERROR_TARGET_FAILURE if unlock was unsuccsesful
-@return lock context
-*/
-uint32_t sc_rv32_DC__unlock(struct target const* const p_target);
-void sc_rv32_HART0_clear_sticky(struct target* const p_target);
-void sc_rv32_CORE_clear_errors(struct target* const p_target);
 void sc_rv32_DAP_CTRL_REG_set(struct target const* const p_target, enum type_dbgc_unit_id_e const dap_unit, uint8_t const dap_group);
 uint32_t sc_rv32_HART_REGTRANS_read(struct target const* const p_target, enum type_dbgc_regblock_hart_e const index);
 void sc_rv32_HART_REGTRANS_write_and_check(struct target const* const p_target, enum type_dbgc_regblock_hart_e const index, uint32_t const set_value);

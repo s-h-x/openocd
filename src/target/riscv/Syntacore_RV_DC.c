@@ -132,7 +132,7 @@ uint32_t sc_rv32_BLD_ID_get(struct target const* const p_target)
 	STATIC_ASSERT(TAP_LEN_BLD_ID == TAP_LEN_RO_32);
 	return read_only_32_bits_regs(p_target, TAP_INSTR_BLD_ID);
 }
-uint32_t sc_rv32_DBG_STATUS_get(struct target const* const p_target)
+static uint32_t sc_rv32_DBG_STATUS_get(struct target const* const p_target)
 {
 	assert(p_target);
 	STATIC_ASSERT(TAP_LEN_DBG_STATUS == TAP_LEN_RO_32);
@@ -293,7 +293,13 @@ uint32_t sc_rv32_DAP_CMD_scan(struct target const* const p_target, uint8_t const
 	error_code__prepend(p_target, old_err_code);
 	return DBG_DATA;
 }
-uint32_t sc_rv32_DC__unlock(struct target const* const p_target)
+/**
+@brief Try to unlock debug controller
+
+@warning Clear previous error_code and set ERROR_TARGET_FAILURE if unlock was unsuccessful
+@return lock context
+*/
+static uint32_t sc_rv32_DC__unlock(struct target const* const p_target)
 {
 	assert(p_target);
 	LOG_WARNING("========= Try to unlock ==============");
@@ -362,7 +368,7 @@ uint32_t sc_rv32_DC__unlock(struct target const* const p_target)
 	LOG_DEBUG("%s context=0x%08X, status=0x%08X", ok ? "Unlock succsessful!" : "Unlock unsuccsessful!", lock_context, status);
 	return lock_context;
 }
-void sc_rv32_HART0_clear_sticky(struct target* const p_target)
+static void sc_rv32_HART0_clear_sticky(struct target* const p_target)
 {
 	LOG_DEBUG("========= Try to clear HART0 errors ============");
 	assert(p_target);
@@ -410,7 +416,7 @@ static uint8_t REGTRANS_scan_type(bool const write, uint8_t const index)
 	assert((index & ~LOW_BITS_MASK(3)) == 0);
 	return MAKE_TYPE_FIELD(uint8_t, !!write, 3, 3) | MAKE_TYPE_FIELD(uint8_t, index, 0, 2);
 }
-void sc_rv32_CORE_clear_errors(struct target* const p_target)
+static void sc_rv32_CORE_clear_errors(struct target* const p_target)
 {
 	LOG_DEBUG("========= Try to clear core errors ============");
 	assert(p_target);
