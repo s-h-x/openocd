@@ -10,8 +10,9 @@ Syntacore RISC-V target
 #include "config.h"
 #endif
 
-#include "target/riscv/Syntacore_RV_DC.h"
-#include "target/riscv/riscv.h"
+#include "sc_rv32i__Arch.h"
+#include "Syntacore_RV_DC.h"
+#include "riscv.h"
 #include "target/target.h"
 #include "target/target_type.h"
 #include "target/breakpoints.h"
@@ -143,10 +144,9 @@ static inline void check_PC_unchanged(target const* const p_target, uint32_t con
 	}
 }
 
-static inline int
-HART_status_bits_to_target_state(target const* const p_target, uint32_t const status)
+static inline enum target_state
+HART_status_bits_to_target_state(uint32_t const status)
 {
-	assert(p_target);
 	static uint32_t const err_bits =
 		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_BIT) |
 		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_BIT) |
@@ -155,9 +155,7 @@ HART_status_bits_to_target_state(target const* const p_target, uint32_t const st
 		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_DBGCMD_NACK_BIT) |
 		BIT_NUM_TO_MASK(DBGC_HART_HDSR_LOCK_STKY_BIT);
 
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return TARGET_UNKNOWN;
-	} else if ( status & err_bits ) {
+	if ( status & err_bits ) {
 		return TARGET_UNKNOWN;
 	} else if ( status & BIT_NUM_TO_MASK(DBGC_HART_HDSR_RST_BIT) ) {
 		return TARGET_RESET;
@@ -284,7 +282,7 @@ update_status(target* const p_target)
 	assert(p_target->coreid == 0);
 
 	uint32_t const HART_status = HART_REGTRANS_read(p_target, DBGC_HART_REGS_DBG_STS);
-	enum target_state const new_state = HART_status_bits_to_target_state(p_target, HART_status);
+	enum target_state const new_state = ERROR_OK == error_code__get(p_target) ? HART_status_bits_to_target_state(HART_status) : TARGET_UNKNOWN;
 	enum target_state const old_state = p_target->state;
 	if ( new_state != old_state ) {
 		p_target->state = new_state;
