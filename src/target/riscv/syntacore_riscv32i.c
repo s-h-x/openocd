@@ -815,7 +815,6 @@ static struct reg_cache* reg_cache__section_create(char const* name, struct reg 
 }
 static void set_DEMODE_ENBL(struct target* const p_target, uint32_t const set_value)
 {
-	assert(p_target);
 	sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DMODE_ENBL, set_value);
 }
 static int resume_common(struct target* const p_target, uint32_t dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
@@ -1131,14 +1130,13 @@ static struct reg const def_CSR_regs_array[] = {
 static void sc_rv32_init_regs_cache(struct target* const p_target)
 {
 	assert(p_target);
+#if 0  // TODO check
+	assert(!p_target->reg_cache);
+#endif
 	struct reg_cache* p_reg_cache_last = p_target->reg_cache = reg_cache__section_create(def_GP_regs_name, def_GP_regs_array, ARRAY_LEN(def_GP_regs_array), p_target);
-	assert(p_reg_cache_last);
 	p_reg_cache_last = p_reg_cache_last->next = reg_cache__section_create(def_FP_regs_name, def_FP_regs_array, ARRAY_LEN(def_FP_regs_array), p_target);
-	assert(p_reg_cache_last);
 	p_reg_cache_last = p_reg_cache_last->next = reg_cache__section_create(def_CSR_regs_name, def_CSR_regs_array, ARRAY_LEN(def_CSR_regs_array), p_target);
-	assert(p_reg_cache_last);
 }
-
 static int sc_rv32i__init_target(struct command_context *cmd_ctx, struct target* const p_target)
 {
 	sc_rv32_init_regs_cache(p_target);
@@ -1863,7 +1861,6 @@ static int sc_rv32i__remove_breakpoint(struct target* const p_target, struct bre
 	}
 	return error_code__get_and_clear(p_target);
 }
-
 static size_t total_number_of_regs(struct reg_cache const *p_reg_cache)
 {
 	size_t total = 0;
