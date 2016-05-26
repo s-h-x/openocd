@@ -239,7 +239,7 @@ enum RISCV_CSR
 	CSR_mfromhost = 0x781u,
 	///@}
 
-	/// Debug CSR number
+	/// Debug controller CSR
 	/// privilege: MRW
 	CSR_DBG_SCRATCH = 0x788u,
 };
