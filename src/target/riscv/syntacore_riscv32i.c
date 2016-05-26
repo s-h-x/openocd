@@ -156,58 +156,70 @@ static void reg_x__operation_conditions_check(struct reg const* const p_reg)
 	}
 	sc_rv32_check_that_target_halted(p_target);
 }
+static void sc_rv32_check_PC_value(struct target const* const p_target, uint32_t const pc_sample_1)
+{
+	assert(p_target);
+	struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	assert(p_arch);
+	if ( p_arch->use_check_pc_unchanged ) {
+		uint32_t const pc_sample_2 = sc_rv32_get_PC(p_target);
+		if ( pc_sample_2 != pc_sample_1 ) {
+			LOG_ERROR("pc changed from 0x%08X to 0x%08X", pc_sample_1, pc_sample_2);
+			error_code__update(p_target, ERROR_TARGET_FAILURE);
+		}
+	}
+}
 static int reg_x__get(struct reg* const p_reg)
 {
 	assert(p_reg);
 	reg_x__operation_conditions_check(p_reg);
 	struct target* p_target = p_reg->arch_info;
 	assert(p_target);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		return error_code__get_and_clear(p_target);
-	}
+	if ( ERROR_OK == error_code__get(p_target) ) {
+		if ( p_reg->valid ) {
+			// register cache already valid
+			if ( p_reg->dirty ) {
+				LOG_WARNING("Try re-read dirty cache register %s", p_reg->name);
+			} else {
+				LOG_DEBUG("Try re-read cache register %s", p_reg->name);
+			}
+		}
+		uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
+		if ( ERROR_OK == error_code__get(p_target) ) {
+			struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			assert(p_arch);
+			size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
+			if ( p_arch->use_pc_advmt_dsbl_bit ) {
+				sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
+			}
+			if ( ERROR_OK == error_code__get(p_target) ) {
+				sc_rv32_EXEC__setup(p_target);
+				int advance_pc_counter = 0;
+				if ( error_code__get(p_target) != ERROR_OK ) {
+					return error_code__get_and_clear(p_target);
+				}
+				// Save p_reg->number register to CSR_DBG_SCRATCH CSR
+				(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_reg->number));
+				advance_pc_counter += instr_step;
+				if ( error_code__get(p_target) != ERROR_OK ) {
+					return error_code__get_and_clear(p_target);
+				}
 
-	if ( p_reg->valid ) {
-		// register cache already valid
-		if ( p_reg->dirty ) {
-			LOG_WARNING("Try re-read dirty cache register %s", p_reg->name);
-		} else {
-			LOG_DEBUG("Try re-read cache register %s", p_reg->name);
+				// Exec jump back to previous instruction and get saved into CSR_DBG_SCRATCH CSR value
+				assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
+				uint32_t const value = sc_rv32_EXEC__step(p_target, RV_JAL(0, -advance_pc_counter));
+				advance_pc_counter = 0;
+				if ( error_code__get(p_target) != ERROR_OK ) {
+					return error_code__get_and_clear(p_target);
+				}
+				reg__set_valid_value_to_cache(p_reg, value);
+				if ( p_arch->use_pc_advmt_dsbl_bit ) {
+					sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
+				}
+			}
+			sc_rv32_check_PC_value(p_target, pc_sample_1);
 		}
 	}
-
-	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
-	if ( error_code__get(p_target) == ERROR_OK ) {
-		struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
-		assert(p_arch);
-		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
-		if ( p_arch->use_pc_advmt_dsbl_bit ) {
-			sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
-		}
-		sc_rv32_EXEC__setup(p_target);
-		int advance_pc_counter = 0;
-		if ( error_code__get(p_target) != ERROR_OK ) {
-			return error_code__get_and_clear(p_target);
-		}
-		// Save p_reg->number register to CSR_DBG_SCRATCH CSR
-		(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_reg->number));
-		advance_pc_counter += instr_step;
-		if ( error_code__get(p_target) != ERROR_OK ) {
-			return error_code__get_and_clear(p_target);
-		}
-
-		// Exec jump back to previous instruction and get saved into CSR_DBG_SCRATCH CSR value
-		assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-		uint32_t const value = sc_rv32_EXEC__step(p_target, RV_JAL(0, -advance_pc_counter));
-		advance_pc_counter = 0;
-		if ( error_code__get(p_target) != ERROR_OK ) {
-			return error_code__get_and_clear(p_target);
-		}
-		reg__set_valid_value_to_cache(p_reg, value);
-		if ( p_arch->use_pc_advmt_dsbl_bit ) {
-			sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
-		}
-	}
-	sc_rv32_check_PC_value(p_target, pc_sample_1);
 	return error_code__get_and_clear(p_target);
 }
 static int reg_x__store(struct reg* const p_reg)
@@ -811,7 +823,7 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 				reg_cache__chain_invalidate(p_target->reg_cache);
 				set_DEMODE_ENBL(p_target, dmode_enabled | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT));
 				sc_rv32_DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
-				(void)sc_rv32_DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
+				sc_rv32_DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS), NULL);
 				error_code__update(p_target, target_add_breakpoint(p_target, &next_bkp));
 				if ( dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT) ) {
 					// then single step already done
@@ -846,7 +858,7 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 		return error_code__get_and_clear(p_target);
 	}
 
-	(void)sc_rv32_DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
+	sc_rv32_DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS), NULL);
 	if ( error_code__get(p_target) != ERROR_OK ) {
 		return error_code__get_and_clear(p_target);
 	}
@@ -866,41 +878,38 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 static int reset__set(struct target* const p_target, bool const active)
 {
 	assert(p_target);
-	sc_rv32_DAP_CTRL_REG_set(p_target, DBGC_UNIT_ID_CORE, DBGC_FGRP_CORE_REGTRANS);
+	uint32_t const get_old_value1 = sc_rv32_core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
 	if ( error_code__get(p_target) == ERROR_OK ) {
-		uint32_t const get_old_value1 = sc_rv32_core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
+		static uint32_t const bit_mask = BIT_NUM_TO_MASK(DBGC_CORE_CDCR_HART0_RST_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDCR_RST_BIT);
+		uint32_t const set_value = (get_old_value1 & ~bit_mask) | (active ? bit_mask : 0u);
+		sc_rv32_CORE_REGTRANS_write(p_target, DBGC_CORE_REGS_DBG_CTRL, set_value);
 		if ( error_code__get(p_target) == ERROR_OK ) {
-			static uint32_t const bit_mask = BIT_NUM_TO_MASK(DBGC_CORE_CDCR_HART0_RST_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDCR_RST_BIT);
-			uint32_t const set_value = (get_old_value1 & ~bit_mask) | (active ? bit_mask : 0u);
-			sc_rv32_CORE_REGTRANS_write(p_target, DBGC_CORE_REGS_DBG_CTRL, set_value);
-			if ( error_code__get(p_target) == ERROR_OK ) {
-				struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
-				assert(p_arch);
-				if ( p_arch->use_verify_core_regtrans_write ) {
-					uint32_t const get_new_value2 = sc_rv32_core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
-					if ( error_code__get(p_target) != ERROR_OK ) {
-						return error_code__get_and_clear(p_target);
-					}
-					if ( (get_new_value2 & bit_mask) != (set_value & bit_mask) ) {
-						LOG_ERROR("Fail to verify write: set 0x%08X, but get 0x%08X", set_value, get_new_value2);
-						error_code__update(p_target, ERROR_TARGET_FAILURE);
-						return error_code__get_and_clear(p_target);
-					}
+			struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			assert(p_arch);
+			if ( p_arch->use_verify_core_regtrans_write ) {
+				uint32_t const get_new_value2 = sc_rv32_core_REGTRANS_read(p_target, DBGC_CORE_REGS_DBG_CTRL);
+				if ( error_code__get(p_target) != ERROR_OK ) {
+					return error_code__get_and_clear(p_target);
 				}
-				LOG_DEBUG("update_status");
-				sc_rv32_update_status(p_target);
-				if ( error_code__get(p_target) == ERROR_OK ) {
-					if ( active ) {
-						if ( p_target->state != TARGET_RESET ) {
-							/// issue error if we are still running
-							LOG_ERROR("Target is not resetting after reset assert");
-							error_code__update(p_target, ERROR_TARGET_FAILURE);
-						}
-					} else {
-						if ( p_target->state == TARGET_RESET ) {
-							LOG_ERROR("Target is still in reset after reset deassert");
-							error_code__update(p_target, ERROR_TARGET_FAILURE);
-						}
+				if ( (get_new_value2 & bit_mask) != (set_value & bit_mask) ) {
+					LOG_ERROR("Fail to verify write: set 0x%08X, but get 0x%08X", set_value, get_new_value2);
+					error_code__update(p_target, ERROR_TARGET_FAILURE);
+					return error_code__get_and_clear(p_target);
+				}
+			}
+			LOG_DEBUG("update_status");
+			sc_rv32_update_status(p_target);
+			if ( error_code__get(p_target) == ERROR_OK ) {
+				if ( active ) {
+					if ( p_target->state != TARGET_RESET ) {
+						/// issue error if we are still running
+						LOG_ERROR("Target is not resetting after reset assert");
+						error_code__update(p_target, ERROR_TARGET_FAILURE);
+					}
+				} else {
+					if ( p_target->state == TARGET_RESET ) {
+						LOG_ERROR("Target is still in reset after reset deassert");
+						error_code__update(p_target, ERROR_TARGET_FAILURE);
 					}
 				}
 			}
@@ -1198,7 +1207,7 @@ static int sc_rv32i__halt(struct target* const p_target)
 			return error_code__get_and_clear(p_target);
 		}
 
-		(void)sc_rv32_DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_HALT) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
+		sc_rv32_DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_HALT) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS), NULL);
 		if ( error_code__get(p_target) != ERROR_OK ) {
 			return error_code__get_and_clear(p_target);
 		}
@@ -1523,7 +1532,7 @@ static int sc_rv32i__read_phys_memory(struct target* const p_target, uint32_t ad
 					}
 
 					/// store read data to buffer
-					buf_set_u32(buffer, 0, 8 * size, value);
+					buf_set_u32(buffer, 0, CHAR_BIT * size, value);
 
 					/// advance src/dst pointers
 					address += size;
@@ -1637,7 +1646,7 @@ static int sc_rv32i__write_phys_memory(struct target* const p_target, uint32_t a
 					uint8_t instr_buf[ARRAY_LEN(instructions)][sizeof(uint32_t)];
 					struct scan_field instr_fields[ARRAY_LEN(instructions)][TAP_NUM_FIELDS_DAP_CMD];
 					for ( size_t i = 0; i < ARRAY_LEN(instructions); ++i ) {
-						buf_set_u32(instr_buf[i], 0, 32, instructions[i]);
+						buf_set_u32(instr_buf[i], 0, TAP_LEN_DAP_CMD_OPCODE_EXT, instructions[i]);
 						struct scan_field const fld = {.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = instr_buf[i]};
 						instr_fields[i][0] = fld;
 						instr_fields[i][1] = instr_scan_opcode_field;
@@ -1678,7 +1687,7 @@ static int sc_rv32i__write_phys_memory(struct target* const p_target, uint32_t a
 							advance_pc_counter -= step_back;
 							assert(advance_pc_counter % NUM_BITS_TO_SIZE(XLEN) == 0);
 							uint8_t OP_correct_pc[4];
-							buf_set_u32(OP_correct_pc, 0, 32, RV_JAL(0, -(int)(step_back)));
+							buf_set_u32(OP_correct_pc, 0, TAP_LEN_DAP_CMD_OPCODE_EXT, RV_JAL(0, -(int)(step_back)));
 							struct scan_field const instr_pc_correct_fields[2] = {{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = OP_correct_pc}, instr_scan_opcode_field};
 							LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
 								instr_pc_correct_fields[0].num_bits, buf_get_u32(instr_pc_correct_fields[0].out_value, 0, instr_pc_correct_fields[0].num_bits),
@@ -1695,7 +1704,7 @@ static int sc_rv32i__write_phys_memory(struct target* const p_target, uint32_t a
 				} else {
 					while ( ERROR_OK == error_code__get(p_target) && count-- ) {
 						/// Set data to CSR
-						sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(buffer, 0, 8 * size));
+						sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(buffer, 0, CHAR_BIT * size));
 						if ( error_code__get(p_target) != ERROR_OK ) {
 							break;
 						}
@@ -1804,8 +1813,10 @@ static int sc_rv32i__remove_breakpoint(struct target* const p_target, struct bre
 		sc_rv32_check_that_target_halted(p_target);
 		if ( error_code__get(p_target) == ERROR_OK ) {
 			assert(p_breakpoint->orig_instr);
-			LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)", p_breakpoint->address, p_breakpoint->length,
-				p_breakpoint->length == 4 ? buf_get_u32(p_breakpoint->orig_instr, 0, 32) : buf_get_u32(p_breakpoint->orig_instr, 0, 16));
+			LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)",
+				p_breakpoint->address,
+				p_breakpoint->length,
+				buf_get_u32(p_breakpoint->orig_instr, 0, p_breakpoint->length * CHAR_BIT));
 			write_memory_space(p_target, p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true);
 			if ( ERROR_OK == error_code__get(p_target) ) {
 				p_breakpoint->set = 0;

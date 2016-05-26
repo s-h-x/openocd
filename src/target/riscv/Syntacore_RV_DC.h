@@ -258,7 +258,7 @@ struct target;
 uint32_t sc_rv32_IDCODE_get(struct target const* const p_target);
 uint32_t sc_rv32_DBG_ID_get(struct target const* const p_target);
 uint32_t sc_rv32_BLD_ID_get(struct target const* const p_target);
-uint32_t sc_rv32_DAP_CMD_scan(struct target const* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT);
+void sc_rv32_DAP_CMD_scan(struct target const* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT, uint32_t* p_result);
 void sc_rv32_DAP_CTRL_REG_set(struct target const* const p_target, enum type_dbgc_unit_id_e const dap_unit, uint8_t const dap_group);
 uint32_t sc_rv32_HART_REGTRANS_read(struct target const* const p_target, enum type_dbgc_regblock_hart_e const index);
 void sc_rv32_HART_REGTRANS_write_and_check(struct target const* const p_target, enum type_dbgc_regblock_hart_e const index, uint32_t const set_value);
@@ -270,7 +270,6 @@ uint32_t sc_rv32_EXEC__step(struct target const* const p_target, uint32_t instru
 /// @}
 
 uint32_t sc_rv32_get_PC(struct target const* const p_target);
-void sc_rv32_check_PC_value(struct target const* const p_target, uint32_t const pc_sample_1);
 void sc_rv32_update_status(struct target* const p_target);
 void sc_rv32_check_that_target_halted(struct target* const p_target);
 
