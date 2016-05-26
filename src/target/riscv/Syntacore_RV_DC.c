@@ -15,6 +15,7 @@ Syntacore RISC-V target
 #include "jtag/jtag.h"
 #include "static_assert.h"
 
+#include <limits.h>
 #include <assert.h>
 
 #ifndef NUM_BITS_TO_SIZE
@@ -254,30 +255,24 @@ uint32_t sc_rv32_DAP_CMD_scan(struct target const* const p_target, uint8_t const
 		error_code__prepend(p_target, old_err_code);
 		return 0xBADC0DE2u;
 	}
-	// Output fields
-	uint8_t const dap_opcode = DAP_OPCODE;
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE) == sizeof dap_opcode);
-
-	uint32_t const dap_opcode_ext = DAP_OPCODE_EXT;
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE_EXT) == sizeof dap_opcode_ext);
 
 	// Input fields
 	uint8_t DAP_OPSTATUS = 0;
 	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE) == sizeof DAP_OPSTATUS);
 
-	uint32_t DBG_DATA = 0;
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE_EXT) == sizeof DBG_DATA);
-
+	uint8_t dbg_data[NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE_EXT)] = {};
+	uint8_t dap_opcode_ext[NUM_BITS_TO_SIZE(TAP_LEN_DAP_CMD_OPCODE_EXT)] = {};
+	buf_set_u32(dap_opcode_ext, 0, 32, DAP_OPCODE_EXT);
 	struct scan_field const fields[2] = {
 		[0] = {
 		.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,
-		.out_value = (uint8_t const*)&dap_opcode_ext,
-		.in_value = (uint8_t*)&DBG_DATA,
+		.out_value = dap_opcode_ext,
+		.in_value = dbg_data,
 	},
 	[1] =
 	{
 		.num_bits = TAP_LEN_DAP_CMD_OPCODE,
-		.out_value = &dap_opcode,
+		.out_value = &DAP_OPCODE,
 		.in_value = &DAP_OPSTATUS,
 		.check_value = &DAP_OPSTATUS_GOOD,
 		.check_mask = &DAP_STATUS_MASK,
@@ -288,7 +283,7 @@ uint32_t sc_rv32_DAP_CMD_scan(struct target const* const p_target, uint8_t const
 	jtag_add_dr_scan_check(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
 	// enforse jtag_execute_queue() to get values
 	error_code__update(p_target, jtag_execute_queue());
-	LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X ; # %08X %1X", p_target->cmd_name, fields[0].num_bits, dap_opcode_ext, fields[1].num_bits, dap_opcode, DBG_DATA, DAP_OPSTATUS);
+	LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X ; # %08X %1X", p_target->cmd_name, fields[0].num_bits, DAP_OPCODE_EXT, fields[1].num_bits, DAP_OPCODE, buf_get_u32(dbg_data, 0, 32), DAP_OPSTATUS);
 	if ( error_code__get(p_target) == ERROR_OK ) {
 		if ( (DAP_OPSTATUS & DAP_OPSTATUS_MASK) != DAP_OPSTATUS_OK ) {
 			LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
@@ -297,7 +292,7 @@ uint32_t sc_rv32_DAP_CMD_scan(struct target const* const p_target, uint8_t const
 	}
 
 	error_code__prepend(p_target, old_err_code);
-	return DBG_DATA;
+	return buf_get_u32(dbg_data, 0, 32);
 }
 /**
 @brief Try to unlock debug controller
@@ -312,8 +307,6 @@ static uint32_t sc_rv32_DC__unlock(struct target const* const p_target)
 
 	struct sc_rv32i__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
-
-	uint32_t lock_context = 0xBADC0DEAu;
 
 	assert(p_target->tap);
 	assert(p_target->tap->ir_length == TAP_IR_LEN);
@@ -342,17 +335,18 @@ static uint32_t sc_rv32_DC__unlock(struct target const* const p_target)
 		jtag_add_ir_scan(p_target->tap, &ir_field_DAP_CMD, TAP_IDLE);
 	}
 
+	uint8_t lock_context_buf[4] = {};
 	{
-		static uint32_t const dap_opcode_ext_UNLOCK = 0xF0F0A5A5u;
+		static uint8_t const dap_opcode_ext_UNLOCK[4] = {};
 		static uint8_t const dap_opcode_UNLOCK = DBGC_DAP_OPCODE_DBGCMD_UNLOCK;
 		struct scan_field const dr_fields_UNLOCK[2] = {
-			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = (uint8_t const*)(&dap_opcode_ext_UNLOCK),.in_value = (uint8_t*)(&lock_context)},
+			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext_UNLOCK, .in_value = lock_context_buf},
 			{.num_bits = TAP_LEN_DAP_CMD_OPCODE,.out_value = &dap_opcode_UNLOCK}
 		};
-		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name, dr_fields_UNLOCK[0].num_bits, dap_opcode_ext_UNLOCK, dr_fields_UNLOCK[1].num_bits, dap_opcode_UNLOCK);
-		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(dr_fields_UNLOCK), dr_fields_UNLOCK, TAP_IDLE);
-		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name, dr_fields_UNLOCK[0].num_bits, dap_opcode_ext_UNLOCK, dr_fields_UNLOCK[1].num_bits, dap_opcode_UNLOCK);
-		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(dr_fields_UNLOCK), dr_fields_UNLOCK, TAP_IDLE);
+		for ( int i = 0; i < 2; ++i ) {
+			LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name, dr_fields_UNLOCK[0].num_bits, buf_get_u32(dap_opcode_ext_UNLOCK, 0, 32), dr_fields_UNLOCK[1].num_bits, dap_opcode_UNLOCK);
+			jtag_add_dr_scan(p_target->tap, ARRAY_LEN(dr_fields_UNLOCK), dr_fields_UNLOCK, TAP_IDLE);
+		}
 	}
 
 	{
@@ -362,17 +356,17 @@ static uint32_t sc_rv32_DC__unlock(struct target const* const p_target)
 		jtag_add_ir_scan(p_target->tap, &ir_field_DBG_STATUS, TAP_IDLE);
 	}
 
-	uint32_t status = 0xBADC0DEBu;
+	uint8_t status_buffer[4] = {};
 	{
-		struct scan_field const dr_field_DBG_STATUS = {.num_bits = TAP_LEN_DBG_STATUS,.out_value = (uint8_t const*)(&status),.in_value = (uint8_t*)(&status)};
-		LOG_DEBUG("drscan %s %d 0x%08X", p_target->cmd_name, dr_field_DBG_STATUS.num_bits, status);
+		struct scan_field const dr_field_DBG_STATUS = {.num_bits = TAP_LEN_DBG_STATUS,.out_value = status_buffer, .in_value = status_buffer};
+		LOG_DEBUG("drscan %s %d 0x%08X", p_target->cmd_name, dr_field_DBG_STATUS.num_bits, buf_get_u32(status_buffer, 0, 32));
 		jtag_add_dr_scan(p_target->tap, 1, &dr_field_DBG_STATUS, TAP_IDLE);
 	}
 
 	// enforse jtag_execute_queue() to get values
-	bool const ok = (error_code__update(p_target, jtag_execute_queue()) == ERROR_OK) && ((status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) == 0);
-	LOG_DEBUG("%s context=0x%08X, status=0x%08X", ok ? "Unlock succsessful!" : "Unlock unsuccsessful!", lock_context, status);
-	return lock_context;
+	bool const ok = (error_code__update(p_target, jtag_execute_queue()) == ERROR_OK) && ((buf_get_u32(status_buffer, 0, 32) & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) == 0);
+	LOG_DEBUG("%s context=0x%08X, status=0x%08X", ok ? "Unlock succsessful!" : "Unlock unsuccsessful!", buf_get_u32(lock_context_buf, 0, 32), buf_get_u32(status_buffer, 0, 32));
+	return buf_get_u32(lock_context_buf, 0, 32);
 }
 static void sc_rv32_HART0_clear_sticky(struct target* const p_target)
 {
@@ -408,10 +402,11 @@ static void sc_rv32_HART0_clear_sticky(struct target* const p_target)
 	}
 
 	{
-		uint32_t const dap_opcode_ext = BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS);
+		uint8_t dap_opcode_ext[(TAP_LEN_DAP_CMD_OPCODE_EXT + CHAR_BIT - 1) / CHAR_BIT];
+		buf_set_u32(dap_opcode_ext, 0, TAP_LEN_DAP_CMD_OPCODE_EXT, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS));
 		uint8_t const dap_opcode = DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL;
 		struct scan_field const fields[2] = {
-			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = (uint8_t const*)&dap_opcode_ext},
+			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext},
 			{.num_bits = TAP_LEN_DAP_CMD_OPCODE,.out_value = &dap_opcode}
 		};
 		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
@@ -458,14 +453,15 @@ static void sc_rv32_CORE_clear_errors(struct target* const p_target)
 	}
 
 	{
-		uint32_t const dap_opcode_ext = 0xFFFFFFFF;
+		uint8_t dap_opcode_ext[(TAP_LEN_DAP_CMD_OPCODE_EXT + CHAR_BIT - 1) / CHAR_BIT];
+		buf_set_u32(dap_opcode_ext, 0, TAP_LEN_DAP_CMD_OPCODE_EXT, 0xFFFFFFFF);
 		uint8_t const dap_opcode = REGTRANS_scan_type(true, DBGC_CORE_REGS_DBG_STS);
 		struct scan_field const fields[2] = {
-			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = (uint8_t const*)&dap_opcode_ext},
+			{.num_bits = TAP_LEN_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext},
 			{.num_bits = TAP_LEN_DAP_CMD_OPCODE,.out_value = &dap_opcode}
 		};
 		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
-		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name, fields[0].num_bits, dap_opcode_ext, fields[1].num_bits, dap_opcode);
+		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name, fields[0].num_bits, buf_get_u32(dap_opcode_ext, 0, 32), fields[1].num_bits, dap_opcode);
 	}
 }
 void sc_rv32_DAP_CTRL_REG_set(struct target const* const p_target, enum type_dbgc_unit_id_e const dap_unit, uint8_t const dap_group)
@@ -595,7 +591,7 @@ uint32_t sc_rv32_get_PC(struct target const* const p_target)
 	assert(p_target);
 	struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	if ( p_arch->use_check_pc_unchanged && p_arch->use_pc_from_pc_sample ) {
+	if ( p_arch->use_check_pc_unchanged ) {
 		return sc_rv32_HART_REGTRANS_read(p_target, DBGC_HART_REGS_PC_SAMPLE);
 	} else {
 		return 0xFFFFFFFFu;
@@ -606,7 +602,7 @@ void sc_rv32_check_PC_value(struct target const* const p_target, uint32_t const 
 	assert(p_target);
 	struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	if ( p_arch->use_check_pc_unchanged && p_arch->use_pc_from_pc_sample ) {
+	if ( p_arch->use_check_pc_unchanged ) {
 		uint32_t const pc_sample_2 = sc_rv32_get_PC(p_target);
 		if ( pc_sample_2 != pc_sample_1 ) {
 			LOG_ERROR("pc changed from 0x%08X to 0x%08X", pc_sample_1, pc_sample_2);

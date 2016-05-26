@@ -17,11 +17,9 @@ struct sc_rv32i__Arch
 	bool use_ir_select_cache;
 	bool use_dap_control_cache;
 	bool use_verify_dap_control;
-	bool use_pc_from_pc_sample;
 	bool use_check_pc_unchanged;
 	bool use_verify_hart_regtrans_write;
 	bool use_verify_core_regtrans_write;
-	bool use_resume_at_sw_breakpoint_emulates_saved_instruction;
 	bool use_pc_advmt_dsbl_bit;
 	bool use_queuing_for_dr_scans;
 };
