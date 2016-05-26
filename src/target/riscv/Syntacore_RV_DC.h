@@ -1,3 +1,9 @@
+/** @file
+
+Syntacore RISC-V target
+
+@copyright Syntacore
+*/
 #ifndef SYNTACORE_RV_DC_H_
 #define SYNTACORE_RV_DC_H_
 

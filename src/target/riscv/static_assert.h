@@ -1,3 +1,7 @@
+/** @file
+
+@copyright Syntacore
+*/
 #ifndef STATIC_ASSERT_H_
 #define STATIC_ASSERT_H_
 

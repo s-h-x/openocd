@@ -1,3 +1,9 @@
+/** @file
+
+Syntacore RISC-V target
+
+@copyright Syntacore
+*/
 #include "riscv.h"
 #include <assert.h>
 

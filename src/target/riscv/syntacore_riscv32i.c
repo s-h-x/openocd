@@ -1,9 +1,7 @@
-﻿/**
-@file
+﻿/** @file
 
 Syntacore RISC-V target
 
-@author Pavel S. Smirnov
 @copyright Syntacore
 */
 #ifdef HAVE_CONFIG_H

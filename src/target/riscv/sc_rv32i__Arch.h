@@ -1,3 +1,9 @@
+/** @file
+
+Syntacore RISC-V target
+
+@copyright Syntacore
+*/
 #ifndef SC_RV32I__ARCH_H_
 #define SC_RV32I__ARCH_H_
 
