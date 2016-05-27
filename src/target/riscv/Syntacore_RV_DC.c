@@ -14,19 +14,12 @@ Syntacore RISC-V target
 #include "helper/log.h"
 #include "jtag/jtag.h"
 #include "static_assert.h"
+#include "sc_macro.h"
 
 #include <limits.h>
 #include <assert.h>
 
 STATIC_ASSERT(CHAR_BIT == 8);
-#ifndef NUM_BITS_TO_SIZE
-#define NUM_BITS_TO_SIZE(num_bits) ( ( (size_t)(num_bits) + (CHAR_BIT - 1) ) / CHAR_BIT )
-#endif
-#ifndef ARRAY_LEN
-#define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
-#endif
-#define LOW_BITS_MASK(n) (~(~0 << (n)))
-#define MAKE_TYPE_FIELD(TYPE, bits, first_bit, last_bit)     ((((TYPE)(bits)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
 
 /// IR id
 enum TAP_IR_e
@@ -88,37 +81,32 @@ allows to repair error state of debug controller.
 static uint32_t read_only_32_bits_regs(struct target const* const p_target, enum TAP_IR_e ir)
 {
 	assert(p_target);
+	uint32_t result = 0xBADC0DE0u;
 	/// Low-level method save but ignore previous errors.
 	int const old_err_code = error_code__get_and_clear(p_target);
 	/// Error state can be updated in IR_select
 	IR_select(p_target, ir);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		/// and it is the general error that does not allow further data retrieving.
-		error_code__prepend(p_target, old_err_code);
-		/// @todo some invalid data pattern should be returned (c++ boost::optional candidate?)
-		return 0xBADC0DE0u;
+	if ( ERROR_OK == error_code__get(p_target) ) {
+		STATIC_ASSERT(TAP_LEN_RO_32 == 32);
+		uint8_t result_buffer[NUM_BITS_TO_SIZE(TAP_LEN_RO_32)] = {};
+		struct scan_field const field = {
+			.num_bits = TAP_LEN_RO_32,
+			.in_value = result_buffer,
+		};
+		assert(p_target->tap);
+		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
+
+		// enforce jtag_execute_queue() to obtain result
+		error_code__update(p_target, jtag_execute_queue());
+		LOG_DEBUG("drscan %s %d 0 ; # %08X", p_target->cmd_name, field.num_bits, buf_get_u32(result_buffer, 0, TAP_LEN_RO_32));
+		if ( ERROR_OK != error_code__get(p_target) ) {
+			/// Error state can be updated in DR scan
+			LOG_ERROR("JTAG error %d", error_code__get(p_target));
+		} else {
+			STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_RO_32) <= sizeof(uint32_t));
+			result = buf_get_u32(result_buffer, 0, TAP_LEN_RO_32);
+		}
 	}
-
-	STATIC_ASSERT(TAP_LEN_RO_32 == 32);
-	uint8_t result_buffer[NUM_BITS_TO_SIZE(TAP_LEN_RO_32)] = {};
-	struct scan_field const field = {
-		.num_bits = TAP_LEN_RO_32,
-		.in_value = result_buffer,
-	};
-	assert(p_target->tap);
-	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-
-	// enforce jtag_execute_queue() to obtain result
-	error_code__update(p_target, jtag_execute_queue());
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		/// Error state can be updated in DR scan
-		LOG_ERROR("JTAG error %d", error_code__get(p_target));
-	}
-
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_RO_32) <= sizeof(uint32_t));
-	uint32_t const result = buf_get_u32(result_buffer, 0, TAP_LEN_DBG_STATUS);
-	LOG_DEBUG("drscan %s %d 0 ; # %08X", p_target->cmd_name, field.num_bits, result);
-
 	error_code__prepend(p_target, old_err_code);
 	return result;
 }
@@ -159,54 +147,57 @@ static uint32_t sc_rv32_DBG_STATUS_get(struct target const* const p_target)
 	}
 	return result;
 }
+static void update_DAP_CTRL_cache(struct target const* const p_target, uint8_t const set_dap_unit_group)
+{
+	assert(p_target);
+	struct sc_rv32i__Arch* const p_arch = p_target->arch_info;
+	assert(p_arch);
+	p_arch->last_DAP_ctrl = set_dap_unit_group;
+}
+static void invalidate_DAP_CTR_cache(struct target const* const p_target)
+{
+	update_DAP_CTRL_cache(p_target, DAP_CTRL_INVALID_CODE);
+}
 /// set unit/group
 static void DAP_CTRL_REG_set_force(struct target const* const p_target, uint8_t const set_dap_unit_group)
 {
 	assert(p_target);
 	int const old_err_code = error_code__get_and_clear(p_target);
 	IR_select(p_target, TAP_INSTR_DAP_CTRL);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		error_code__prepend(p_target, old_err_code);
-		return;
-	}
+	if ( ERROR_OK == error_code__get(p_target)) {
+		// clear status bits
+		uint8_t status = 0;
+		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof status);
+		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof set_dap_unit_group);
+		struct scan_field const field = {
+			.num_bits = TAP_LEN_DAP_CTRL,
+			.out_value = &set_dap_unit_group,
+			.in_value = &status,
+			.check_value = &DAP_OPSTATUS_GOOD,
+			.check_mask = &DAP_STATUS_MASK,
+		};
 
-	// clear status bits
-	uint8_t status = 0;
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof status);
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof set_dap_unit_group);
-	struct scan_field const field = {
-		.num_bits = TAP_LEN_DAP_CTRL,
-		.out_value = &set_dap_unit_group,
-		.in_value = &status,
-		.check_value = &DAP_OPSTATUS_GOOD,
-		.check_mask = &DAP_STATUS_MASK,
-	};
+		invalidate_DAP_CTR_cache(p_target);
+		jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
 
-	struct sc_rv32i__Arch* const p_arch = p_target->arch_info;
-	assert(p_arch);
-
-	/// set invalid cache value
-	p_arch->last_DAP_ctrl = DAP_CTRL_INVALID_CODE;
-
-	jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
-
-	// enforce jtag_execute_queue() to get status
-	int const jtag_status = jtag_execute_queue();
-	LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
-	if ( jtag_status != ERROR_OK ) {
-		uint32_t const dbg_status = sc_rv32_DBG_STATUS_get(p_target);
-		static uint32_t const dbg_status_check_value = BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
-		static uint32_t const dbg_status_mask =
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) |
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
-		if ( (dbg_status & dbg_status_mask) != (dbg_status_check_value & dbg_status_mask) ) {
-			LOG_ERROR("JTAG error %d, operation_status=0x%1X, dbg_status=0x%08X", jtag_status, (uint32_t)status, dbg_status);
-			error_code__update(p_target, jtag_status);
+		// enforce jtag_execute_queue() to get status
+		int const jtag_status = jtag_execute_queue();
+		LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
+		if ( ERROR_OK != jtag_status ) {
+			uint32_t const dbg_status = sc_rv32_DBG_STATUS_get(p_target);
+			static uint32_t const dbg_status_check_value = BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
+			static uint32_t const dbg_status_mask =
+				BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) |
+				BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
+			if ( (dbg_status & dbg_status_mask) != (dbg_status_check_value & dbg_status_mask) ) {
+				LOG_ERROR("JTAG error %d, operation_status=0x%1X, dbg_status=0x%08X", jtag_status, (uint32_t)status, dbg_status);
+				error_code__update(p_target, jtag_status);
+			} else {
+				LOG_WARNING("JTAG error %d, operation_status=0x%1X, but dbg_status=0x%08X", jtag_status, (uint32_t)status, dbg_status);
+			}
 		} else {
-			LOG_WARNING("JTAG error %d, operation_status=0x%1X, but dbg_status=0x%08X", jtag_status, (uint32_t)status, dbg_status);
+			update_DAP_CTRL_cache(p_target, set_dap_unit_group);
 		}
-	} else {
-		p_arch->last_DAP_ctrl = set_dap_unit_group;
 	}
 	error_code__prepend(p_target, old_err_code);
 }
@@ -219,30 +210,28 @@ static void DAP_CTRL_REG_verify(struct target const* const p_target, uint8_t con
 	p_arch->last_DAP_ctrl = DAP_CTRL_INVALID_CODE;
 	int const old_err_code = error_code__get_and_clear(p_target);
 	IR_select(p_target, TAP_INSTR_DAP_CTRL_RD);
-	if ( error_code__get(p_target) != ERROR_OK ) {
-		error_code__prepend(p_target, old_err_code);
-		return;
-	}
-	uint8_t get_dap_unit_group = 0;
-	uint8_t set_dap_unit_group_mask = 0x0Fu;
-	STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof get_dap_unit_group);
-	struct scan_field const field =
-	{
-		.num_bits = TAP_LEN_DAP_CTRL,
-		.in_value = &get_dap_unit_group,
-		.check_value = &set_dap_unit_group,
-		.check_mask = &set_dap_unit_group_mask,
-	};
-	// enforce jtag_execute_queue() to get get_dap_unit_group
-	jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
-	error_code__update(p_target, jtag_execute_queue());
-	LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
-	if ( error_code__get(p_target) == ERROR_OK ) {
-		if ( get_dap_unit_group == set_dap_unit_group ) {
-			p_arch->last_DAP_ctrl = get_dap_unit_group;
-		} else {
-			LOG_ERROR("Unit/Group verification error: set 0x%1X, but get 0x%1X!", set_dap_unit_group, get_dap_unit_group);
-			error_code__update(p_target, ERROR_TARGET_FAILURE);
+	if ( ERROR_OK == error_code__get(p_target) ) {
+		uint8_t get_dap_unit_group = 0;
+		uint8_t set_dap_unit_group_mask = 0x0Fu;
+		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof get_dap_unit_group);
+		struct scan_field const field =
+		{
+			.num_bits = TAP_LEN_DAP_CTRL,
+			.in_value = &get_dap_unit_group,
+			.check_value = &set_dap_unit_group,
+			.check_mask = &set_dap_unit_group_mask,
+		};
+		// enforce jtag_execute_queue() to get get_dap_unit_group
+		jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
+		error_code__update(p_target, jtag_execute_queue());
+		LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
+		if ( ERROR_OK == error_code__get(p_target) ) {
+			if ( get_dap_unit_group == set_dap_unit_group ) {
+				p_arch->last_DAP_ctrl = get_dap_unit_group;
+			} else {
+				LOG_ERROR("Unit/Group verification error: set 0x%1X, but get 0x%1X!", set_dap_unit_group, get_dap_unit_group);
+				error_code__update(p_target, ERROR_TARGET_FAILURE);
+			}
 		}
 	}
 	error_code__prepend(p_target, old_err_code);
@@ -352,7 +341,9 @@ static uint32_t sc_rv32_DC__unlock(struct target const* const p_target)
 	}
 
 	// enforse jtag_execute_queue() to get values
-	bool const ok = (error_code__update(p_target, jtag_execute_queue()) == ERROR_OK) && ((buf_get_u32(status_buffer, 0, TAP_LEN_DAP_CMD_OPCODE_EXT) & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) == 0);
+	bool const ok =
+		ERROR_OK == error_code__update(p_target, jtag_execute_queue()) &&
+		0 == (buf_get_u32(status_buffer, 0, TAP_LEN_DAP_CMD_OPCODE_EXT) & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT));
 	LOG_DEBUG("%s context=0x%08X, status=0x%08X", ok ? "Unlock succsessful!" : "Unlock unsuccsessful!", buf_get_u32(lock_context_buf, 0, TAP_LEN_DAP_CMD_OPCODE_EXT), buf_get_u32(status_buffer, 0, TAP_LEN_DAP_CMD_OPCODE_EXT));
 	return buf_get_u32(lock_context_buf, 0, TAP_LEN_DAP_CMD_OPCODE_EXT);
 }
@@ -402,8 +393,10 @@ static void sc_rv32_HART0_clear_sticky(struct target* const p_target)
 }
 static uint8_t REGTRANS_scan_type(bool const write, uint8_t const index)
 {
-	assert((index & ~LOW_BITS_MASK(3)) == 0);
-	return MAKE_TYPE_FIELD(uint8_t, !!write, 3, 3) | MAKE_TYPE_FIELD(uint8_t, index, 0, 2);
+	assert((index & LOW_BITS_MASK(3)) == index);
+	return
+		MAKE_TYPE_FIELD(uint8_t, !!write, 3, 3) |
+		MAKE_TYPE_FIELD(uint8_t, index, 0, 2);
 }
 static void sc_rv32_CORE_clear_errors(struct target* const p_target)
 {
@@ -455,13 +448,13 @@ static void sc_rv32_CORE_clear_errors(struct target* const p_target)
 void sc_rv32_DAP_CTRL_REG_set(struct target const* const p_target, enum type_dbgc_unit_id_e const dap_unit, uint8_t const dap_group)
 {
 	assert(p_target);
-	assert(
-		(
-		((dap_unit == DBGC_UNIT_ID_HART_0 && 0 == p_target->coreid) || (dap_unit == DBGC_UNIT_ID_HART_1 && 1 == p_target->coreid)) &&
-		(dap_group == DBGC_FGRP_HART_REGTRANS || dap_group == DBGC_FGRP_HART_DBGCMD)
-	) ||
-	(dap_unit == DBGC_UNIT_ID_CORE && dap_group == DBGC_FGRP_HART_REGTRANS)
-	);
+	bool const match_HART_0 = DBGC_UNIT_ID_HART_0 == dap_unit && 0 == p_target->coreid;
+	bool const match_HART_1 = DBGC_UNIT_ID_HART_1 == dap_unit && 1 == p_target->coreid;
+	bool const HART_unit = match_HART_0 || match_HART_1;
+	bool const HART_group = DBGC_FGRP_HART_REGTRANS == dap_group || DBGC_FGRP_HART_DBGCMD == dap_group;
+	bool const CORE_unit = DBGC_UNIT_ID_CORE == dap_unit;
+	bool const CORE_group = DBGC_FGRP_CORE_REGTRANS == dap_group;
+	assert((HART_unit && HART_group) || (CORE_unit && CORE_group));
 
 	uint8_t const set_dap_unit_group =
 		MAKE_TYPE_FIELD(uint8_t,
@@ -479,16 +472,14 @@ void sc_rv32_DAP_CTRL_REG_set(struct target const* const p_target, enum type_dbg
 		LOG_DEBUG("DAP_CTRL_REG of %s reset to 0x%1X", p_target->cmd_name, set_dap_unit_group);
 	}
 
-	/// Invalidate last_DAP_ctrl
-	p_arch->last_DAP_ctrl = DAP_CTRL_INVALID_CODE;
-
+	invalidate_DAP_CTR_cache(p_target);
 	int const old_err_code = error_code__get_and_clear(p_target);
 	DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
 	if ( p_arch->use_verify_dap_control ) {
 		error_code__get_and_clear(p_target);
 		DAP_CTRL_REG_verify(p_target, set_dap_unit_group);
-		if ( error_code__get(p_target) == ERROR_OK ) {
-			p_arch->last_DAP_ctrl = set_dap_unit_group;
+		if ( ERROR_OK == error_code__get(p_target) ) {
+			update_DAP_CTRL_cache(p_target, set_dap_unit_group);
 		}
 	}
 	error_code__prepend(p_target, old_err_code);
@@ -497,11 +488,12 @@ static void REGTRANS_write(struct target const* const p_target, enum type_dbgc_u
 {
 	assert(p_target);
 	sc_rv32_DAP_CTRL_REG_set(p_target, a_unit, a_fgrp);
-	if ( error_code__get(p_target) != ERROR_OK ) {
+	if ( ERROR_OK != error_code__get(p_target) ) {
 		LOG_WARNING("DAP_CTRL_REG_set error");
 		return;
+	} else {
+		sc_rv32_DAP_CMD_scan(p_target, REGTRANS_scan_type(true, index), data, NULL);
 	}
-	sc_rv32_DAP_CMD_scan(p_target, REGTRANS_scan_type(true, index), data, NULL);
 }
 static uint32_t REGTRANS_read(struct target const* const p_target, enum type_dbgc_unit_id_e const a_unit, uint8_t const a_fgrp, uint8_t const index)
 {
@@ -657,16 +649,19 @@ static uint32_t try_to_get_ready(struct target* const p_target)
 void sc_rv32_update_status(struct target* const p_target)
 {
 	assert(p_target);
-	error_code__get_and_clear(p_target);
-	int const old_err_code = ERROR_OK;
-	{
-		// Reset protection
-		jtag_add_tlr();
-		uint32_t const IDCODE = sc_rv32_IDCODE_get(p_target);
-		assert(IDCODE == EXPECTED_IDCODE);
-	}
-
-	{
+	int const old_err_code = error_code__get_and_clear(p_target);
+	// protection from reset 
+	jtag_add_tlr();
+	invalidate_DAP_CTR_cache(p_target);
+	uint32_t const IDCODE = sc_rv32_IDCODE_get(p_target);
+	if ( EXPECTED_IDCODE != IDCODE ) {
+#if 0
+		target_reset_examined(p_target);
+#else
+		p_target->examined = false;
+#endif
+		error_code__update(p_target, ERROR_TARGET_FAILURE);
+	} else {
 		uint32_t core_status = try_to_get_ready(p_target);
 		LOG_DEBUG("Check core_status for lock: 0x%08X", core_status);
 		if ( 0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) ) {
@@ -684,71 +679,79 @@ void sc_rv32_update_status(struct target* const p_target)
 		LOG_DEBUG("Core_status: 0x%08X", core_status);
 		if ( (core_status & (BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT))) != BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT) ) {
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
-			return;
-		}
+		} else {
+			uint32_t const hart0_err_bits = BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_STKY_BIT);
+			if ( core_status & hart0_err_bits ) {
+				LOG_WARNING("Hart errors detected: 0x%08X", core_status);
+				sc_rv32_HART0_clear_sticky(p_target);
+				error_code__get_and_clear(p_target);
+				core_status = sc_rv32_DBG_STATUS_get(p_target);
+				LOG_WARNING("Hart errors %s: 0x%08X", core_status & hart0_err_bits ? "not fixed!" : "fixed", core_status);
+			}
 
-		uint32_t const hart0_err_bits =
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT) |
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_STKY_BIT);
-		if ( core_status & hart0_err_bits ) {
-			LOG_WARNING("Hart errors detected: 0x%08X", core_status);
-			sc_rv32_HART0_clear_sticky(p_target);
-			error_code__get_and_clear(p_target);
-			core_status = sc_rv32_DBG_STATUS_get(p_target);
-			LOG_WARNING("Hart errors %s: 0x%08X", core_status & hart0_err_bits ? "not fixed!" : "fixed", core_status);
-		}
+#if 0
+			uint32_t const hart1_err_bits = BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART1_ERR_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART1_ERR_STKY_BIT);
+			if ( core_status & hart1_err_bits ) {
+				LOG_WARNING("Hart errors detected: 0x%08X", core_status);
+				sc_rv32_HART1_clear_sticky(p_target);
+				error_code__get_and_clear(p_target);
+				core_status = sc_rv32_DBG_STATUS_get(p_target);
+				LOG_WARNING("Hart errors %s: 0x%08X", core_status & hart1_err_bits ? "not fixed!" : "fixed", core_status);
+			}
+#endif
+			static uint32_t const cdsr_err_bits =
+				BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_BIT) |
+				BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_HWCORE_BIT) |
+				BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_FSMBUSY_BIT) |
+				BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_DAP_OPCODE_BIT);
+			if ( core_status & cdsr_err_bits ) {
+				LOG_WARNING("Core errors detected: 0x%08X", core_status);
+				error_code__get_and_clear(p_target);
+				sc_rv32_CORE_clear_errors(p_target);
+				error_code__get_and_clear(p_target);
+				core_status = sc_rv32_DBG_STATUS_get(p_target);
+				LOG_WARNING("Core errors %s: 0x%08X", core_status & cdsr_err_bits ? "not fixed!" : "fixed", core_status);
+			}
 
-		static uint32_t const cdsr_err_bits =
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_BIT) |
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_HWCORE_BIT) |
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_FSMBUSY_BIT) |
-			BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_DAP_OPCODE_BIT);
-		if ( core_status & cdsr_err_bits ) {
-			LOG_WARNING("Core errors detected: 0x%08X", core_status);
-			error_code__get_and_clear(p_target);
-			sc_rv32_CORE_clear_errors(p_target);
-			error_code__get_and_clear(p_target);
-			core_status = sc_rv32_DBG_STATUS_get(p_target);
-			LOG_WARNING("Core errors %s: 0x%08X", core_status & cdsr_err_bits ? "not fixed!" : "fixed", core_status);
-		}
-	}
+			/// Only 1 HART available
+			assert(p_target->coreid == 0);
 
-	/// Only 1 HART available
-	assert(p_target->coreid == 0);
-
-	uint32_t const HART_status = sc_rv32_HART_REGTRANS_read(p_target, DBGC_HART_REGS_DBG_STS);
-	enum target_state const new_state = ERROR_OK == error_code__get(p_target) ? HART_status_bits_to_target_state(HART_status) : TARGET_UNKNOWN;
-	enum target_state const old_state = p_target->state;
-	if ( new_state != old_state ) {
-		p_target->state = new_state;
-		switch ( new_state ) {
-		case TARGET_HALTED:
-			update_debug_reason(p_target);
-			LOG_DEBUG("TARGET_EVENT_HALTED");
-			target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
-			break;
-		case TARGET_RESET:
-			update_debug_reason(p_target);
-			LOG_DEBUG("TARGET_EVENT_RESET_ASSERT");
-			target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
-			break;
-		case TARGET_RUNNING:
-			LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_NOTHALTED);
-			p_target->debug_reason = DBG_REASON_NOTHALTED;
-			LOG_DEBUG("TARGET_EVENT_RESUMED");
-			target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
-		case TARGET_UNKNOWN:
-		default:
-			break;
+			uint32_t const HART_status = sc_rv32_HART_REGTRANS_read(p_target, DBGC_HART_REGS_DBG_STS);
+			enum target_state const new_state = ERROR_OK == error_code__get(p_target) ? HART_status_bits_to_target_state(HART_status) : TARGET_UNKNOWN;
+			enum target_state const old_state = p_target->state;
+			if ( new_state != old_state ) {
+				p_target->state = new_state;
+				switch ( new_state ) {
+				case TARGET_HALTED:
+					update_debug_reason(p_target);
+					LOG_DEBUG("TARGET_EVENT_HALTED");
+					target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
+					break;
+				case TARGET_RESET:
+					update_debug_reason(p_target);
+					LOG_DEBUG("TARGET_EVENT_RESET_ASSERT");
+					target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
+					break;
+				case TARGET_RUNNING:
+					LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_NOTHALTED);
+					p_target->debug_reason = DBG_REASON_NOTHALTED;
+					LOG_DEBUG("TARGET_EVENT_RESUMED");
+					target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
+				case TARGET_UNKNOWN:
+				default:
+					break;
+				}
+			}
 		}
 	}
 	error_code__prepend(p_target, old_err_code);
 }
+
 void sc_rv32_check_that_target_halted(struct target* const p_target)
 {
 	LOG_DEBUG("update_status");
 	sc_rv32_update_status(p_target);
-	if ( error_code__get(p_target) == ERROR_OK ) {
+	if ( ERROR_OK == error_code__get(p_target) ) {
 		if ( p_target->state != TARGET_HALTED ) {
 			LOG_ERROR("Target not halted");
 			error_code__update(p_target, ERROR_TARGET_NOT_HALTED);

@@ -23,7 +23,7 @@ struct sc_rv32i__Arch
 	bool use_pc_advmt_dsbl_bit;
 	bool use_queuing_for_dr_scans;
 };
-enum
+enum DAP_CODE_enum
 {
 	DAP_CTRL_INVALID_CODE = 0xFFu,
 };

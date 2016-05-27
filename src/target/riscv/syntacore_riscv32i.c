@@ -8,6 +8,7 @@ Syntacore RISC-V target
 #include "config.h"
 #endif
 
+#include "sc_macro.h"
 #include "sc_rv32i__Arch.h"
 #include "Syntacore_RV_DC.h"
 #include "riscv.h"
@@ -30,16 +31,6 @@ Syntacore RISC-V target
 #define FP_enabled !!1
 #define VERIFY_REG_WRITE 1
 #define WRITE_BUFFER_THRESHOLD (1u << 18)
-/// Utility macros
-///@{
-
-#define LOW_BITS_MASK(n) (~(~0 << (n)))
-#define MAKE_TYPE_FIELD(TYPE, bits, first_bit, last_bit)     ((((TYPE)(bits)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
-
-#define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
-
-#define NUM_BITS_TO_SIZE(num_bits) ( ( (size_t)(num_bits) + (8 - 1) ) / 8 )
-///@}
 
 /// RISC-V GP registers id
 enum
@@ -60,9 +51,6 @@ enum arch_bits_numbers
 	/// Size of RISC-V instruction
 	ILEN = 32u,
 };
-
-static uint8_t const DAP_OPSTATUS_GOOD = DAP_OPSTATUS_OK;
-static uint8_t const DAP_STATUS_MASK = DAP_OPSTATUS_MASK;
 
 /// GP registers accessors
 ///@{
@@ -1627,6 +1615,8 @@ static int sc_rv32i__write_phys_memory(struct target* const p_target, uint32_t a
 				if ( p_arch->use_queuing_for_dr_scans ) {
 					uint8_t DAP_OPSTATUS = 0;
 					uint8_t const data_wr_opcode[1] = {DBGC_DAP_OPCODE_DBGCMD_DBGDATA_WR};
+					static uint8_t const DAP_OPSTATUS_GOOD = DAP_OPSTATUS_OK;
+					static uint8_t const DAP_STATUS_MASK = DAP_OPSTATUS_MASK;
 					struct scan_field const data_scan_opcode_field = {
 						.num_bits = TAP_LEN_DAP_CMD_OPCODE,
 						.out_value = data_wr_opcode,

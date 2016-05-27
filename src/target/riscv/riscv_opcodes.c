@@ -5,10 +5,8 @@ Syntacore RISC-V target
 @copyright Syntacore
 */
 #include "riscv.h"
+#include "sc_macro.h"
 #include <assert.h>
-
-#define LOW_BITS_MASK(n) (~(~0 << (n)))
-#define MAKE_TYPE_FIELD(TYPE, bits, first_bit, last_bit)     ((((TYPE)(bits)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
 
 #define EXTRACT_FIELD(bits, first_bit, last_bit) (((bits) >> (first_bit)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit)))
 #define CHECK_REG(REG) assert(IS_VALID_UNSIFNED_FIELD(REG,5))
