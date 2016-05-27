@@ -1792,25 +1792,16 @@ static int sc_rv32i__remove_breakpoint(struct target* const p_target, struct bre
 {
 	assert(p_target);
 	assert(p_breakpoint);
-	if ( (p_breakpoint->length == 4 || p_breakpoint->length == 2) ) {
-		error_code__update(p_target, ERROR_TARGET_INVALID);
-	} else if ( 0 != p_breakpoint->address % 2 ) {
-		error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
-	} else if ( !(p_breakpoint->type == BKPT_SOFT && p_breakpoint->set) ) {
-		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
-	} else {
-		assert(p_target);
-		sc_rv32_check_that_target_halted(p_target);
-		if ( error_code__get(p_target) == ERROR_OK ) {
-			assert(p_breakpoint->orig_instr);
-			LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)",
-				p_breakpoint->address,
-				p_breakpoint->length,
-				buf_get_u32(p_breakpoint->orig_instr, 0, p_breakpoint->length * CHAR_BIT));
-			write_memory_space(p_target, p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true);
-			if ( ERROR_OK == error_code__get(p_target) ) {
-				p_breakpoint->set = 0;
-			}
+	sc_rv32_check_that_target_halted(p_target);
+	if ( ERROR_OK == error_code__get(p_target) ) {
+		assert(p_breakpoint->orig_instr);
+		LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)",
+			p_breakpoint->address,
+			p_breakpoint->length,
+			buf_get_u32(p_breakpoint->orig_instr, 0, p_breakpoint->length * CHAR_BIT));
+		write_memory_space(p_target, p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true);
+		if ( ERROR_OK == error_code__get(p_target) ) {
+			p_breakpoint->set = 0;
 		}
 	}
 	return error_code__get_and_clear(p_target);
