@@ -19,9 +19,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -210,8 +208,7 @@ static const struct stm32lx_part_info stm32lx_parts[] = {
 		.page_size			= 256,
 		.pages_per_sector	= 16,
 		.max_flash_size_kb	= 256,
-		.first_bank_size_kb	= 192,
-		.has_dual_banks		= true,
+		.has_dual_banks		= false,
 		.flash_base			= 0x40023C00,
 		.fsize_base			= 0x1FF800CC,
 	},
