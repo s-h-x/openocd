@@ -1795,10 +1795,12 @@ static int sc_rv32i__remove_breakpoint(struct target* const p_target, struct bre
 	sc_rv32_check_that_target_halted(p_target);
 	if ( ERROR_OK == error_code__get(p_target) ) {
 		assert(p_breakpoint->orig_instr);
+#if 0
 		LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)",
 			p_breakpoint->address,
 			p_breakpoint->length,
 			buf_get_u32(p_breakpoint->orig_instr, 0, p_breakpoint->length * CHAR_BIT));
+#endif
 		write_memory_space(p_target, p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true);
 		if ( ERROR_OK == error_code__get(p_target) ) {
 			p_breakpoint->set = 0;
