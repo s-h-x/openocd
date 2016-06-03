@@ -47,7 +47,7 @@ enum arch_bits_numbers
 	/// Size of RISC-V GP registers in bits
 	XLEN = 32u,
 	/// Size of RISC-V FP registers in bits
-	FLEN = 32u,
+	FLEN = 64u,
 	/// Size of RISC-V instruction
 	ILEN = 32u,
 };
@@ -524,8 +524,10 @@ static int reg_f__get(struct reg* const p_reg)
 
 	/// @todo check that FPU is enabled
 	/// Find temporary GP register
-	struct reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
-	assert(p_wrk_reg);
+	struct reg* const p_wrk_reg_1 = prepare_temporary_GP_register(p_target, 0);
+	assert(p_wrk_reg_1);
+	struct reg* const p_wrk_reg_2 = prepare_temporary_GP_register(p_target, p_wrk_reg_1->number);
+	assert(p_wrk_reg_2);
 
 	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 	if ( error_code__get(p_target) == ERROR_OK ) {
@@ -539,19 +541,25 @@ static int reg_f__get(struct reg* const p_reg)
 		int advance_pc_counter = 0;
 		if ( error_code__get(p_target) == ERROR_OK ) {
 			/// Copy values to temporary register
-			(void)sc_rv32_EXEC__step(p_target, RV_FMV_X_S(p_wrk_reg->number, p_reg->number));
+			(void)sc_rv32_EXEC__step(p_target, RV_FMV_X2_S(p_wrk_reg_2->number, p_wrk_reg_1->number, p_reg->number));
 			advance_pc_counter += instr_step;
 			if ( error_code__get(p_target) == ERROR_OK ) {
 				/// and store temporary register to CSR_DBG_SCRATCH CSR.
-				(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
+				(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg_1->number));
 				advance_pc_counter += instr_step;
 				if ( error_code__get(p_target) == ERROR_OK ) {
-					/// Correct pc by jump 2 instructions back and get previous command result.
-					assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-					uint32_t const value = sc_rv32_EXEC__step(p_target, RV_JAL(0, -advance_pc_counter));
-					advance_pc_counter = 0;
+					uint32_t const value_lo = sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg_2->number));
+					advance_pc_counter += instr_step;
 					if ( error_code__get(p_target) == ERROR_OK ) {
-						reg__set_valid_value_to_cache(p_reg, value);
+						/// Correct pc by jump 2 instructions back and get previous command result.
+						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
+						uint32_t const value_hi = sc_rv32_EXEC__step(p_target, RV_JAL(0, -advance_pc_counter));
+						advance_pc_counter = 0;
+						if ( error_code__get(p_target) == ERROR_OK ) {
+							buf_set_u64(p_reg->value, 0, p_reg->size, (uint64_t)value_hi << 32 | (uint64_t)value_lo);
+							p_reg->valid = true;
+							p_reg->dirty = false;
+						}
 					}
 				}
 			}
@@ -565,8 +573,11 @@ static int reg_f__get(struct reg* const p_reg)
 
 	// restore temporary register
 	int const old_err_code = error_code__get_and_clear(p_target);
-	if ( error_code__update(p_target, reg_x__store(p_wrk_reg)) == ERROR_OK ) {
-		assert(!p_wrk_reg->dirty);
+	if ( error_code__update(p_target, reg_x__store(p_wrk_reg_2)) == ERROR_OK ) {
+		assert(!p_wrk_reg_2->dirty);
+	}
+	if ( error_code__update(p_target, reg_x__store(p_wrk_reg_1)) == ERROR_OK ) {
+		assert(!p_wrk_reg_1->dirty);
 	}
 	error_code__prepend(p_target, old_err_code);
 

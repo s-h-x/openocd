@@ -122,6 +122,10 @@ uint32_t RV_FMV_X_S(reg_num_type rd, reg_num_type rs1_fp)
 {
 	return RV_INSTR_R_TYPE(0x70u, 0u, rs1_fp, 0u, rd, 0x53u);
 }
+uint32_t RV_FMV_X2_S(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp)
+{
+	return RV_INSTR_R_TYPE(0x70u, rd_hi, rs1_fp, 0u, rd_lo, 0x53u);
+}
 uint32_t RV_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1)
 {
 	return RV_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd_fp, 0x53u);
