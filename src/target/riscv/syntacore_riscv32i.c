@@ -1829,6 +1829,7 @@ static int sc_rv32i__remove_breakpoint(struct target* const p_target, struct bre
 	}
 	return error_code__get_and_clear(p_target);
 }
+#if 0
 static size_t total_number_of_regs(struct reg_cache const *p_reg_cache)
 {
 	size_t total = 0;
@@ -1837,6 +1838,7 @@ static size_t total_number_of_regs(struct reg_cache const *p_reg_cache)
 	}
 	return total;
 }
+#endif
 /// gdb_server expects valid reg values and will use set method for updating reg values
 static int sc_rv32i__get_gdb_reg_list(struct target* const p_target, struct reg **reg_list[], int* const reg_list_size, enum target_register_class const reg_class)
 {
