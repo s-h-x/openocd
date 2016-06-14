@@ -45,7 +45,7 @@ enum
 	NUMBER_OF_X_REGS = RISCV_PC_REGNUM,
 	NUMBER_OF_GP_REGS = NUMBER_OF_X_REGS + 1u,
 	NUMBER_OF_F_REGS = RISCV_LAST_FP_REGNUM - RISCV_FIRST_FP_REGNUM + 1,
-	NUMBER_OF_GDB_REGS = NUMBER_OF_GP_REGS + NUMBER_OF_F_REGS,
+	NUMBER_OF_GDB_REGS = RISCV_LAST_CSR_REGNUM + 1,
 };
 
 enum arch_bits_numbers
@@ -193,7 +193,7 @@ static int reg_x__get(struct reg* const p_reg)
 					return error_code__get_and_clear(p_target);
 				}
 				// Save p_reg->number register to CSR_DBG_SCRATCH CSR
-				(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_reg->number));
+				(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_SC_DBG_SCRATCH, p_reg->number));
 				advance_pc_counter += instr_step;
 				if ( error_code__get(p_target) != ERROR_OK ) {
 					return error_code__get_and_clear(p_target);
@@ -242,7 +242,7 @@ static int reg_x__store(struct reg* const p_reg)
 	}
 	assert(p_reg->valid);
 	assert(p_reg->dirty);
-	(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_reg->number, CSR_DBG_SCRATCH));
+	(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_reg->number, CSR_SC_DBG_SCRATCH));
 	advance_pc_counter += instr_step;
 	p_reg->dirty = false;
 
@@ -254,7 +254,7 @@ static int reg_x__store(struct reg* const p_reg)
 
 #if VERIFY_REG_WRITE
 	sc_rv32_EXEC__push_data_to_CSR(p_target, 0xFEEDBEEF);
-	(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_reg->number));
+	(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_SC_DBG_SCRATCH, p_reg->number));
 	advance_pc_counter += instr_step;
 #endif
 	/// Correct pc back after each instruction
@@ -377,7 +377,7 @@ static uint32_t csr_get_value(struct target* const p_target, uint32_t const csr_
 				advance_pc_counter += instr_step;
 				if ( error_code__get(p_target) == ERROR_OK ) {
 					/// and store temporary register to CSR_DBG_SCRATCH CSR.
-					(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
+					(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_SC_DBG_SCRATCH, p_wrk_reg->number));
 					advance_pc_counter += instr_step;
 					if ( error_code__get(p_target) == ERROR_OK ) {
 						/// Correct pc by jump 2 instructions back and get previous command result.
@@ -478,7 +478,7 @@ static int reg_pc__set(struct reg* const p_reg, uint8_t* const buf)
 		sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
 		if ( error_code__get(p_target) == ERROR_OK ) {
 			// set temporary register value to restoring pc value
-			(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
+			(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_SC_DBG_SCRATCH));
 			advance_pc_counter += instr_step;
 			if ( error_code__get(p_target) == ERROR_OK ) {
 				assert(p_wrk_reg->dirty);
@@ -551,10 +551,10 @@ static int reg_f__get(struct reg* const p_reg)
 			advance_pc_counter += instr_step;
 			if ( error_code__get(p_target) == ERROR_OK ) {
 				/// and store temporary register to CSR_DBG_SCRATCH CSR.
-				(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg_1->number));
+				(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_SC_DBG_SCRATCH, p_wrk_reg_1->number));
 				advance_pc_counter += instr_step;
 				if ( error_code__get(p_target) == ERROR_OK ) {
-					uint32_t const value_lo = sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg_2->number));
+					uint32_t const value_lo = sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_SC_DBG_SCRATCH, p_wrk_reg_2->number));
 					advance_pc_counter += instr_step;
 					if ( error_code__get(p_target) == ERROR_OK ) {
 						/// Correct pc by jump 2 instructions back and get previous command result.
@@ -629,7 +629,7 @@ static int reg_f__set(struct reg* const p_reg, uint8_t* const buf)
 			sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
 			if ( error_code__get(p_target) == ERROR_OK ) {
 				// set temporary register value to restoring pc value
-				(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
+				(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_SC_DBG_SCRATCH));
 				advance_pc_counter += instr_step;
 				if ( error_code__get(p_target) == ERROR_OK ) {
 					assert(p_wrk_reg->dirty);
@@ -722,7 +722,7 @@ static int reg_csr__set(struct reg* const p_reg, uint8_t* const buf)
 			sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
 			if ( error_code__get(p_target) == ERROR_OK ) {
 				// set temporary register value
-				(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
+				(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_SC_DBG_SCRATCH));
 				advance_pc_counter += instr_step;
 				if ( error_code__get(p_target) == ERROR_OK ) {
 					assert(p_wrk_reg->dirty);
@@ -958,9 +958,11 @@ static struct reg_feature feature_riscv_org = {
 	.name = "org.gnu.gdb.riscv.cpu",
 };
 
+#if 0
 static struct reg_feature feature_sc_com = {
 	.name = "org.gnu.gdb.riscv.syntacore.cpu",
 };
+#endif
 static char const def_GP_regs_name[] = "rv32i";
 static struct reg const def_GP_regs_array[] = {
 	// Hard-wired zero
@@ -1071,35 +1073,120 @@ static struct reg const def_FP_regs_array[] = {
 };
 
 static char const def_CSR_regs_name[] = "rv32iCSR";
+static struct reg const CSR_not_exists ={.name = "", .caller_save = false,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_csr_accessors,.feature = &feature_riscv_org};
+#define DECLARE_CSR(NAME,VALUE) {.name = #NAME, .number = CSR_##NAME + RISCV_FIRST_CSR_REGNUM, .exist = true},
 static struct reg const def_CSR_regs_array[] = {
-#define DEF_ITEM(NAME) {.name = #NAME, .number = CSR_##NAME + RISCV_FIRST_CSR_REGNUM, .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN, .type = &reg_csr_accessors, .feature = &feature_sc_com}
-	DEF_ITEM(mcpuid),
-	DEF_ITEM(mimpid),
-	DEF_ITEM(mhartid),
-	DEF_ITEM(mstatus),
-	DEF_ITEM(mtvec),
-	DEF_ITEM(mepc),
-	DEF_ITEM(mcause),
-	DEF_ITEM(mbadaddr),
-	DEF_ITEM(mip),
-	DEF_ITEM(mie),
-	DEF_ITEM(mtime),
-	DEF_ITEM(mtimeh),
-	DEF_ITEM(mtimecmp),
-	DEF_ITEM(fflags),
-	DEF_ITEM(frm),
+DECLARE_CSR(fflags, CSR_FFLAGS)
+DECLARE_CSR(frm, CSR_FRM)
+DECLARE_CSR(fcsr, CSR_FCSR)
+DECLARE_CSR(cycle, CSR_CYCLE)
+DECLARE_CSR(time, CSR_TIME)
+DECLARE_CSR(instret, CSR_INSTRET)
+DECLARE_CSR(stats, CSR_STATS)
+DECLARE_CSR(uarch0, CSR_UARCH0)
+DECLARE_CSR(uarch1, CSR_UARCH1)
+DECLARE_CSR(uarch2, CSR_UARCH2)
+DECLARE_CSR(uarch3, CSR_UARCH3)
+DECLARE_CSR(uarch4, CSR_UARCH4)
+DECLARE_CSR(uarch5, CSR_UARCH5)
+DECLARE_CSR(uarch6, CSR_UARCH6)
+DECLARE_CSR(uarch7, CSR_UARCH7)
+DECLARE_CSR(uarch8, CSR_UARCH8)
+DECLARE_CSR(uarch9, CSR_UARCH9)
+DECLARE_CSR(uarch10, CSR_UARCH10)
+DECLARE_CSR(uarch11, CSR_UARCH11)
+DECLARE_CSR(uarch12, CSR_UARCH12)
+DECLARE_CSR(uarch13, CSR_UARCH13)
+DECLARE_CSR(uarch14, CSR_UARCH14)
+DECLARE_CSR(uarch15, CSR_UARCH15)
+DECLARE_CSR(sstatus, CSR_SSTATUS)
+DECLARE_CSR(stvec, CSR_STVEC)
+DECLARE_CSR(sie, CSR_SIE)
+DECLARE_CSR(sscratch, CSR_SSCRATCH)
+DECLARE_CSR(sepc, CSR_SEPC)
+DECLARE_CSR(sip, CSR_SIP)
+DECLARE_CSR(sptbr, CSR_SPTBR)
+DECLARE_CSR(sasid, CSR_SASID)
+DECLARE_CSR(cyclew, CSR_CYCLEW)
+DECLARE_CSR(timew, CSR_TIMEW)
+DECLARE_CSR(instretw, CSR_INSTRETW)
+DECLARE_CSR(stime, CSR_STIME)
+DECLARE_CSR(scause, CSR_SCAUSE)
+DECLARE_CSR(sbadaddr, CSR_SBADADDR)
+DECLARE_CSR(stimew, CSR_STIMEW)
+DECLARE_CSR(mstatus, CSR_MSTATUS)
+DECLARE_CSR(mtvec, CSR_MTVEC)
+DECLARE_CSR(mtdeleg, CSR_MTDELEG)
+DECLARE_CSR(mie, CSR_MIE)
+DECLARE_CSR(mtimecmp, CSR_MTIMECMP)
+DECLARE_CSR(mscratch, CSR_MSCRATCH)
+DECLARE_CSR(mepc, CSR_MEPC)
+DECLARE_CSR(mcause, CSR_MCAUSE)
+DECLARE_CSR(mbadaddr, CSR_MBADADDR)
+DECLARE_CSR(mip, CSR_MIP)
+DECLARE_CSR(mtime, CSR_MTIME)
+DECLARE_CSR(mcpuid, CSR_MCPUID)
+DECLARE_CSR(mimpid, CSR_MIMPID)
+DECLARE_CSR(mhartid, CSR_MHARTID)
+DECLARE_CSR(mtohost, CSR_MTOHOST)
+DECLARE_CSR(mfromhost, CSR_MFROMHOST)
+DECLARE_CSR(mreset, CSR_MRESET)
+DECLARE_CSR(mipi, CSR_MIPI)
+DECLARE_CSR(miobase, CSR_MIOBASE)
+DECLARE_CSR(cycleh, CSR_CYCLEH)
+DECLARE_CSR(timeh, CSR_TIMEH)
+DECLARE_CSR(instreth, CSR_INSTRETH)
+DECLARE_CSR(cyclehw, CSR_CYCLEHW)
+DECLARE_CSR(timehw, CSR_TIMEHW)
+DECLARE_CSR(instrethw, CSR_INSTRETHW)
+DECLARE_CSR(stimeh, CSR_STIMEH)
+DECLARE_CSR(stimehw, CSR_STIMEHW)
+DECLARE_CSR(mtimecmph, CSR_MTIMECMPH)
+DECLARE_CSR(mtimeh, CSR_MTIMEH)
 };
-#undef DEF_ITEM
+#undef DECLARE_CSR
+static struct reg_cache* reg_cache__CSR_section_create(char const* name, struct reg const regs_templates[], size_t const num_regs, void* const p_arch_info)
+{
+	assert(name);
+	assert(0 < num_regs);
+	assert(p_arch_info);
+	struct reg* const p_dst_array = calloc(4096, sizeof(struct reg));
+	{
+		for ( size_t i = 0; i < 4096; ++i ) {
+			struct reg * p_reg = &p_dst_array[i];
+			*p_reg = CSR_not_exists;
+			p_reg->number = i + RISCV_FIRST_CSR_REGNUM;
+			p_reg->value = calloc(1, NUM_BITS_TO_SIZE(p_reg->size));;
+			p_reg->arch_info = p_arch_info;
+		}
+	}
+	{
+		struct reg const* p_src_iter = &regs_templates[0];
+		for ( size_t i = 0; i < num_regs; ++i ) {
+			struct reg* const p_dst_iter = &p_dst_array[p_src_iter->number - RISCV_FIRST_CSR_REGNUM];
+			p_dst_iter->name = p_src_iter->name;
+			p_dst_iter->exist = true;
 
+			++p_src_iter;
+		}
+	}
+	struct reg_cache const the_reg_cache = {
+		.name = name,
+		.reg_list = p_dst_array,
+		.num_regs = 4096,
+	};
+
+	struct reg_cache* const p_obj = calloc(1, sizeof(struct reg_cache));
+	assert(p_obj);
+	*p_obj = the_reg_cache;
+	return p_obj;
+}
 static void sc_rv32_init_regs_cache(struct target* const p_target)
 {
 	assert(p_target);
-#if 0  // TODO check
-	assert(!p_target->reg_cache);
-#endif
 	struct reg_cache* p_reg_cache_last = p_target->reg_cache = reg_cache__section_create(def_GP_regs_name, def_GP_regs_array, ARRAY_LEN(def_GP_regs_array), p_target);
 	p_reg_cache_last = p_reg_cache_last->next = reg_cache__section_create(def_FP_regs_name, def_FP_regs_array, ARRAY_LEN(def_FP_regs_array), p_target);
-	p_reg_cache_last->next = reg_cache__section_create(def_CSR_regs_name, def_CSR_regs_array, ARRAY_LEN(def_CSR_regs_array), p_target);
+	p_reg_cache_last->next = reg_cache__CSR_section_create(def_CSR_regs_name, def_CSR_regs_array, ARRAY_LEN(def_CSR_regs_array), p_target);
 }
 static int sc_rv32i__init_target(struct command_context *cmd_ctx, struct target* const p_target)
 {
@@ -1515,7 +1602,7 @@ static int sc_rv32i__read_phys_memory(struct target* const p_target, uint32_t ad
 					}
 
 					/// Load address to work register
-					(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_DBG_SCRATCH));
+					(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_SC_DBG_SCRATCH));
 					advance_pc_counter += instr_step;
 					if ( error_code__get(p_target) != ERROR_OK ) {
 						break;
@@ -1529,7 +1616,7 @@ static int sc_rv32i__read_phys_memory(struct target* const p_target, uint32_t ad
 					}
 
 					/// Exec store work register to csr
-					(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_DBG_SCRATCH, p_wrk_reg->number));
+					(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_SC_DBG_SCRATCH, p_wrk_reg->number));
 					advance_pc_counter += instr_step;
 
 					/// get data from csr and jump back to correct pc
@@ -1620,12 +1707,12 @@ static int sc_rv32i__write_phys_memory(struct target* const p_target, uint32_t a
 			sc_rv32_EXEC__push_data_to_CSR(p_target, address);
 			if ( error_code__get(p_target) == ERROR_OK ) {
 				/// Load address to work register
-				(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_addr_reg->number, CSR_DBG_SCRATCH));
+				(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_addr_reg->number, CSR_SC_DBG_SCRATCH));
 				advance_pc_counter += instr_step;
 
 				// Opcodes
 				uint32_t const instructions[3] = {
-					RV_CSRR(p_data_reg->number, CSR_DBG_SCRATCH),
+					RV_CSRR(p_data_reg->number, CSR_SC_DBG_SCRATCH),
 					(size == 4 ? RV_SW(p_data_reg->number, p_addr_reg->number, 0) :
 					size == 2 ? RV_SH(p_data_reg->number, p_addr_reg->number, 0) :
 					/*size == 1*/ RV_SB(p_data_reg->number, p_addr_reg->number, 0)),

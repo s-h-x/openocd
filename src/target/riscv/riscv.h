@@ -13,237 +13,179 @@ typedef uint8_t reg_num_type;
 typedef int32_t riscv_signed_type;
 typedef int16_t riscv_short_signed_type;
 typedef uint16_t csr_num_type;
+#define CSR_FFLAGS 0x1
+#define CSR_FRM 0x2
+#define CSR_FCSR 0x3
+#define CSR_CYCLE 0xc00
+#define CSR_TIME 0xc01
+#define CSR_INSTRET 0xc02
+#define CSR_STATS 0xc0
+#define CSR_UARCH0 0xcc0
+#define CSR_UARCH1 0xcc1
+#define CSR_UARCH2 0xcc2
+#define CSR_UARCH3 0xcc3
+#define CSR_UARCH4 0xcc4
+#define CSR_UARCH5 0xcc5
+#define CSR_UARCH6 0xcc6
+#define CSR_UARCH7 0xcc7
+#define CSR_UARCH8 0xcc8
+#define CSR_UARCH9 0xcc9
+#define CSR_UARCH10 0xcca
+#define CSR_UARCH11 0xccb
+#define CSR_UARCH12 0xccc
+#define CSR_UARCH13 0xccd
+#define CSR_UARCH14 0xcce
+#define CSR_UARCH15 0xccf
+#define CSR_SSTATUS 0x100
+#define CSR_STVEC 0x101
+#define CSR_SIE 0x104
+#define CSR_SSCRATCH 0x140
+#define CSR_SEPC 0x141
+#define CSR_SIP 0x144
+#define CSR_SPTBR 0x180
+#define CSR_SASID 0x181
+#define CSR_CYCLEW 0x900
+#define CSR_TIMEW 0x901
+#define CSR_INSTRETW 0x902
+#define CSR_STIME 0xd01
+#define CSR_SCAUSE 0xd42
+#define CSR_SBADADDR 0xd43
+#define CSR_STIMEW 0xa01
+#define CSR_MSTATUS 0x300
+#define CSR_MTVEC 0x301
+#define CSR_MTDELEG 0x302
+#define CSR_MIE 0x304
+#define CSR_MTIMECMP 0x321
+#define CSR_MSCRATCH 0x340
+#define CSR_MEPC 0x341
+#define CSR_MCAUSE 0x342
+#define CSR_MBADADDR 0x343
+#define CSR_MIP 0x344
+#define CSR_MTIME 0x701
+#define CSR_MCPUID 0xf00
+#define CSR_MIMPID 0xf01
+#define CSR_MHARTID 0xf10
+#define CSR_MTOHOST 0x780
+#define CSR_MFROMHOST 0x781
+#define CSR_MRESET 0x782
+#define CSR_MIPI 0x783
+#define CSR_MIOBASE 0x784
+#define CSR_CYCLEH 0xc80
+#define CSR_TIMEH 0xc81
+#define CSR_INSTRETH 0xc82
+#define CSR_CYCLEHW 0x980
+#define CSR_TIMEHW 0x981
+#define CSR_INSTRETHW 0x982
+#define CSR_STIMEH 0xd81
+#define CSR_STIMEHW 0xa81
+#define CSR_MTIMECMPH 0x361
+#define CSR_MTIMEH 0x741
 
+#define DECLARE_CSR(NAME,VALUE) CSR_##NAME = VALUE,
 enum RISCV_CSR
 {
-	/// User Floating-Point CSRs
-	/// privilege: URW
-	/// @addtogroup floating_point_csrs
-	///@{
-	/// Floating-Point Accrued Exceptions.
-	CSR_fflags = 0x001u,
-	/// Floating-Point Dynamic Rounding Mode.
-	CSR_frm = 0x002u,
-	/// Floating-Point Control and Status Register (frm + fflags).
-	CSR_fcsr = 0x003u,
-	///@}
+DECLARE_CSR(fflags, CSR_FFLAGS)
+DECLARE_CSR(frm, CSR_FRM)
+DECLARE_CSR(fcsr, CSR_FCSR)
+DECLARE_CSR(cycle, CSR_CYCLE)
+DECLARE_CSR(time, CSR_TIME)
+DECLARE_CSR(instret, CSR_INSTRET)
+DECLARE_CSR(stats, CSR_STATS)
+DECLARE_CSR(uarch0, CSR_UARCH0)
+DECLARE_CSR(uarch1, CSR_UARCH1)
+DECLARE_CSR(uarch2, CSR_UARCH2)
+DECLARE_CSR(uarch3, CSR_UARCH3)
+DECLARE_CSR(uarch4, CSR_UARCH4)
+DECLARE_CSR(uarch5, CSR_UARCH5)
+DECLARE_CSR(uarch6, CSR_UARCH6)
+DECLARE_CSR(uarch7, CSR_UARCH7)
+DECLARE_CSR(uarch8, CSR_UARCH8)
+DECLARE_CSR(uarch9, CSR_UARCH9)
+DECLARE_CSR(uarch10, CSR_UARCH10)
+DECLARE_CSR(uarch11, CSR_UARCH11)
+DECLARE_CSR(uarch12, CSR_UARCH12)
+DECLARE_CSR(uarch13, CSR_UARCH13)
+DECLARE_CSR(uarch14, CSR_UARCH14)
+DECLARE_CSR(uarch15, CSR_UARCH15)
+DECLARE_CSR(sstatus, CSR_SSTATUS)
+DECLARE_CSR(stvec, CSR_STVEC)
+DECLARE_CSR(sie, CSR_SIE)
+DECLARE_CSR(sscratch, CSR_SSCRATCH)
+DECLARE_CSR(sepc, CSR_SEPC)
+DECLARE_CSR(sip, CSR_SIP)
+DECLARE_CSR(sptbr, CSR_SPTBR)
+DECLARE_CSR(sasid, CSR_SASID)
+DECLARE_CSR(cyclew, CSR_CYCLEW)
+DECLARE_CSR(timew, CSR_TIMEW)
+DECLARE_CSR(instretw, CSR_INSTRETW)
+DECLARE_CSR(stime, CSR_STIME)
+DECLARE_CSR(scause, CSR_SCAUSE)
+DECLARE_CSR(sbadaddr, CSR_SBADADDR)
+DECLARE_CSR(stimew, CSR_STIMEW)
+DECLARE_CSR(mstatus, CSR_MSTATUS)
+DECLARE_CSR(mtvec, CSR_MTVEC)
+DECLARE_CSR(mtdeleg, CSR_MTDELEG)
+DECLARE_CSR(mie, CSR_MIE)
+DECLARE_CSR(mtimecmp, CSR_MTIMECMP)
+DECLARE_CSR(mscratch, CSR_MSCRATCH)
+DECLARE_CSR(mepc, CSR_MEPC)
+DECLARE_CSR(mcause, CSR_MCAUSE)
+DECLARE_CSR(mbadaddr, CSR_MBADADDR)
+DECLARE_CSR(mip, CSR_MIP)
+DECLARE_CSR(mtime, CSR_MTIME)
+DECLARE_CSR(mcpuid, CSR_MCPUID)
+DECLARE_CSR(mimpid, CSR_MIMPID)
+DECLARE_CSR(mhartid, CSR_MHARTID)
+DECLARE_CSR(mtohost, CSR_MTOHOST)
+DECLARE_CSR(mfromhost, CSR_MFROMHOST)
+DECLARE_CSR(mreset, CSR_MRESET)
+DECLARE_CSR(mipi, CSR_MIPI)
+DECLARE_CSR(miobase, CSR_MIOBASE)
+DECLARE_CSR(cycleh, CSR_CYCLEH)
+DECLARE_CSR(timeh, CSR_TIMEH)
+DECLARE_CSR(instreth, CSR_INSTRETH)
+DECLARE_CSR(cyclehw, CSR_CYCLEHW)
+DECLARE_CSR(timehw, CSR_TIMEHW)
+DECLARE_CSR(instrethw, CSR_INSTRETHW)
+DECLARE_CSR(stimeh, CSR_STIMEH)
+DECLARE_CSR(stimehw, CSR_STIMEHW)
+DECLARE_CSR(mtimecmph, CSR_MTIMECMPH)
+DECLARE_CSR(mtimeh, CSR_MTIMEH)
 
-	/// User Counter/Timers
-	/// privilege: URO
-	///@{
-	/// Cycle counter for RDCYCLE instruction
-	CSR_cycle = 0xC00u,
-	/// Timer for RDTIME instruction
-	CSR_time = 0xC01u,
-	/// Instructions-retired counter for RDINSTRET instruction
-	CSR_instret = 0xC02u,
-	/// Upper 32 bits of cycle, RV32I onl
-	CSR_cycleh = 0xC80u,
-	/// Upper 32 bits of time, RV32I only
-	CSR_timeh = 0xC81u,
-	///  Upper 32 bits of instret, RV32I only.
-	CSR_instreth = 0xC82u,
-	///@}
+/// Supervisor Trap Setup
+///@{
+/// Wall-clock timer compare val
+CSR_stimecmp = 0x121u,
+///@}
 
-	/// Supervisor Trap Setup
-	///@{
-	/// Supervisor status register
-	CSR_sstatus = 0x100u,
-	/// Supervisor trap handler base address
-	CSR_stvec = 0x101u,
-	/// Supervisor interrupt-enable register
-	CSR_sie = 0x104u,
-	/// Wall-clock timer compare val
-	CSR_stimecmp = 0x121u,
-	///@}
+/// Machine Protection and Translation
+/// privilege: MRW
+///@{
 
-	/// Supervisor Timer
-	///@{
-	/// Supervisor wall-clock time register.
-	CSR_stime = 0xD01u,
-	/// Upper 32 bits of stime, RV32I onl
-	CSR_stimeh = 0xD81u,
-	///@}
+/// @brief Base register
+CSR_mbase = 0x380u,
 
-	/// Supervisor Trap Handling
-	///@{
-	/// Scratch register for supervisor trap handlers
-	CSR_sscratch = 0x140u,
-	/// Supervisor exception program counter.
-	CSR_sepc = 0x141u,
-	/// Supervisor trap cause.
-	CSR_scause = 0xD42u,
-	/// Supervisor bad address.
-	CSR_sbadaddr = 0xD43u,
-	/// Supervisor interrupt pending
-	CSR_sip = 0x144u,
-	///@}
+/// @brief Base register
+CSR_mbound = 0x381u,
 
-	/// Supervisor Protection and Translation
-	///@{
-	/// Page-table base register
-	CSR_sptbr = 0x180u,
-	/// Address-space ID.
-	CSR_sasid = 0x181u,
-	///@}
+/// @brief Bound register.
+CSR_mibase = 0x382u,
 
-	/// Supervisor Read/Write Shadow of User Read-Only registers
-	///@{
-	/// Cycle counter for RDCYCLE instruction.
-	CSR_cyclew = 0x900u,
-	/// Timer for RDTIME instruction.
-	CSR_timew = 0x901u,
-	/// Instructions-retired counter for RDINSTRET instruction
-	CSR_instretw = 0x902u,
-	/// Upper 32 bits of cycle, RV32I only
-	CSR_cyclehw = 0x980u,
-	/// Upper 32 bits of time, RV32I only
-	CSR_timehw = 0x981u,
-	/// Upper 32 bits of CSR_instretw, RV32I only
-	CSR_instrethw = 0x982u,
-	///@}
+/// @brief Instruction base register.
+CSR_mibound = 0x383u,
 
-	/// Hypervisor Trap Setup
-	///@{
-	/// Hypervisor status register
-	CSR_hstatus = 0x200u,
-	/// Hypervisor trap handler base address
-	CSR_htvec = 0x201u,
-	/// Hypervisor trap delegation register.
-	CSR_htdeleg = 0x202u,
-	/// Hypervisor wall-clock timer compare value.
-	CSR_htimecmp = 0x221u,
-	///@}
+/// @brief Data base register
+CSR_mdbase = 0x384u,
 
-	/// Hypervisor Timer
-	///@{
-	CSR_htime = 0xE01u,
-	CSR_htimeh = 0xE81u,
-	///@}
+/// @brief Data bound register
+CSR_mdbound = 0x385u,
+///@}
 
-	/// Hypervisor Trap Handling
-	///@{
-	CSR_hscratch = 0x240u,
-	CSR_hepc = 0x241u,
-	CSR_hcause = 0x242u,
-	CSR_hbadaddr = 0x243u,
-	///@}
-
-	/// Hypervisor Read/Write Shadow of Supervisor Read-Only Registers
-	///@{
-	CSR_stimew = 0xA01u,
-	CSR_stimehw = 0xA81u,
-	///@}
-
-	/// Machine Information Registers
-	/// privilege: MRO
-	///@{
-	/// @brief CPU description
-	CSR_mcpuid = 0xF00u,
-
-	/// @brief Vendor ID and version number
-	CSR_mimpid = 0xF01u,
-
-	/// @brief Hardware thread ID
-	CSR_mhartid = 0xF10u,
-	///@}
-
-	/// Machine Trap Setup
-	/// privilege: MRW
-	///@{
-
-	/// @brief Machine status register
-	///< FS - bits 13:12
-	CSR_mstatus = 0x300u,
-
-	/// @brief Machine trap-handler base address
-	CSR_mtvec = 0x301u,
-
-	/// @brief Machine trap delegation register
-	CSR_mtdeleg = 0x302u,
-
-	/// @brief Machine interrupt-enable register
-	CSR_mie = 0x304u,
-
-	/// @brief Machine wall-clock timer compare value
-	CSR_mtimecmp = 0x321u,
-	///@}
-
-	/// Machine Timers and Counters
-	/// privilege: MRW
-	///@{
-
-	/// @brief Machine wall-clock time
-	CSR_mtime = 0x701u,
-
-	/// @brief Upper 32 bits of mtime, RV32I only
-	CSR_mtimeh = 0x741u,
-	///@}
-
-	/// Machine Trap Handling
-	/// privilege: MRW
-	///@{
-
-	/// @brief Scratch register for machine trap handlers.
-	CSR_mscratch = 0x340u,
-	/// @brief Machine exception program counter
-	CSR_mepc = 0x341u,
-	/// @brief Machine trap cause
-	CSR_mcause = 0x342u,
-	/// @brief Machine bad address
-	CSR_mbadaddr = 0x343u,
-	/// @brief Machine interrupt pending.
-	CSR_mip = 0x344u,
-	///@}
-
-	/// Machine Protection and Translation
-	/// privilege: MRW
-	///@{
-
-	/// @brief Base register
-	CSR_mbase = 0x380u,
-
-	/// @brief Base register
-	CSR_mbound = 0x381u,
-
-	/// @brief Bound register.
-	CSR_mibase = 0x382u,
-
-	/// @brief Instruction base register.
-	CSR_mibound = 0x383u,
-
-	/// @brief Data base register
-	CSR_mdbase = 0x384u,
-
-	/// @brief Data bound register
-	CSR_mdbound = 0x385u,
-	///@}
-
-	/// Machine Read-Write Shadow of Hypervisor Read-Only Registers
-	/// privilege: MRW
-	///@{
-
-	/// @brief Hypervisor wall-clock timer
-	CSR_htimew = 0xB01u,
-
-	/// @brief Upper 32 bits of hypervisor wall-clock timer, RV32I only.
-	CSR_htimehw = 0xB81u,
-	///@}
-
-	/// Machine Host-Target Interface (Non-Standard Berkeley Extension)
-	/// privilege: MRW
-	///@{
-	/// @brief Output register to host
-	CSR_mtohost = 0x780u,
-	/// @brief Input register from host.
-	CSR_mfromhost = 0x781u,
-	///@}
-
-	/// Debug controller CSR
-	/// privilege: MRW
-	CSR_DBG_SCRATCH = 0x788u,
+/// Debug controller CSR
+/// privilege: MRW
+CSR_SC_DBG_SCRATCH = 0x788u,
 };
-
+#undef DECLARE_CSR
 enum mstatus_context_field_e
 {
 	ext_off = 0,
