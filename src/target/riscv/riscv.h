@@ -216,7 +216,6 @@ enum VM_mode
 
 uint32_t RV_ADD(reg_num_type rd, reg_num_type rs1, reg_num_type rs2);
 uint32_t RV_FMV_X_S(reg_num_type rd, reg_num_type rs1_fp);
-uint32_t RV_FMV_X2_S(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp);
 uint32_t RV_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1);
 uint32_t RV_LB(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
 uint32_t RV_LH(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
@@ -241,6 +240,9 @@ uint32_t RV_JAL(reg_num_type rd, riscv_signed_type imm_20_01);
 uint32_t RV_NOP(void);
 uint32_t RV_CSRW(unsigned csr, reg_num_type rs1);
 uint32_t RV_CSRR(reg_num_type rd, csr_num_type csr);
+
+uint32_t RV_FMV_X2_S(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp);
+uint32_t RV_FMV_S_X2(reg_num_type rd_fp, reg_num_type rs_lo, reg_num_type rs_hi);
 ///@]
 
 #endif  // RISCV_I_H_

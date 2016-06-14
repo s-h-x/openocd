@@ -130,6 +130,10 @@ uint32_t RV_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1)
 {
 	return RV_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd_fp, 0x53u);
 }
+uint32_t RV_FMV_S_X2(reg_num_type rd_fp, reg_num_type rs_lo, reg_num_type rs_hi)
+{
+	return RV_INSTR_R_TYPE(0x78u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
+}
 uint32_t RV_LB(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RV_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x03u);
