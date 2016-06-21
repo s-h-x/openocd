@@ -1073,7 +1073,8 @@ static struct reg const def_FP_regs_array[] = {
 };
 
 static char const def_CSR_regs_name[] = "rv32iCSR";
-static struct reg const CSR_not_exists ={.name = "", .caller_save = false,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_csr_accessors,.feature = &feature_riscv_org};
+static struct reg const CSR_not_exists ={.name = "", .caller_save = false, .dirty = false, .valid = false, .exist = true, .size = XLEN,.type = &reg_csr_accessors,.feature = &feature_riscv_org};
+#if 0
 #define DECLARE_CSR(NAME,VALUE) {.name = #NAME, .number = CSR_##NAME + RISCV_FIRST_CSR_REGNUM, .exist = true},
 static struct reg const def_CSR_regs_array[] = {
 DECLARE_CSR(fflags, CSR_FFLAGS)
@@ -1181,12 +1182,46 @@ static struct reg_cache* reg_cache__CSR_section_create(char const* name, struct 
 	*p_obj = the_reg_cache;
 	return p_obj;
 }
+#else
+static struct reg_cache* reg_cache__CSR_section_create_gdb(char const* name, void* const p_arch_info)
+{
+    assert(name);
+    struct reg* const p_dst_array = calloc(4096, sizeof(struct reg));
+    {
+        for ( int i = 0; i < 4096; ++i ) {
+            struct reg * p_reg = &p_dst_array[i];
+            *p_reg = CSR_not_exists;
+            char buf[20];
+            sprintf(buf, "csr%d", i);
+            // TODO cleanup
+            p_reg->name = strndup(buf, sizeof buf);
+            p_reg->number = i + RISCV_FIRST_CSR_REGNUM;
+            p_reg->value = calloc(1, NUM_BITS_TO_SIZE(p_reg->size));;
+            p_reg->arch_info = p_arch_info;
+        }
+    }
+    struct reg_cache const the_reg_cache = {
+        .name = name,
+        .reg_list = p_dst_array,
+        .num_regs = 4096,
+    };
+
+    struct reg_cache* const p_obj = calloc(1, sizeof(struct reg_cache));
+    assert(p_obj);
+    *p_obj = the_reg_cache;
+    return p_obj;
+}
+#endif
 static void sc_rv32_init_regs_cache(struct target* const p_target)
 {
 	assert(p_target);
 	struct reg_cache* p_reg_cache_last = p_target->reg_cache = reg_cache__section_create(def_GP_regs_name, def_GP_regs_array, ARRAY_LEN(def_GP_regs_array), p_target);
 	p_reg_cache_last = p_reg_cache_last->next = reg_cache__section_create(def_FP_regs_name, def_FP_regs_array, ARRAY_LEN(def_FP_regs_array), p_target);
+#if 0
 	p_reg_cache_last->next = reg_cache__CSR_section_create(def_CSR_regs_name, def_CSR_regs_array, ARRAY_LEN(def_CSR_regs_array), p_target);
+#else
+        p_reg_cache_last->next = reg_cache__CSR_section_create_gdb(def_CSR_regs_name, p_target);
+#endif
 }
 static int sc_rv32i__init_target(struct command_context *cmd_ctx, struct target* const p_target)
 {
