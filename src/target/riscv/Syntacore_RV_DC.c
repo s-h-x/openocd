@@ -658,7 +658,7 @@ static void update_debug_status(struct target* const p_target)
 		ERROR_OK != error_code__get(p_target) ? TARGET_UNKNOWN :
 		HART_status_bits_to_target_state(HART_status);
 	LOG_DEBUG("debug_status: old=%d, new=%d", old_state, new_state);
-#if 0
+#if 1
 	if ( new_state == old_state ) {
 		return;
 	}

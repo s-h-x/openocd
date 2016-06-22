@@ -834,6 +834,7 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 				if ( dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT) ) {
 					// then single step already done
 					reg_cache__chain_invalidate(p_target->reg_cache);
+					p_target->state = debug_execution ? TARGET_DEBUG_RUNNING : TARGET_RUNNING;
 					target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
 					set_DEMODE_ENBL(p_target, dmode_enabled);
 					sc_rv32_update_status(p_target);
