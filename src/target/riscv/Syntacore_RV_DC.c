@@ -591,6 +591,7 @@ static enum target_state HART_status_bits_to_target_state(uint32_t const status)
 		BIT_NUM_TO_MASK(DBGC_HART_HDSR_LOCK_STKY_BIT);
 
 	if ( status & err_bits ) {
+		LOG_WARNING("Error status: 0x%08x", status);
 		return TARGET_UNKNOWN;
 	} else if ( status & BIT_NUM_TO_MASK(DBGC_HART_HDSR_RST_BIT) ) {
 		return TARGET_RESET;
@@ -653,7 +654,9 @@ static void update_debug_status(struct target* const p_target)
 	/// Only 1 HART available now
 	assert(p_target->coreid == 0);
 	uint32_t const HART_status = sc_rv32_HART_REGTRANS_read(p_target, DBGC_HART_REGS_DBG_STS);
-	enum target_state const new_state = ERROR_OK == error_code__get(p_target) ? HART_status_bits_to_target_state(HART_status) : TARGET_UNKNOWN;
+	enum target_state const new_state =
+		ERROR_OK != error_code__get(p_target) ? TARGET_UNKNOWN :
+		HART_status_bits_to_target_state(HART_status);
 	if ( new_state != old_state ) {
 		p_target->state = new_state;
 		switch ( new_state ) {
@@ -662,19 +665,23 @@ static void update_debug_status(struct target* const p_target)
 			LOG_INFO("TARGET_EVENT_HALTED");
 			target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
 			break;
+
 		case TARGET_RESET:
 			update_debug_reason(p_target);
 			LOG_INFO("TARGET_EVENT_RESET_ASSERT");
 			target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
 			break;
+
 		case TARGET_RUNNING:
 			LOG_INFO("New debug reason: 0x%08X (DBG_REASON_NOTHALTED)", DBG_REASON_NOTHALTED);
 			p_target->debug_reason = DBG_REASON_NOTHALTED;
 			LOG_INFO("TARGET_EVENT_RESUMED");
 			target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
+			break;
+
 		case TARGET_UNKNOWN:
 		default:
-			LOG_WARNING("TARGET_UNKNOWN");
+			LOG_WARNING("TARGET_UNKNOWN %d", new_state);
 			break;
 		}
 	}
@@ -694,7 +701,7 @@ static void check_and_repair_debug_controller_errors(struct target* const p_targ
 		LOG_ERROR("Debug controller/JTAG error! Try to re-examine!");
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return;
-	}
+}
 	uint32_t core_status = try_to_get_ready(p_target);
 	if ( 0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) ) {
 		LOG_ERROR("Lock detected: 0x%08X", core_status);
