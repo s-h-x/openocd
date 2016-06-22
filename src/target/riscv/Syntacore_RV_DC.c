@@ -642,9 +642,20 @@ static enum target_debug_reason read_debug_cause(struct target* const p_target)
 static void update_debug_reason(struct target* const p_target)
 {
 	assert(p_target);
+	static char const* reasons_names[] = 
+	{
+		"DBG_REASON_DBGRQ",
+		"DBG_REASON_BREAKPOINT",
+		"DBG_REASON_WATCHPOINT",
+		"DBG_REASON_WPTANDBKPT",
+		"DBG_REASON_SINGLESTEP",
+		"DBG_REASON_NOTHALTED",
+		"DBG_REASON_EXIT",
+		"DBG_REASON_UNDEFINED",
+	};
 	enum target_debug_reason const debug_reason = read_debug_cause(p_target);
 	if ( debug_reason != p_target->debug_reason ) {
-		LOG_INFO("New debug reason: 0x%08X", (uint32_t)debug_reason);
+		LOG_DEBUG("New debug reason: 0x%08X (%s)", (uint32_t)debug_reason, debug_reason >= ARRAY_LEN(reasons_names) ? "unknown" : reasons_names[debug_reason]);
 		p_target->debug_reason = debug_reason;
 	}
 }
@@ -667,20 +678,20 @@ static void update_debug_status(struct target* const p_target)
 	switch ( new_state ) {
 	case TARGET_HALTED:
 		update_debug_reason(p_target);
-		LOG_INFO("TARGET_EVENT_HALTED");
+		LOG_DEBUG("TARGET_EVENT_HALTED");
 		target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
 		break;
 
 	case TARGET_RESET:
 		update_debug_reason(p_target);
-		LOG_INFO("TARGET_EVENT_RESET_ASSERT");
+		LOG_DEBUG("TARGET_EVENT_RESET_ASSERT");
 		target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
 		break;
 
 	case TARGET_RUNNING:
-		LOG_INFO("New debug reason: 0x%08X (DBG_REASON_NOTHALTED)", DBG_REASON_NOTHALTED);
+		LOG_DEBUG("New debug reason: 0x%08X (DBG_REASON_NOTHALTED)", DBG_REASON_NOTHALTED);
 		p_target->debug_reason = DBG_REASON_NOTHALTED;
-		LOG_INFO("TARGET_EVENT_RESUMED");
+		LOG_DEBUG("TARGET_EVENT_RESUMED");
 		target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
 		break;
 
