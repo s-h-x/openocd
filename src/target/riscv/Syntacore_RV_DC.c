@@ -657,33 +657,37 @@ static void update_debug_status(struct target* const p_target)
 	enum target_state const new_state =
 		ERROR_OK != error_code__get(p_target) ? TARGET_UNKNOWN :
 		HART_status_bits_to_target_state(HART_status);
-	if ( new_state != old_state ) {
-		p_target->state = new_state;
-		switch ( new_state ) {
-		case TARGET_HALTED:
-			update_debug_reason(p_target);
-			LOG_INFO("TARGET_EVENT_HALTED");
-			target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
-			break;
+	LOG_DEBUG("debug_status: old=%d, new=%d", old_state, new_state);
+#if 0
+	if ( new_state == old_state ) {
+		return;
+	}
+#endif
+	p_target->state = new_state;
+	switch ( new_state ) {
+	case TARGET_HALTED:
+		update_debug_reason(p_target);
+		LOG_INFO("TARGET_EVENT_HALTED");
+		target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
+		break;
 
-		case TARGET_RESET:
-			update_debug_reason(p_target);
-			LOG_INFO("TARGET_EVENT_RESET_ASSERT");
-			target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
-			break;
+	case TARGET_RESET:
+		update_debug_reason(p_target);
+		LOG_INFO("TARGET_EVENT_RESET_ASSERT");
+		target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
+		break;
 
-		case TARGET_RUNNING:
-			LOG_INFO("New debug reason: 0x%08X (DBG_REASON_NOTHALTED)", DBG_REASON_NOTHALTED);
-			p_target->debug_reason = DBG_REASON_NOTHALTED;
-			LOG_INFO("TARGET_EVENT_RESUMED");
-			target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
-			break;
+	case TARGET_RUNNING:
+		LOG_INFO("New debug reason: 0x%08X (DBG_REASON_NOTHALTED)", DBG_REASON_NOTHALTED);
+		p_target->debug_reason = DBG_REASON_NOTHALTED;
+		LOG_INFO("TARGET_EVENT_RESUMED");
+		target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
+		break;
 
-		case TARGET_UNKNOWN:
-		default:
-			LOG_WARNING("TARGET_UNKNOWN %d", new_state);
-			break;
-		}
+	case TARGET_UNKNOWN:
+	default:
+		LOG_WARNING("TARGET_UNKNOWN %d", new_state);
+		break;
 	}
 }
 static void check_and_repair_debug_controller_errors(struct target* const p_target)
@@ -701,7 +705,7 @@ static void check_and_repair_debug_controller_errors(struct target* const p_targ
 		LOG_ERROR("Debug controller/JTAG error! Try to re-examine!");
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return;
-}
+	}
 	uint32_t core_status = try_to_get_ready(p_target);
 	if ( 0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) ) {
 		LOG_ERROR("Lock detected: 0x%08X", core_status);
