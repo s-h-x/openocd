@@ -868,6 +868,7 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 
 	LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_NOTHALTED);
 	p_target->debug_reason = DBG_REASON_NOTHALTED;
+	p_target->state = debug_execution ? TARGET_DEBUG_RUNNING : TARGET_RUNNING;
 	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
 
 	LOG_DEBUG("update_status");
