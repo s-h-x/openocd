@@ -164,7 +164,7 @@ static void DAP_CTRL_REG_set_force(struct target const* const p_target, uint8_t 
 	assert(p_target);
 	int const old_err_code = error_code__get_and_clear(p_target);
 	IR_select(p_target, TAP_INSTR_DAP_CTRL);
-	if ( ERROR_OK == error_code__get(p_target)) {
+	if ( ERROR_OK == error_code__get(p_target) ) {
 		// clear status bits
 		uint8_t status = 0;
 		STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_LEN_DAP_CTRL) == sizeof status);
