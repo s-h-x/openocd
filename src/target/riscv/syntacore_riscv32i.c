@@ -834,16 +834,12 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 				if ( dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT) ) {
 					// then single step already done
 					reg_cache__chain_invalidate(p_target->reg_cache);
+					target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
 					set_DEMODE_ENBL(p_target, dmode_enabled);
-#if 0
-					target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
-#endif
-					LOG_DEBUG("update_status");
 					sc_rv32_update_status(p_target);
-#if 1
 					LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_SINGLESTEP);
 					p_target->debug_reason = DBG_REASON_SINGLESTEP;
-#endif
+					target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_HALTED : TARGET_EVENT_HALTED);
 					return error_code__get_and_clear(p_target);
 				}
 			}
