@@ -27,9 +27,15 @@ Syntacore RISC-V target
 #include <memory.h>
 #include <limits.h>
 
-/// TAP IDCODE expected
+/// Size of RISC-V GP registers in bits
+#define XLEN (32u)
+/// Size of RISC-V FP registers in bits
+#define FLEN (64u)
+/// Size of RISC-V instruction
+#define ILEN (32u)
+
 #define FP_enabled !!1
-#define VERIFY_REG_WRITE 1
+#define VERIFY_REG_WRITE 0
 #define WRITE_BUFFER_THRESHOLD (1u << 18)
 
 /// RISC-V GP registers id
@@ -46,16 +52,6 @@ enum
 	NUMBER_OF_GP_REGS = NUMBER_OF_X_REGS + 1u,
 	NUMBER_OF_F_REGS = RISCV_LAST_FP_REGNUM - RISCV_FIRST_FP_REGNUM + 1,
 	NUMBER_OF_GDB_REGS = RISCV_LAST_CSR_REGNUM + 1,
-};
-
-enum arch_bits_numbers
-{
-	/// Size of RISC-V GP registers in bits
-	XLEN = 32u,
-	/// Size of RISC-V FP registers in bits
-	FLEN = 64u,
-	/// Size of RISC-V instruction
-	ILEN = 32u,
 };
 
 /// GP registers accessors
@@ -95,10 +91,17 @@ static void reg__set_new_cache_value(struct reg* const p_reg, uint8_t* const buf
 
 	assert(p_reg->exist);
 
-	STATIC_ASSERT(CHAR_BIT == 8);
-	assert(p_reg->size <= CHAR_BIT * sizeof(uint32_t));
-
-	LOG_DEBUG("Set register %s cache to 0x%08X", p_reg->name, buf_get_u32(buf, 0, p_reg->size));
+	switch ( p_reg->size ) {
+	case 32:
+		LOG_DEBUG("Set register %s cache to 0x%08X", p_reg->name, buf_get_u32(buf, 0, p_reg->size));
+		break;
+	case 64:
+		LOG_DEBUG("Set register %s cache to 0x%016lX", p_reg->name, buf_get_u64(buf, 0, p_reg->size));
+		break;
+	default:
+		assert(!"Bad register size");
+		break;
+	}
 
 	assert(p_reg->value);
 	buf_cpy(buf, p_reg->value, p_reg->size);
@@ -293,6 +296,12 @@ static int reg_x__set(struct reg* const p_reg, uint8_t* const buf)
 	/// store dirty register data to HW
 	return reg_x__store(p_reg);
 }
+static struct reg_arch_type const reg_x_accessors =
+{
+	.get = reg_x__get,
+	.set = reg_x__set,
+};
+
 static int reg_x0__get(struct reg* const p_reg)
 {
 	assert(p_reg);
@@ -309,6 +318,10 @@ static int reg_x0__set(struct reg* const p_reg, uint8_t* const buf)
 	reg__set_valid_value_to_cache(p_reg, 0u);
 	return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 }
+
+static struct reg_arch_type const reg_x0_accessors = {.get = reg_x0__get,.set = reg_x0__set,};
+struct reg_data_type GP_reg_data_type = {.type = REG_TYPE_INT32,};
+
 static struct reg* prepare_temporary_GP_register(struct target const* const p_target, int const after_reg)
 {
 	assert(p_target);
@@ -405,11 +418,13 @@ static uint32_t csr_get_value(struct target* const p_target, uint32_t const csr_
 	}
 	return value;
 }
+
 static bool is_RVC_enable(struct target* const p_target)
 {
 	uint32_t const mcpuid = csr_get_value(p_target, CSR_mcpuid);
 	return 0 != (mcpuid & (1u << ('C' - 'A')));
 }
+
 /// Update pc cache from HW (if non-cached)
 static int reg_pc__get(struct reg* const p_reg)
 {
@@ -509,9 +524,176 @@ static int reg_pc__set(struct reg* const p_reg, uint8_t* const buf)
 
 	return error_code__get_and_clear(p_target);
 }
-static int reg_f__get(struct reg* const p_reg)
+
+static struct reg_arch_type const reg_pc_accessors =
+{
+	.get = reg_pc__get,
+	.set = reg_pc__set,
+};
+
+struct reg_data_type PC_reg_data_type =
+{
+	.type = REG_TYPE_CODE_PTR,
+};
+
+#if FLEN == 32
+
+static int reg_fs__get(struct reg* const p_reg)
 {
 	assert(p_reg);
+	assert(p_reg->size == 32);
+	assert(RISCV_FIRST_FP_REGNUM <= p_reg->number && p_reg->number <= RISCV_LAST_FP_REGNUM);
+	if ( !p_reg->exist ) {
+		LOG_WARNING("FP register %s (#%d) is unavailable", p_reg->name, p_reg->number - RISCV_FIRST_FP_REGNUM);
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+
+	assert(reg__check(p_reg));
+
+	struct target* const p_target = p_reg->arch_info;
+	assert(p_target);
+
+	sc_rv32_check_that_target_halted(p_target);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__get_and_clear(p_target);
+	}
+
+	/// @todo check that FPU is enabled
+	/// Find temporary GP register
+	struct reg* const p_wrk_reg_1 = prepare_temporary_GP_register(p_target, 0);
+	assert(p_wrk_reg_1);
+
+	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
+	if ( error_code__get(p_target) == ERROR_OK ) {
+		struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		assert(p_arch);
+		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
+			sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
+		}
+		sc_rv32_EXEC__setup(p_target);
+		int advance_pc_counter = 0;
+		if ( error_code__get(p_target) == ERROR_OK ) {
+			/// Copy values to temporary register
+			(void)sc_rv32_EXEC__step(p_target, RV_FMV_X_S(p_wrk_reg_1->number, p_reg->number - RISCV_FIRST_FP_REGNUM));
+			advance_pc_counter += instr_step;
+			if ( error_code__get(p_target) == ERROR_OK ) {
+				/// and store temporary register to CSR_DBG_SCRATCH CSR.
+				(void)sc_rv32_EXEC__step(p_target, RV_CSRW(CSR_SC_DBG_SCRATCH, p_wrk_reg_1->number));
+				advance_pc_counter += instr_step;
+				if ( error_code__get(p_target) == ERROR_OK ) {
+					assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
+					uint32_t const value = sc_rv32_EXEC__step(p_target, RV_JAL(0, -advance_pc_counter));
+					advance_pc_counter = 0;
+					if ( error_code__get(p_target) == ERROR_OK ) {
+						buf_set_u32(p_reg->value, 0, p_reg->size, value);
+						p_reg->valid = true;
+						p_reg->dirty = false;
+					}
+				}
+			}
+		}
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
+			sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
+		}
+	}
+
+	sc_rv32_check_PC_value(p_target, pc_sample_1);
+
+	// restore temporary register
+	int const old_err_code = error_code__get_and_clear(p_target);
+	if ( error_code__update(p_target, reg_x__store(p_wrk_reg_1)) == ERROR_OK ) {
+		assert(!p_wrk_reg_1->dirty);
+	}
+	error_code__prepend(p_target, old_err_code);
+
+	return error_code__get_and_clear(p_target);
+}
+static int reg_fs__set(struct reg* const p_reg, uint8_t* const buf)
+{
+	assert(p_reg);
+	assert(p_reg->size == 32);
+	assert(RISCV_FIRST_FP_REGNUM <= p_reg->number && p_reg->number < RISCV_LAST_FP_REGNUM);
+	if ( !p_reg->exist ) {
+		LOG_WARNING("Register %s is unavailable", p_reg->name);
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+
+	assert(reg__check(p_reg));
+
+	struct target* const p_target = p_reg->arch_info;
+	assert(p_target);
+
+	sc_rv32_check_that_target_halted(p_target);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__get_and_clear(p_target);
+	}
+
+	/// @todo check that FPU is enabled
+	/// Find temporary GP register
+	struct reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
+	assert(p_wrk_reg);
+
+	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
+	if ( error_code__get(p_target) == ERROR_OK ) {
+		struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		assert(p_arch);
+		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BITS_TO_SIZE(ILEN);
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
+			sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_HART_HDCR_PC_ADVMT_DSBL_BIT));
+		}
+		sc_rv32_EXEC__setup(p_target);
+		int advance_pc_counter = 0;
+		if ( error_code__get(p_target) == ERROR_OK ) {
+			reg__set_new_cache_value(p_reg, buf);
+
+			sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
+			if ( error_code__get(p_target) == ERROR_OK ) {
+				// set temporary register value to restoring pc value
+				(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_SC_DBG_SCRATCH));
+				advance_pc_counter += instr_step;
+				if ( error_code__get(p_target) == ERROR_OK ) {
+					assert(p_wrk_reg->dirty);
+					assert(0 < p_wrk_reg->number && p_wrk_reg->number < RISCV_PC_REGNUM);
+					(void)sc_rv32_EXEC__step(p_target, RV_FMV_S_X(p_reg->number - RISCV_FIRST_FP_REGNUM, p_wrk_reg->number));
+					advance_pc_counter += instr_step;
+					if ( error_code__get(p_target) == ERROR_OK ) {
+						/// Correct pc by jump 2 instructions back and get previous command result.
+						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
+						if ( advance_pc_counter ) {
+							(void)sc_rv32_EXEC__step(p_target, RV_JAL(0, -advance_pc_counter));
+						}
+						advance_pc_counter = 0;
+						assert(p_reg->valid);
+						assert(p_reg->dirty);
+						p_reg->dirty = false;
+						LOG_DEBUG("Store register value 0x%08X from cache to register %s", buf_get_u32(p_reg->value, 0, p_reg->size), p_reg->name);
+					}
+				}
+			}
+		}
+		if ( p_arch->use_pc_advmt_dsbl_bit ) {
+			sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
+		}
+	}
+
+	sc_rv32_check_PC_value(p_target, pc_sample_1);
+	// restore temporary register
+	int const old_err_code = error_code__get_and_clear(p_target);
+	error_code__update(p_target, reg_x__store(p_wrk_reg));
+	error_code__prepend(p_target, old_err_code);
+	assert(!p_wrk_reg->dirty);
+	return error_code__get_and_clear(p_target);
+}
+static struct reg_arch_type const reg_f_accessors = {.get = reg_fs__get,.set = reg_fs__set,};
+struct reg_data_type FP_reg_data_type = {.type = REG_TYPE_IEEE_SINGLE,};
+
+#elif FLEN == 64
+
+static int reg_fd__get(struct reg* const p_reg)
+{
+	assert(p_reg);
+	assert(p_reg->size == 64);
 	assert(RISCV_FIRST_FP_REGNUM <= p_reg->number && p_reg->number <= RISCV_LAST_FP_REGNUM);
 	if ( !p_reg->exist ) {
 		LOG_WARNING("FP register %s (#%d) is unavailable", p_reg->name, p_reg->number - RISCV_FIRST_FP_REGNUM);
@@ -589,9 +771,11 @@ static int reg_f__get(struct reg* const p_reg)
 
 	return error_code__get_and_clear(p_target);
 }
-static int reg_f__set(struct reg* const p_reg, uint8_t* const buf)
+
+static int reg_fd__set(struct reg* const p_reg, uint8_t* const buf)
 {
 	assert(p_reg);
+	assert(p_reg->size == 64);
 	assert(RISCV_FIRST_FP_REGNUM <= p_reg->number && p_reg->number < RISCV_LAST_FP_REGNUM);
 	if ( !p_reg->exist ) {
 		LOG_WARNING("Register %s is unavailable", p_reg->name);
@@ -610,8 +794,15 @@ static int reg_f__set(struct reg* const p_reg, uint8_t* const buf)
 
 	/// @todo check that FPU is enabled
 	/// Find temporary GP register
-	struct reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
-	assert(p_wrk_reg);
+	struct reg* const p_wrk_reg_1 = prepare_temporary_GP_register(p_target, 0);
+	assert(p_wrk_reg_1);
+	assert(p_wrk_reg_1->dirty);
+	assert(0 < p_wrk_reg_1->number && p_wrk_reg_1->number < RISCV_PC_REGNUM);
+
+	struct reg* const p_wrk_reg_2 = prepare_temporary_GP_register(p_target, p_wrk_reg_1->number);
+	assert(p_wrk_reg_2);
+	assert(p_wrk_reg_2->dirty);
+	assert(0 < p_wrk_reg_2->number && p_wrk_reg_2->number < RISCV_PC_REGNUM);
 
 	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 	if ( error_code__get(p_target) == ERROR_OK ) {
@@ -625,28 +816,33 @@ static int reg_f__set(struct reg* const p_reg, uint8_t* const buf)
 		int advance_pc_counter = 0;
 		if ( error_code__get(p_target) == ERROR_OK ) {
 			reg__set_new_cache_value(p_reg, buf);
-
 			sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size));
 			if ( error_code__get(p_target) == ERROR_OK ) {
 				// set temporary register value to restoring pc value
-				(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg->number, CSR_SC_DBG_SCRATCH));
+				(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg_1->number, CSR_SC_DBG_SCRATCH));
 				advance_pc_counter += instr_step;
 				if ( error_code__get(p_target) == ERROR_OK ) {
-					assert(p_wrk_reg->dirty);
-					assert(0 < p_wrk_reg->number && p_wrk_reg->number < RISCV_PC_REGNUM);
-					(void)sc_rv32_EXEC__step(p_target, RV_FMV_S_X(p_reg->number - RISCV_FIRST_FP_REGNUM, p_wrk_reg->number));
-					advance_pc_counter += instr_step;
+					sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(&((uint8_t const*)p_reg->value)[4], 0, p_reg->size));
 					if ( error_code__get(p_target) == ERROR_OK ) {
-						/// Correct pc by jump 2 instructions back and get previous command result.
-						assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-						if ( advance_pc_counter ) {
-							(void)sc_rv32_EXEC__step(p_target, RV_JAL(0, -advance_pc_counter));
+						// set temporary register value to restoring pc value
+						(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg_2->number, CSR_SC_DBG_SCRATCH));
+						advance_pc_counter += instr_step;
+						if ( error_code__get(p_target) == ERROR_OK ) {
+							(void)sc_rv32_EXEC__step(p_target, RV_FMV_S_X2(p_reg->number - RISCV_FIRST_FP_REGNUM, p_wrk_reg_2->number, p_wrk_reg_1->number));
+							advance_pc_counter += instr_step;
+							if ( error_code__get(p_target) == ERROR_OK ) {
+								/// Correct pc by jump 2 instructions back and get previous command result.
+								assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
+								if ( advance_pc_counter ) {
+									(void)sc_rv32_EXEC__step(p_target, RV_JAL(0, -advance_pc_counter));
+								}
+								advance_pc_counter = 0;
+								assert(p_reg->valid);
+								assert(p_reg->dirty);
+								p_reg->dirty = false;
+								LOG_DEBUG("Store register value 0x%016lX from cache to register %s", buf_get_u64(p_reg->value, 0, p_reg->size), p_reg->name);
+							}
 						}
-						advance_pc_counter = 0;
-						assert(p_reg->valid);
-						assert(p_reg->dirty);
-						p_reg->dirty = false;
-						LOG_DEBUG("Store register value 0x%08X from cache to register %s", buf_get_u32(p_reg->value, 0, p_reg->size), p_reg->name);
 					}
 				}
 			}
@@ -659,11 +855,33 @@ static int reg_f__set(struct reg* const p_reg, uint8_t* const buf)
 	sc_rv32_check_PC_value(p_target, pc_sample_1);
 	// restore temporary register
 	int const old_err_code = error_code__get_and_clear(p_target);
-	error_code__update(p_target, reg_x__store(p_wrk_reg));
+	if ( error_code__update(p_target, reg_x__store(p_wrk_reg_2)) == ERROR_OK ) {
+		assert(!p_wrk_reg_2->dirty);
+	}
+	if ( error_code__update(p_target, reg_x__store(p_wrk_reg_1)) == ERROR_OK ) {
+		assert(!p_wrk_reg_1->dirty);
+	}
 	error_code__prepend(p_target, old_err_code);
-	assert(!p_wrk_reg->dirty);
 	return error_code__get_and_clear(p_target);
 }
+
+static struct reg_arch_type const reg_f_accessors = {.get = reg_fd__get,.set = reg_fd__set,};
+
+struct reg_data_type FP_s_type = {.type = REG_TYPE_IEEE_SINGLE, .id = "Float_S",};
+struct reg_data_type FP_d_type = {.type = REG_TYPE_IEEE_DOUBLE, .id = "Float_D",};
+
+struct reg_data_type_union_field FP_s = {.name="S", .type = &FP_s_type};
+struct reg_data_type_union_field FP_d = {.name = "D",.type = &FP_d_type, .next = &FP_s};
+
+struct reg_data_type_union FP_s_or_d = {.fields = &FP_d};
+struct reg_data_type FP_reg_data_type = {.type = REG_TYPE_ARCH_DEFINED, .id = "Float_D_or_S", .type_class = REG_TYPE_CLASS_UNION, .reg_type_union=&FP_s_or_d};
+
+#else
+
+#error Invalid FLEN
+
+#endif
+
 static int reg_csr__get(struct reg* const p_reg)
 {
 	assert(p_reg);
@@ -757,6 +975,12 @@ static int reg_csr__set(struct reg* const p_reg, uint8_t* const buf)
 	assert(!p_wrk_reg->dirty);
 	return error_code__get_and_clear(p_target);
 }
+static struct reg_arch_type const reg_csr_accessors =
+{
+	.get = reg_csr__get,
+	.set = reg_csr__set,
+};
+
 static struct reg_cache* reg_cache__section_create(char const* name, struct reg const regs_templates[], size_t const num_regs, void* const p_arch_info)
 {
 	assert(name);
@@ -784,10 +1008,12 @@ static struct reg_cache* reg_cache__section_create(char const* name, struct reg 
 	*p_obj = the_reg_cache;
 	return p_obj;
 }
+
 static void set_DEMODE_ENBL(struct target* const p_target, uint32_t const set_value)
 {
 	sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DMODE_ENBL, set_value);
 }
+
 static int resume_common(struct target* const p_target, uint32_t dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	assert(p_target);
@@ -879,6 +1105,7 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 
 	return error_code__get_and_clear(p_target);
 }
+
 static int reset__set(struct target* const p_target, bool const active)
 {
 	assert(p_target);
@@ -923,56 +1150,10 @@ static int reset__set(struct target* const p_target, bool const active)
 	return error_code__get_and_clear(p_target);
 }
 
-static struct reg_arch_type const reg_x0_accessors =
-{
-	.get = reg_x0__get,
-	.set = reg_x0__set,
-};
-
-static struct reg_arch_type const reg_x_accessors =
-{
-	.get = reg_x__get,
-	.set = reg_x__set,
-};
-
-static struct reg_arch_type const reg_pc_accessors =
-{
-	.get = reg_pc__get,
-	.set = reg_pc__set,
-};
-
-static struct reg_arch_type const reg_f_accessors =
-{
-	.get = reg_f__get,
-	.set = reg_f__set,
-};
-
-static struct reg_arch_type const reg_csr_accessors =
-{
-	.get = reg_csr__get,
-	.set = reg_csr__set,
-};
 static struct reg_feature feature_riscv_org = {
 	.name = "org.gnu.gdb.riscv.cpu",
 };
 
-#if 0
-static struct reg_feature feature_sc_com = {
-	.name = "org.gnu.gdb.riscv.syntacore.cpu",
-};
-#endif
-struct reg_data_type GP_reg_data_type =
-{
-.type = REG_TYPE_INT32,
-};
-struct reg_data_type PC_reg_data_type =
-{
-    .type = REG_TYPE_CODE_PTR,
-};
-struct reg_data_type FP_reg_data_type =
-{
-    .type = REG_TYPE_IEEE_DOUBLE,
-};
 static char const def_GP_regs_name[] = "rv32i";
 static struct reg const def_GP_regs_array[] = {
 	// Hard-wired zero
