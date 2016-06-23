@@ -867,8 +867,8 @@ static int reg_fd__set(struct reg* const p_reg, uint8_t* const buf)
 
 static struct reg_arch_type const reg_f_accessors = {.get = reg_fd__get,.set = reg_fd__set,};
 
-struct reg_data_type FP_s_type = {.type = REG_TYPE_IEEE_SINGLE, .id = "Float_S",};
-struct reg_data_type FP_d_type = {.type = REG_TYPE_IEEE_DOUBLE, .id = "Float_D",};
+struct reg_data_type FP_s_type = {.type = REG_TYPE_IEEE_SINGLE,};
+struct reg_data_type FP_d_type = {.type = REG_TYPE_IEEE_DOUBLE,};
 
 struct reg_data_type_union_field FP_s = {.name="S", .type = &FP_s_type};
 struct reg_data_type_union_field FP_d = {.name = "D",.type = &FP_d_type, .next = &FP_s};
