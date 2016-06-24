@@ -1205,117 +1205,117 @@ static struct reg_feature feature_riscv_org = {
 	.name = "org.gnu.gdb.riscv.cpu",
 };
 
-static char const def_GP_regs_name[] = "rv32i";
+static char const def_GP_regs_name[] = "general";
 static struct reg const def_GP_regs_array[] = {
 	// Hard-wired zero
-	{.name = "x0",.number = 0,.caller_save = false,.dirty = false,.valid = true,.exist = true,.size = XLEN,.type = &reg_x0_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
+	{.name = "x0",.number = 0,.caller_save = false,.dirty = false,.valid = true,.exist = true,.size = XLEN,.type = &reg_x0_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
 
 	// Return address
-	{.name = "x1",.number = 1,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
+	{.name = "x1",.number = 1,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
 
 	// Stack pointer
-	{.name = "x2",.number = 2,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
+	{.name = "x2",.number = 2,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
 
 	// Global pointer
-	{.name = "x3",.number = 3,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
+	{.name = "x3",.number = 3,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
 
 	// Thread pointer
-	{.name = "x4",.number = 4,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
+	{.name = "x4",.number = 4,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
 
 	// Temporaries
-	{.name = "x5",.number = 5,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x6",.number = 6,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x7",.number = 7,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
+	{.name = "x5",.number = 5,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x6",.number = 6,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x7",.number = 7,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
 
 	// Saved register/frame pointer
-	{.name = "x8",.number = 8,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
+	{.name = "x8",.number = 8,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
 
 	// Saved register
-	{.name = "x9",.number = 9,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
+	{.name = "x9",.number = 9,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
 
 	// Function arguments/return values
-	{.name = "x10",.number = 10,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x11",.number = 11,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
+	{.name = "x10",.number = 10,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x11",.number = 11,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
 
 	// Function arguments
-	{.name = "x12",.number = 12,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x13",.number = 13,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x14",.number = 14,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x15",.number = 15,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x16",.number = 16,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x17",.number = 17,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
+	{.name = "x12",.number = 12,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x13",.number = 13,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x14",.number = 14,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x15",.number = 15,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x16",.number = 16,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x17",.number = 17,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
 
 	// Saved registers
-	{.name = "x18",.number = 18,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x19",.number = 19,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x20",.number = 20,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x21",.number = 21,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x22",.number = 22,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x23",.number = 23,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x24",.number = 24,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x25",.number = 25,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x26",.number = 26,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x27",.number = 27,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
+	{.name = "x18",.number = 18,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x19",.number = 19,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x20",.number = 20,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x21",.number = 21,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x22",.number = 22,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x23",.number = 23,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x24",.number = 24,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x25",.number = 25,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x26",.number = 26,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x27",.number = 27,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
 
 	// Temporaries
-	{.name = "x28",.number = 28,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x29",.number = 29,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x30",.number = 30,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
-	{.name = "x31",.number = 31,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type},
+	{.name = "x28",.number = 28,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x29",.number = 29,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x30",.number = 30,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
+	{.name = "x31",.number = 31,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type, .group = def_GP_regs_name},
 
 	// Program counter
-	{.name = "pc",.number = RISCV_PC_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_pc_accessors,.feature = &feature_riscv_org,.reg_data_type = &PC_reg_data_type},
+	{.name = "pc",.number = RISCV_PC_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_pc_accessors,.feature = &feature_riscv_org,.reg_data_type = &PC_reg_data_type, .group = def_GP_regs_name},
 };
 
-static char const def_FP_regs_name[] = "rv32ifd";
+static char const def_FP_regs_name[] = "float";
 static struct reg const def_FP_regs_array[] = {
 	// FP temporaries
-	{.name = "f0",.number = 0 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f1",.number = 1 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f2",.number = 2 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f3",.number = 3 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f4",.number = 4 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f5",.number = 5 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f6",.number = 6 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f7",.number = 7 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
+	{.name = "f0",.number = 0 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f1",.number = 1 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f2",.number = 2 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f3",.number = 3 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f4",.number = 4 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f5",.number = 5 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f6",.number = 6 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f7",.number = 7 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
 
 	// FP saved registers
-	{.name = "f8",.number = 8 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f9",.number = 9 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
+	{.name = "f8",.number = 8 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f9",.number = 9 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
 
 	// FP arguments/return values
-	{.name = "f10",.number = 10 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f11",.number = 11 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
+	{.name = "f10",.number = 10 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f11",.number = 11 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
 
 	// FP arguments
-	{.name = "f12",.number = 12 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f13",.number = 13 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f14",.number = 14 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f15",.number = 15 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f16",.number = 16 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f17",.number = 17 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
+	{.name = "f12",.number = 12 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f13",.number = 13 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f14",.number = 14 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f15",.number = 15 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f16",.number = 16 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f17",.number = 17 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
 
 	// FP saved registers
-	{.name = "f18",.number = 18 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f19",.number = 19 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f20",.number = 20 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f21",.number = 21 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f22",.number = 22 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f23",.number = 23 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f24",.number = 24 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f25",.number = 25 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f26",.number = 26 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f27",.number = 27 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
+	{.name = "f18",.number = 18 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f19",.number = 19 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f20",.number = 20 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f21",.number = 21 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f22",.number = 22 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f23",.number = 23 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f24",.number = 24 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f25",.number = 25 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f26",.number = 26 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f27",.number = 27 + RISCV_FIRST_FP_REGNUM,.caller_save = false,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
 
 	// FP temporaries
-	{.name = "f28",.number = 28 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f29",.number = 29 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f30",.number = 30 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
-	{.name = "f31",.number = 31 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type},
+	{.name = "f28",.number = 28 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f29",.number = 29 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f30",.number = 30 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
+	{.name = "f31",.number = 31 + RISCV_FIRST_FP_REGNUM,.caller_save = true,.dirty = false,.valid = false,.exist = FP_enabled,.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type, .group = def_FP_regs_name},
 };
 
-static char const def_CSR_regs_name[] = "rv32iCSR";
-static struct reg const CSR_not_exists = {.name = "",.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_csr_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type};
+static char const def_CSR_regs_name[] = "system";
+static struct reg const CSR_not_exists = {.name = "",.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_csr_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_CSR_regs_name};
 #if 0
 #define DECLARE_CSR(NAME,VALUE) {.name = #NAME, .number = CSR_##NAME + RISCV_FIRST_CSR_REGNUM, .exist = true},
 static struct reg const def_CSR_regs_array[] = {
