@@ -1072,8 +1072,10 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 			}
 		}
 		// dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
+#if 0
 	} else {
 		dmode_enabled &= ~BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
+#endif
 	}
 
 	reg_cache__chain_invalidate(p_target->reg_cache);
