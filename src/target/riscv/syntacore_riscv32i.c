@@ -710,7 +710,28 @@ static int reg_fd__get(struct reg* const p_reg)
 		return error_code__get_and_clear(p_target);
 	}
 
-	/// @todo check that FPU is enabled
+	uint32_t const mcpuid = csr_get_value(p_target, CSR_mcpuid);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__get_and_clear(p_target);
+	}
+	if ( 0 == (mcpuid & (BIT_NUM_TO_MASK('f' - 'a') | BIT_NUM_TO_MASK('d' - 'a'))) ) {
+		LOG_ERROR("FPU is not supported");
+		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+		return error_code__get_and_clear(p_target);
+	}
+
+	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__get_and_clear(p_target);
+	}
+	if ( 0 == (mstatus & (3u << 12)) ) {
+		LOG_ERROR("FPU is disabled");
+		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+		return error_code__get_and_clear(p_target);
+	}
+
+	bool const FPU_D = 0 != (mcpuid & BIT_NUM_TO_MASK('d' - 'a'));
+
 	/// Find temporary GP register
 	struct reg* const p_wrk_reg_1 = prepare_temporary_GP_register(p_target, 0);
 	assert(p_wrk_reg_1);
@@ -728,8 +749,12 @@ static int reg_fd__get(struct reg* const p_reg)
 		sc_rv32_EXEC__setup(p_target);
 		int advance_pc_counter = 0;
 		if ( error_code__get(p_target) == ERROR_OK ) {
-			/// Copy values to temporary register
-			(void)sc_rv32_EXEC__step(p_target, RV_FMV_X2_S(p_wrk_reg_2->number, p_wrk_reg_1->number, p_reg->number - RISCV_FIRST_FP_REGNUM));
+			uint32_t const opcode_1 =
+				FPU_D ?
+				RV_FMV_X2_S(p_wrk_reg_2->number, p_wrk_reg_1->number, p_reg->number - RISCV_FIRST_FP_REGNUM) :
+				RV_FMV_X_S(p_wrk_reg_1->number, p_reg->number - RISCV_FIRST_FP_REGNUM);
+
+			(void)sc_rv32_EXEC__step(p_target, opcode_1);
 			advance_pc_counter += instr_step;
 			if ( error_code__get(p_target) == ERROR_OK ) {
 				/// and store temporary register to CSR_DBG_SCRATCH CSR.
@@ -744,7 +769,7 @@ static int reg_fd__get(struct reg* const p_reg)
 						uint32_t const value_hi = sc_rv32_EXEC__step(p_target, RV_JAL(0, -advance_pc_counter));
 						advance_pc_counter = 0;
 						if ( error_code__get(p_target) == ERROR_OK ) {
-							buf_set_u64(p_reg->value, 0, p_reg->size, (uint64_t)value_hi << 32 | (uint64_t)value_lo);
+							buf_set_u64(p_reg->value, 0, p_reg->size, (FPU_D ? (uint64_t)value_hi << 32 : 0u) | (uint64_t)value_lo);
 							p_reg->valid = true;
 							p_reg->dirty = false;
 						}
@@ -792,7 +817,28 @@ static int reg_fd__set(struct reg* const p_reg, uint8_t* const buf)
 		return error_code__get_and_clear(p_target);
 	}
 
-	/// @todo check that FPU is enabled
+	uint32_t const mcpuid = csr_get_value(p_target, CSR_mcpuid);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__get_and_clear(p_target);
+	}
+	if ( 0 == (mcpuid & (BIT_NUM_TO_MASK('f' - 'a') | BIT_NUM_TO_MASK('d' - 'a'))) ) {
+		LOG_ERROR("FPU is not supported");
+		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+		return error_code__get_and_clear(p_target);
+	}
+
+	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
+	if ( error_code__get(p_target) != ERROR_OK ) {
+		return error_code__get_and_clear(p_target);
+	}
+	if ( 0 == (mstatus & (3u << 12)) ) {
+		LOG_ERROR("FPU is disabled");
+		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+		return error_code__get_and_clear(p_target);
+	}
+
+	bool const FPU_D = 0 != (mcpuid & BIT_NUM_TO_MASK('d' - 'a'));
+
 	/// Find temporary GP register
 	struct reg* const p_wrk_reg_1 = prepare_temporary_GP_register(p_target, 0);
 	assert(p_wrk_reg_1);
@@ -824,11 +870,14 @@ static int reg_fd__set(struct reg* const p_reg, uint8_t* const buf)
 				if ( error_code__get(p_target) == ERROR_OK ) {
 					sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(&((uint8_t const*)p_reg->value)[4], 0, p_reg->size));
 					if ( error_code__get(p_target) == ERROR_OK ) {
-						// set temporary register value to restoring pc value
 						(void)sc_rv32_EXEC__step(p_target, RV_CSRR(p_wrk_reg_2->number, CSR_SC_DBG_SCRATCH));
 						advance_pc_counter += instr_step;
 						if ( error_code__get(p_target) == ERROR_OK ) {
-							(void)sc_rv32_EXEC__step(p_target, RV_FMV_S_X2(p_reg->number - RISCV_FIRST_FP_REGNUM, p_wrk_reg_2->number, p_wrk_reg_1->number));
+							uint32_t const opcode_1 =
+								FPU_D ?
+								RV_FMV_S_X2(p_reg->number - RISCV_FIRST_FP_REGNUM, p_wrk_reg_2->number, p_wrk_reg_1->number) :
+								RV_FMV_S_X(p_reg->number - RISCV_FIRST_FP_REGNUM, p_wrk_reg_1->number);
+							(void)sc_rv32_EXEC__step(p_target, opcode_1);
 							advance_pc_counter += instr_step;
 							if ( error_code__get(p_target) == ERROR_OK ) {
 								/// Correct pc by jump 2 instructions back and get previous command result.
@@ -867,14 +916,14 @@ static int reg_fd__set(struct reg* const p_reg, uint8_t* const buf)
 
 static struct reg_arch_type const reg_f_accessors = {.get = reg_fd__get,.set = reg_fd__set,};
 
-struct reg_data_type FP_s_type = {.type = REG_TYPE_IEEE_SINGLE, .id = "ieee_single",};
-struct reg_data_type FP_d_type = {.type = REG_TYPE_IEEE_DOUBLE, .id = "ieee_double",};
+struct reg_data_type FP_s_type = {.type = REG_TYPE_IEEE_SINGLE,.id = "ieee_single",};
+struct reg_data_type FP_d_type = {.type = REG_TYPE_IEEE_DOUBLE,.id = "ieee_double",};
 
-struct reg_data_type_union_field FP_s = {.name="S", .type = &FP_s_type};
-struct reg_data_type_union_field FP_d = {.name = "D",.type = &FP_d_type, .next = &FP_s};
+struct reg_data_type_union_field FP_s = {.name = "S",.type = &FP_s_type};
+struct reg_data_type_union_field FP_d = {.name = "D",.type = &FP_d_type,.next = &FP_s};
 
 struct reg_data_type_union FP_s_or_d = {.fields = &FP_d};
-struct reg_data_type FP_reg_data_type = {.type = REG_TYPE_ARCH_DEFINED, .id = "Float_D_or_S", .type_class = REG_TYPE_CLASS_UNION, .reg_type_union=&FP_s_or_d};
+struct reg_data_type FP_reg_data_type = {.type = REG_TYPE_ARCH_DEFINED,.id = "Float_D_or_S",.type_class = REG_TYPE_CLASS_UNION,.reg_type_union = &FP_s_or_d};
 
 #else
 
@@ -1069,11 +1118,11 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 					target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_HALTED : TARGET_EVENT_HALTED);
 					return error_code__get_and_clear(p_target);
 				}
+				}
 			}
-		}
 		// dmode_enabled |= BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 #if 0
-	} else {
+		} else {
 		dmode_enabled &= ~BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT);
 #endif
 	}
@@ -1106,7 +1155,7 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 	}
 
 	return error_code__get_and_clear(p_target);
-}
+	}
 
 static int reset__set(struct target* const p_target, bool const active)
 {
