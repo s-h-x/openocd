@@ -6731,6 +6731,11 @@ the initial log output channel is stderr.
 Add @var{directory} to the file/script search path.
 @end deffn
 
+@deffn Command bindto [name]
+Specify address by name on which to listen for incoming TCP/IP connections.
+By default, OpenOCD will listen on all available interfaces.
+@end deffn
+
 @anchor{targetstatehandling}
 @section Target State handling
 @cindex reset
@@ -7829,6 +7834,12 @@ They are available in addition to other core-specific commands that may be avail
 @deffn Command {dap apid} [num]
 Displays ID register from AP @var{num},
 defaulting to the currently selected AP.
+@end deffn
+
+@deffn Command {dap apreg} ap_num reg [value]
+Displays content of a register @var{reg} from AP @var{ap_num}
+or set a new value @var{value}.
+@var{reg} is byte address of a word register, 0, 4, 8 ... 0xfc.
 @end deffn
 
 @deffn Command {dap apsel} [num]
