@@ -1526,10 +1526,12 @@ static int sc_rv32i__examine(struct target* const p_target)
 
 	if ( error_code__get(p_target) == ERROR_OK ) {
 		uint32_t const IDCODE = sc_rv32_IDCODE_get(p_target);
+#if 0
 		if ( IDCODE != EXPECTED_IDCODE ) {
 			LOG_ERROR("Invalid IDCODE=0x%08X!", IDCODE);
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 		} else {
+#endif
 			uint32_t const DBG_ID = sc_rv32_DBG_ID_get(p_target);
 			if ( (DBG_ID & DBG_ID_VERSION_MASK) != (DBG_ID_VERSION_MASK & EXPECTED_DBG_ID) ||
 				(DBG_ID & DBG_ID_SUBVERSION_MASK) < (EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK) ) {
@@ -1543,7 +1545,9 @@ static int sc_rv32i__examine(struct target* const p_target)
 					target_set_examined(p_target);
 				}
 			}
+#if 0
 		}
+#endif
 	}
 
 	return error_code__get_and_clear(p_target);
