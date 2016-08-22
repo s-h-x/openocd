@@ -584,11 +584,9 @@ static enum target_state HART_status_bits_to_target_state(uint32_t const status)
 {
 	static uint32_t const err_bits =
 		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_BIT) |
-		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_BIT) |
 		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_HWTHREAD_BIT) |
 		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_DAP_OPCODE_BIT) |
-		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_DBGCMD_NACK_BIT) |
-		BIT_NUM_TO_MASK(DBGC_HART_HDSR_LOCK_STKY_BIT);
+		BIT_NUM_TO_MASK(DBGC_HART_HDSR_ERR_DBGCMD_NACK_BIT);
 
 	if ( status & err_bits ) {
 		LOG_WARNING("Error status: 0x%08x", status);
@@ -736,7 +734,7 @@ static void check_and_repair_debug_controller_errors(struct target* const p_targ
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return;
 	}
-	uint32_t const hart0_err_bits = BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_STKY_BIT);
+	static uint32_t const hart0_err_bits = BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT) | BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_STKY_BIT);
 	if ( 0 != (core_status & hart0_err_bits) ) {
 		LOG_WARNING("Hart errors detected: 0x%08X", core_status);
 		sc_rv32_HART0_clear_sticky(p_target);
