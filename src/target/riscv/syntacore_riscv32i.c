@@ -1574,7 +1574,7 @@ static int sc_rv32i__examine(struct target* const p_target)
 
 	if ( ERROR_OK == error_code__get(p_target) ) {
 		uint32_t const IDCODE = sc_rv32_IDCODE_get(p_target);
-		if ( (IDCODE & EXPECTED_IDCODE_MASK) != EXPECTED_IDCODE ) {
+		if ( (IDCODE & EXPECTED_IDCODE_MASK) != (EXPECTED_IDCODE & EXPECTED_IDCODE_MASK) ) {
 			LOG_ERROR("Invalid IDCODE=0x%08X!", IDCODE);
 			error_code__update(p_target, ERROR_TARGET_FAILURE);
 		} else {

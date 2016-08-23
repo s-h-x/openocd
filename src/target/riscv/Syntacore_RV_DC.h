@@ -9,7 +9,7 @@ Syntacore RISC-V target
 
 #include <stdint.h>
 
-#define EXPECTED_IDCODE (0xC0DEDEB1u)
+#define EXPECTED_IDCODE      (0xC0DEDEB1u)
 #define EXPECTED_IDCODE_MASK (0xFFF0FFFFu)
 
 /// Lowest required DBG_ID

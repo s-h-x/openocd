@@ -705,7 +705,7 @@ static void check_and_repair_debug_controller_errors(struct target* const p_targ
 	jtag_add_tlr();
 	invalidate_DAP_CTR_cache(p_target);
 	uint32_t const IDCODE = sc_rv32_IDCODE_get(p_target);
-	if ( EXPECTED_IDCODE != (IDCODE & EXPECTED_IDCODE_MASK )) {
+	if ( (EXPECTED_IDCODE & EXPECTED_IDCODE_MASK) != (IDCODE & EXPECTED_IDCODE_MASK )) {
 #if 0
 		target_reset_examined(p_target);
 #else
