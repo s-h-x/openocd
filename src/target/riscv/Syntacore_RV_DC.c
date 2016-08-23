@@ -704,9 +704,8 @@ static void check_and_repair_debug_controller_errors(struct target* const p_targ
 	// protection from reset 
 	jtag_add_tlr();
 	invalidate_DAP_CTR_cache(p_target);
-#if 0
 	uint32_t const IDCODE = sc_rv32_IDCODE_get(p_target);
-	if ( EXPECTED_IDCODE != IDCODE ) {
+	if ( EXPECTED_IDCODE != (IDCODE & EXPECTED_IDCODE_MASK )) {
 #if 0
 		target_reset_examined(p_target);
 #else
@@ -716,7 +715,6 @@ static void check_and_repair_debug_controller_errors(struct target* const p_targ
 		error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return;
 	}
-#endif
 	uint32_t core_status = try_to_get_ready(p_target);
 	if ( 0 != (core_status & BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT)) ) {
 		LOG_ERROR("Lock detected: 0x%08X", core_status);
