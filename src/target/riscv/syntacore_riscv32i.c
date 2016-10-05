@@ -1045,19 +1045,11 @@ static int reg_csr__set(struct reg* const p_reg, uint8_t* const buf)
 						assert(p_reg->dirty);
 						p_reg->dirty = false;
 						LOG_DEBUG("Store register value 0x%08X from cache to register %s", buf_get_u32(p_reg->value, 0, p_reg->size), p_reg->name);
-						sc_rv32_update_status(p_target);
-					} else {
-						sc_rv32_update_status(p_target);
 					}
-				} else {
-					sc_rv32_update_status(p_target);
 				}
-			} else {
-				sc_rv32_update_status(p_target);
 			}
-		} else {
-			sc_rv32_update_status(p_target);
 		}
+		sc_rv32_update_status(p_target);
 		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 		}
