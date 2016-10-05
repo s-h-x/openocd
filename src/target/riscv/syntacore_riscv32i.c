@@ -515,15 +515,10 @@ static int reg_pc__set(struct reg* const p_reg, uint8_t* const buf)
 				assert(p_reg->valid);
 				assert(p_reg->dirty);
 				p_reg->dirty = false;
-			} else {
-				sc_rv32_update_status(p_target);
 			}
-		} else {
-			sc_rv32_update_status(p_target);
 		}
-	} else {
-		sc_rv32_update_status(p_target);
 	}
+	sc_rv32_update_status(p_target);
 
 #if 0
 	if ( p_arch->use_pc_advmt_dsbl_bit ) {
@@ -914,24 +909,13 @@ static int reg_fd__set(struct reg* const p_reg, uint8_t* const buf)
 								assert(p_reg->dirty);
 								p_reg->dirty = false;
 								LOG_DEBUG("Store register value 0x%016lX from cache to register %s", buf_get_u64(p_reg->value, 0, p_reg->size), p_reg->name);
-							} else {
-								sc_rv32_update_status(p_target);
 							}
-						} else {
-							sc_rv32_update_status(p_target);
 						}
-					} else {
-						sc_rv32_update_status(p_target);
 					}
-				} else {
-					sc_rv32_update_status(p_target);
 				}
-			} else {
-				sc_rv32_update_status(p_target);
 			}
-		} else {
-			sc_rv32_update_status(p_target);
 		}
+		sc_rv32_update_status(p_target);
 		if ( p_arch->use_pc_advmt_dsbl_bit ) {
 			sc_rv32_HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
 		}
@@ -1592,17 +1576,12 @@ static int sc_rv32i__examine(struct target* const p_target)
 static int sc_rv32i__poll(struct target* const p_target)
 {
 	assert(p_target);
-	LOG_DEBUG("update_status");
 	sc_rv32_update_status(p_target);
-	if ( ERROR_OK != error_code__get(p_target) ) {
-		return error_code__get_and_clear(p_target);
-	}
 	return error_code__get_and_clear(p_target);
 }
 static int sc_rv32i__arch_state(struct target* const p_target)
 {
 	assert(p_target);
-	LOG_DEBUG("update_status");
 	sc_rv32_update_status(p_target);
 	return error_code__get_and_clear(p_target);
 }
@@ -1611,7 +1590,6 @@ static int sc_rv32i__halt(struct target* const p_target)
 	assert(p_target);
 	// May be already halted?
 	{
-		LOG_DEBUG("update_status");
 		sc_rv32_update_status(p_target);
 		if ( ERROR_OK != error_code__get(p_target) ) {
 			return error_code__get_and_clear(p_target);
@@ -1637,7 +1615,6 @@ static int sc_rv32i__halt(struct target* const p_target)
 		}
 	}
 
-	LOG_DEBUG("update_status");
 	sc_rv32_update_status(p_target);
 	if ( ERROR_OK != error_code__get(p_target) ) {
 		return error_code__get_and_clear(p_target);
@@ -1989,7 +1966,6 @@ static int sc_rv32i__read_phys_memory(struct target* const p_target, uint32_t ad
 		}
 
 		if ( ERROR_OK != error_code__get(p_target) ) {
-			LOG_DEBUG("update_status");
 			sc_rv32_update_status(p_target);
 		}
 
@@ -2185,7 +2161,6 @@ static int sc_rv32i__write_phys_memory(struct target* const p_target, uint32_t a
 	}
 
 	if ( ERROR_OK != error_code__get(p_target) ) {
-		LOG_DEBUG("update_status");
 		sc_rv32_update_status(p_target);
 	}
 

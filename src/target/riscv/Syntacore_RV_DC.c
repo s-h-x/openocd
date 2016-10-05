@@ -762,6 +762,7 @@ static void check_and_repair_debug_controller_errors(struct target* const p_targ
 
 void sc_rv32_update_status(struct target* const p_target)
 {
+	LOG_DEBUG("update_status");
 	assert(p_target);
 	int const old_err_code = error_code__get_and_clear(p_target);
 	check_and_repair_debug_controller_errors(p_target);
@@ -773,7 +774,6 @@ void sc_rv32_update_status(struct target* const p_target)
 
 void sc_rv32_check_that_target_halted(struct target* const p_target)
 {
-	LOG_DEBUG("update_status");
 	sc_rv32_update_status(p_target);
 	if ( ERROR_OK == error_code__get(p_target) ) {
 		if ( p_target->state != TARGET_HALTED ) {
