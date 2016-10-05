@@ -1045,6 +1045,7 @@ static int reg_csr__set(struct reg* const p_reg, uint8_t* const buf)
 						assert(p_reg->dirty);
 						p_reg->dirty = false;
 						LOG_DEBUG("Store register value 0x%08X from cache to register %s", buf_get_u32(p_reg->value, 0, p_reg->size), p_reg->name);
+						sc_rv32_update_status(p_target);
 					} else {
 						sc_rv32_update_status(p_target);
 					}
