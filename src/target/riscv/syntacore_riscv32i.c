@@ -1096,13 +1096,14 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 		return error_code__get_and_clear(p_target);
 	}
 
-	/// @todo multiple caches
+	// TODO: multiple caches
+	// PC cache
 	struct reg* const p_pc = &p_target->reg_cache->reg_list[NUMBER_OF_X_REGS];
 	if ( !current ) {
+		// setup new PC
 		uint8_t buf[sizeof address];
 		buf_set_u32(buf, 0, XLEN, address);
-		error_code__update(p_target, reg_pc__set(p_pc, buf));
-		if ( ERROR_OK != error_code__get(p_target) ) {
+		if ( ERROR_OK != error_code__update(p_target, reg_pc__set(p_pc, buf))) {
 			return error_code__get_and_clear(p_target);
 		}
 		assert(!p_pc->dirty);
@@ -1121,26 +1122,39 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 			}
 
 			if ( p_next_bkp ) {
-				// If next instruction is replaced by breakpoint, then execute saved instruction
+				// exec single step without breakpoint
 				struct sc_rv32i__Arch const* const p_arch = p_target->arch_info;
 				assert(p_arch);
+				// save breakpoint
 				struct breakpoint next_bkp = *p_next_bkp;
+				// remove breakpoint
 				error_code__update(p_target, target_remove_breakpoint(p_target, &next_bkp));
+				// prepare for single step
 				reg_cache__chain_invalidate(p_target->reg_cache);
+				// force single step
 				set_DEMODE_ENBL(p_target, dmode_enabled | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT));
 				sc_rv32_DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
+				// resume for single step
 				sc_rv32_DAP_CMD_scan(p_target, DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL, BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_RESUME) | BIT_NUM_TO_MASK(DBGC_DAP_OPCODE_DBGCMD_DBG_CTRL_CLEAR_STICKY_BITS), NULL);
+				// restore breakpoint
 				error_code__update(p_target, target_add_breakpoint(p_target, &next_bkp));
-				if ( dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT) ) {
-					// then single step already done
+				// If resume/halt already done (by single step)
+				if (0 != (dmode_enabled & BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT))) {
+					// TODO: extra call
 					reg_cache__chain_invalidate(p_target->reg_cache);
+					// set status
 					p_target->state = debug_execution ? TARGET_DEBUG_RUNNING : TARGET_RUNNING;
+					// raise resume event
 					target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
+					// setup debug mode
 					set_DEMODE_ENBL(p_target, dmode_enabled);
+					// set debug reason
 					sc_rv32_update_status(p_target);
 					LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_SINGLESTEP);
 					p_target->debug_reason = DBG_REASON_SINGLESTEP;
+					// raise halt event
 					target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_HALTED : TARGET_EVENT_HALTED);
+					// and exit
 					return error_code__get_and_clear(p_target);
 				}
 			}
@@ -1152,11 +1166,15 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 #endif
 	}
 
+	// prepare for execution continue
 	reg_cache__chain_invalidate(p_target->reg_cache);
+	// enable requested debug mode
 	set_DEMODE_ENBL(p_target, dmode_enabled);
 	if ( ERROR_OK != error_code__get(p_target) ) {
 		return error_code__get_and_clear(p_target);
 	}
+	// resume exec
+	//@{
 	sc_rv32_DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_UNIT_ID_HART_0 : DBGC_UNIT_ID_HART_1, DBGC_FGRP_HART_DBGCMD);
 	if ( ERROR_OK != error_code__get(p_target) ) {
 		LOG_WARNING("DAP_CTRL_REG_set error");
@@ -1167,18 +1185,15 @@ static int resume_common(struct target* const p_target, uint32_t dmode_enabled, 
 	if ( ERROR_OK != error_code__get(p_target) ) {
 		return error_code__get_and_clear(p_target);
 	}
+	//@}
 
+	// Mark "not halted", set state, raise event
 	LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_NOTHALTED);
 	p_target->debug_reason = DBG_REASON_NOTHALTED;
 	p_target->state = debug_execution ? TARGET_DEBUG_RUNNING : TARGET_RUNNING;
 	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
 
-	LOG_DEBUG("update_status");
 	sc_rv32_update_status(p_target);
-	if ( ERROR_OK != error_code__get(p_target) ) {
-		return error_code__get_and_clear(p_target);
-	}
-
 	return error_code__get_and_clear(p_target);
 }
 
@@ -1615,31 +1630,22 @@ static int sc_rv32i__halt(struct target* const p_target)
 		}
 	}
 
-	sc_rv32_update_status(p_target);
-	if ( ERROR_OK != error_code__get(p_target) ) {
-		return error_code__get_and_clear(p_target);
-	}
-
-	// Verify that in debug mode
 	sc_rv32_check_that_target_halted(p_target);
-	if ( ERROR_OK != error_code__get(p_target) ) {
-		return error_code__get_and_clear(p_target);
-	}
-
 	return error_code__get_and_clear(p_target);
 }
 static int sc_rv32i__resume(struct target* const p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	LOG_DEBUG("resume: current=%d address=0x%08x handle_breakpoints=%d debug_execution=%d", current, address, handle_breakpoints, debug_execution);
 	assert(p_target);
-	uint32_t const dmode_enabled = NORMAL_DEBUG_ENABLE_MASK;
+	static uint32_t const dmode_enabled = NORMAL_DEBUG_ENABLE_MASK;
 	return resume_common(p_target, dmode_enabled, current, address, handle_breakpoints, debug_execution);
 }
 static int sc_rv32i__step(struct target* const p_target, int const current, uint32_t const address, int const handle_breakpoints)
 {
 	LOG_DEBUG("step: current=%d address=0x%08x handle_breakpoints=%d", current, address, handle_breakpoints);
 	assert(p_target);
-	uint32_t const dmode_enabled = (NORMAL_DEBUG_ENABLE_MASK & ~BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT)) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
+	// disable halt on SW breakpoint to pass SW breakpoint processing to core
+	static uint32_t const dmode_enabled = (NORMAL_DEBUG_ENABLE_MASK & ~BIT_NUM_TO_MASK(DBGC_HART_HDMER_SW_BRKPT_BIT)) | BIT_NUM_TO_MASK(DBGC_HART_HDMER_SINGLE_STEP_BIT);
 	return resume_common(p_target, dmode_enabled, current, address, handle_breakpoints, false);
 }
 static int sc_rv32i__assert_reset(struct target* const p_target)
