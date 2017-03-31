@@ -760,7 +760,7 @@ static int reg_fd__get(struct reg* const p_reg)
 		if ( ERROR_OK == error_code__get(p_target) ) {
 			uint32_t const opcode_1 =
 				FPU_D ?
-				RV_FMV_X2_S(p_wrk_reg_2->number, p_wrk_reg_1->number, p_reg->number - RISCV_FIRST_FP_REGNUM) :
+				RV_FMV_2X_D(p_wrk_reg_2->number, p_wrk_reg_1->number, p_reg->number - RISCV_FIRST_FP_REGNUM) :
 				RV_FMV_X_S(p_wrk_reg_1->number, p_reg->number - RISCV_FIRST_FP_REGNUM);
 
 			(void)sc_rv32_EXEC__step(p_target, opcode_1);
@@ -894,7 +894,7 @@ static int reg_fd__set(struct reg* const p_reg, uint8_t* const buf)
 						if ( ERROR_OK == error_code__get(p_target) ) {
 							uint32_t const opcode_1 =
 								FPU_D ?
-								RV_FMV_S_X2(p_reg->number - RISCV_FIRST_FP_REGNUM, p_wrk_reg_2->number, p_wrk_reg_1->number) :
+								RV_FMV_D_2X(p_reg->number - RISCV_FIRST_FP_REGNUM, p_wrk_reg_2->number, p_wrk_reg_1->number) :
 								RV_FMV_S_X(p_reg->number - RISCV_FIRST_FP_REGNUM, p_wrk_reg_1->number);
 							(void)sc_rv32_EXEC__step(p_target, opcode_1);
 							advance_pc_counter += instr_step;
