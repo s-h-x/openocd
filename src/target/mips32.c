@@ -384,7 +384,7 @@ int mips32_init_arch_info(struct target *target, struct mips32_common *mips32, s
 	mips32->read_core_reg = mips32_read_core_reg;
 	mips32->write_core_reg = mips32_write_core_reg;
 
-	mips32->ejtag_info.scan_delay = 2000000;	/* Initial default value */
+	mips32->ejtag_info.scan_delay = MIPS32_SCAN_DELAY_LEGACY_MODE;	/* Initial default value */
 	mips32->ejtag_info.mode = 0;			/* Initial default value */
 
 	return ERROR_OK;
@@ -771,9 +771,9 @@ int mips32_checksum_memory(struct target *target, uint32_t address,
 	return retval;
 }
 
-/** Checks whether a memory region is zeroed. */
+/** Checks whether a memory region is erased. */
 int mips32_blank_check_memory(struct target *target,
-		uint32_t address, uint32_t count, uint32_t *blank)
+		uint32_t address, uint32_t count, uint32_t *blank, uint8_t erased_value)
 {
 	struct working_area *erase_check_algorithm;
 	struct reg_param reg_params[3];
@@ -788,6 +788,12 @@ int mips32_blank_check_memory(struct target *target,
 		0x24840001,		/* addiu	$a0, $a0, 1 */
 		0x7000003F		/* sdbbp */
 	};
+
+	if (erased_value != 0xff) {
+		LOG_ERROR("Erase value 0x%02" PRIx8 " not yet supported for MIPS32",
+			erased_value);
+		return ERROR_FAIL;
+	}
 
 	/* make sure we have a working area */
 	if (target_alloc_working_area(target, sizeof(erase_check_code), &erase_check_algorithm) != ERROR_OK)
@@ -810,7 +816,7 @@ int mips32_blank_check_memory(struct target *target,
 	buf_set_u32(reg_params[1].value, 0, 32, count);
 
 	init_reg_param(&reg_params[2], "r6", 32, PARAM_IN_OUT);
-	buf_set_u32(reg_params[2].value, 0, 32, 0xff);
+	buf_set_u32(reg_params[2].value, 0, 32, erased_value);
 
 	int retval = target_run_algorithm(target, 0, NULL, 3, reg_params,
 			erase_check_algorithm->address,
@@ -911,7 +917,7 @@ COMMAND_HANDLER(mips32_handle_scan_delay_command)
 			return ERROR_COMMAND_SYNTAX_ERROR;
 
 	command_print(CMD_CTX, "scan delay: %d nsec", ejtag_info->scan_delay);
-	if (ejtag_info->scan_delay >= 2000000) {
+	if (ejtag_info->scan_delay >= MIPS32_SCAN_DELAY_LEGACY_MODE) {
 		ejtag_info->mode = 0;
 		command_print(CMD_CTX, "running in legacy mode");
 	} else {

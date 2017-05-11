@@ -130,6 +130,9 @@ struct target {
 	struct jtag_tap *tap;				/* where on the jtag chain is this */
 	int32_t coreid;						/* which device on the TAP? */
 
+	/** Should we defer examine to later */
+	bool defer_examine;
+
 	/**
 	 * Indicates whether this target has been examined.
 	 *
@@ -154,7 +157,7 @@ struct target {
 										 * upon first allocation from virtual/physical address. */
 	bool working_area_virt_spec;		/* virtual address specified? */
 	uint32_t working_area_virt;			/* virtual address */
-	bool working_area_phys_spec;		/* virtual address specified? */
+	bool working_area_phys_spec;		/* physical address specified? */
 	uint32_t working_area_phys;			/* physical address */
 	uint32_t working_area_size;			/* size in bytes */
 	uint32_t backup_working_area;		/* whether the content of the working area has to be preserved */
@@ -170,6 +173,7 @@ struct target {
 	struct debug_msg_receiver *dbgmsg;	/* list of debug message receivers */
 	uint32_t dbg_msg_enabled;			/* debug message status */
 	void *arch_info;					/* architecture specific information */
+	void *private_config;				/* pointer to target specific config data (for jim_configure hook) */
 	struct target *next;				/* next target in list */
 
 	int display;						/* display async info in telnet session. Do not display
@@ -579,7 +583,7 @@ int target_read_buffer(struct target *target,
 int target_checksum_memory(struct target *target,
 		uint32_t address, uint32_t size, uint32_t *crc);
 int target_blank_check_memory(struct target *target,
-		uint32_t address, uint32_t size, uint32_t *blank);
+		uint32_t address, uint32_t size, uint32_t *blank, uint8_t erased_value);
 int target_wait_state(struct target *target, enum target_state state, int ms);
 
 /**

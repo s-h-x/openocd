@@ -1,16 +1,10 @@
-include $(top_srcdir)/common.mk
-
-noinst_LTLIBRARIES = libriscv.la
-libriscv_la_SOURCES = $(RISCV_SRC)
-
-RISCV_SRC = \
-	syntacore_riscv32i.c \
-	riscv_opcodes.c \
-	Syntacore_RV_DC.c \
-	sc_rv32i__Arch.c
-
-noinst_HEADERS = \
-	riscv.h \
-	Syntacore_RV_DC.h \
-	sc_rv32i__Arch.h \
-	static_assert.h
+noinst_LTLIBRARIES += %D%/libriscv.la
+%C%_libriscv_la_SOURCES = \
+	%D%/syntacore_riscv32i.c \
+	%D%/riscv_opcodes.c \
+	%D%/Syntacore_RV_DC.c \
+	%D%/sc_rv32i__Arch.c \
+	%D%/riscv.h \
+	%D%/Syntacore_RV_DC.h \
+	%D%/sc_rv32i__Arch.h \
+	%D%/static_assert.h

@@ -448,7 +448,12 @@ static int jtagdp_overrun_check(struct adiv5_dap *dap)
 					/* timeout happened */
 					if (tmp->ack != JTAG_ACK_OK_FAULT) {
 						LOG_ERROR("Timeout during WAIT recovery");
+						dap->select = DP_SELECT_INVALID;
 						jtag_ap_q_abort(dap, NULL);
+						/* clear the sticky overrun condition */
+						adi_jtag_scan_inout_check_u32(dap, JTAG_DP_DPACC,
+							DP_CTRL_STAT, DPAP_WRITE,
+							dap->dp_ctrl_stat | SSTICKYORUN, NULL, 0);
 						retval = ERROR_JTAG_DEVICE_ERROR;
 					}
 				}
@@ -525,8 +530,14 @@ static int jtagdp_overrun_check(struct adiv5_dap *dap)
 			if (retval == ERROR_OK) {
 				if (el->ack != JTAG_ACK_OK_FAULT) {
 					LOG_ERROR("Timeout during WAIT recovery");
+					dap->select = DP_SELECT_INVALID;
 					jtag_ap_q_abort(dap, NULL);
+					/* clear the sticky overrun condition */
+					adi_jtag_scan_inout_check_u32(dap, JTAG_DP_DPACC,
+						DP_CTRL_STAT, DPAP_WRITE,
+						dap->dp_ctrl_stat | SSTICKYORUN, NULL, 0);
 					retval = ERROR_JTAG_DEVICE_ERROR;
+					break;
 				}
 			} else
 				break;
@@ -563,8 +574,6 @@ static int jtagdp_transaction_endcheck(struct adiv5_dap *dap)
 		if ((ctrlstat & (CDBGPWRUPREQ | CDBGPWRUPACK | CSYSPWRUPREQ | CSYSPWRUPACK)) !=
 						(CDBGPWRUPREQ | CDBGPWRUPACK | CSYSPWRUPREQ | CSYSPWRUPACK)) {
 			LOG_ERROR("Debug regions are unpowered, an unexpected reset might have happened");
-			retval = ERROR_JTAG_DEVICE_ERROR;
-			goto done;
 		}
 
 		if (ctrlstat & SSTICKYERR)
@@ -579,10 +588,7 @@ static int jtagdp_transaction_endcheck(struct adiv5_dap *dap)
 		if (retval != ERROR_OK)
 			goto done;
 
-		if (ctrlstat & SSTICKYERR) {
-			retval = ERROR_JTAG_DEVICE_ERROR;
-			goto done;
-		}
+		retval = ERROR_JTAG_DEVICE_ERROR;
 	}
 
  done:

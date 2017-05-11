@@ -132,6 +132,8 @@ enum {
 enum {
 	FP_NONE = 0,
 	FPv4_SP,
+	FPv5_SP,
+	FPv5_DP,
 };
 
 #define ARMV7M_NUM_CORE_REGS (ARMV7M_xPSR + 1)
@@ -223,7 +225,7 @@ int armv7m_restore_context(struct target *target);
 int armv7m_checksum_memory(struct target *target,
 		uint32_t address, uint32_t count, uint32_t *checksum);
 int armv7m_blank_check_memory(struct target *target,
-		uint32_t address, uint32_t count, uint32_t *blank);
+		uint32_t address, uint32_t count, uint32_t *blank, uint8_t erased_value);
 
 int armv7m_maybe_skip_bkpt_inst(struct target *target, bool *inst_found);
 

@@ -981,6 +981,18 @@ static int cortex_m_assert_reset(struct target *target)
 
 	bool srst_asserted = false;
 
+	if (!target_was_examined(target)) {
+		if (jtag_reset_config & RESET_HAS_SRST) {
+			adapter_assert_reset();
+			if (target->reset_halt)
+				LOG_ERROR("Target not examined, will not halt after reset!");
+			return ERROR_OK;
+		} else {
+			LOG_ERROR("Target not examined, reset NOT asserted!");
+			return ERROR_FAIL;
+		}
+	}
+
 	if ((jtag_reset_config & RESET_HAS_SRST) &&
 	    (jtag_reset_config & RESET_SRST_NO_GATING)) {
 		adapter_assert_reset();
@@ -1101,7 +1113,8 @@ static int cortex_m_deassert_reset(struct target *target)
 	enum reset_types jtag_reset_config = jtag_get_reset_config();
 
 	if ((jtag_reset_config & RESET_HAS_SRST) &&
-	    !(jtag_reset_config & RESET_SRST_NO_GATING)) {
+	    !(jtag_reset_config & RESET_SRST_NO_GATING) &&
+		target_was_examined(target)) {
 		int retval = dap_dp_init(armv7m->debug_ap->dap);
 		if (retval != ERROR_OK) {
 			LOG_ERROR("DP initialisation failed");
@@ -1683,6 +1696,7 @@ static int cortex_m_init_target(struct command_context *cmd_ctx,
 	struct target *target)
 {
 	armv7m_build_reg_cache(target);
+	arm_semihosting_init(target);
 	return ERROR_OK;
 }
 
@@ -1695,6 +1709,7 @@ void cortex_m_deinit_target(struct target *target)
 	cortex_m_dwt_free(target);
 	armv7m_free_reg_cache(target);
 
+	free(target->private_config);
 	free(cortex_m);
 }
 
@@ -1875,6 +1890,11 @@ static void cortex_m_dwt_free(struct target *target)
 #define MVFR0_DEFAULT_M4 0x10110021
 #define MVFR1_DEFAULT_M4 0x11000011
 
+#define MVFR0_DEFAULT_M7_SP 0x10110021
+#define MVFR0_DEFAULT_M7_DP 0x10110221
+#define MVFR1_DEFAULT_M7_SP 0x11000011
+#define MVFR1_DEFAULT_M7_DP 0x12000011
+
 int cortex_m_examine(struct target *target)
 {
 	int retval;
@@ -1893,11 +1913,15 @@ int cortex_m_examine(struct target *target)
 			return retval;
 		}
 
-		/* Search for the MEM-AP */
-		retval = dap_find_ap(swjdp, AP_TYPE_AHB_AP, &armv7m->debug_ap);
-		if (retval != ERROR_OK) {
-			LOG_ERROR("Could not find MEM-AP to control the core");
-			return retval;
+		if (cortex_m->apsel < 0) {
+			/* Search for the MEM-AP */
+			retval = dap_find_ap(swjdp, AP_TYPE_AHB_AP, &armv7m->debug_ap);
+			if (retval != ERROR_OK) {
+				LOG_ERROR("Could not find MEM-AP to control the core");
+				return retval;
+			}
+		} else {
+			armv7m->debug_ap = dap_ap(swjdp, cortex_m->apsel);
 		}
 
 		/* Leave (only) generic DAP stuff for debugport_init(); */
@@ -1930,21 +1954,33 @@ int cortex_m_examine(struct target *target)
 		}
 		LOG_DEBUG("cpuid: 0x%8.8" PRIx32 "", cpuid);
 
-		/* test for floating point feature on Cortex-M4 */
 		if (i == 4) {
 			target_read_u32(target, MVFR0, &mvfr0);
 			target_read_u32(target, MVFR1, &mvfr1);
 
+			/* test for floating point feature on Cortex-M4 */
 			if ((mvfr0 == MVFR0_DEFAULT_M4) && (mvfr1 == MVFR1_DEFAULT_M4)) {
 				LOG_DEBUG("Cortex-M%d floating point feature FPv4_SP found", i);
 				armv7m->fp_feature = FPv4_SP;
+			}
+		} else if (i == 7) {
+			target_read_u32(target, MVFR0, &mvfr0);
+			target_read_u32(target, MVFR1, &mvfr1);
+
+			/* test for floating point features on Cortex-M7 */
+			if ((mvfr0 == MVFR0_DEFAULT_M7_SP) && (mvfr1 == MVFR1_DEFAULT_M7_SP)) {
+				LOG_DEBUG("Cortex-M%d floating point feature FPv5_SP found", i);
+				armv7m->fp_feature = FPv5_SP;
+			} else if ((mvfr0 == MVFR0_DEFAULT_M7_DP) && (mvfr1 == MVFR1_DEFAULT_M7_DP)) {
+				LOG_DEBUG("Cortex-M%d floating point feature FPv5_DP found", i);
+				armv7m->fp_feature = FPv5_DP;
 			}
 		} else if (i == 0) {
 			/* Cortex-M0 does not support unaligned memory access */
 			armv7m->arm.is_armv6m = true;
 		}
 
-		if (armv7m->fp_feature != FPv4_SP &&
+		if (armv7m->fp_feature == FP_NONE &&
 		    armv7m->arm.core_cache->num_regs > ARMV7M_NUM_CORE_REGS_NOFP) {
 			/* free unavailable FPU registers */
 			size_t idx;
@@ -1959,9 +1995,14 @@ int cortex_m_examine(struct target *target)
 			armv7m->arm.core_cache->num_regs = ARMV7M_NUM_CORE_REGS_NOFP;
 		}
 
-		if ((i == 4 || i == 3) && !armv7m->stlink) {
-			/* Cortex-M3/M4 has 4096 bytes autoincrement range */
-			armv7m->debug_ap->tar_autoincr_block = (1 << 12);
+		if (!armv7m->stlink) {
+			if (i == 3 || i == 4)
+				/* Cortex-M3/M4 have 4096 bytes autoincrement range,
+				 * s. ARM IHI 0031C: MEM-AP 7.2.2 */
+				armv7m->debug_ap->tar_autoincr_block = (1 << 12);
+			else if (i == 7)
+				/* Cortex-M7 has only 1024 bytes autoincrement range */
+				armv7m->debug_ap->tar_autoincr_block = (1 << 10);
 		}
 
 		/* Configure trace modules */
@@ -2143,6 +2184,13 @@ static int cortex_m_target_create(struct target *target, Jim_Interp *interp)
 
 	cortex_m->common_magic = CORTEX_M_COMMON_MAGIC;
 	cortex_m_init_arch_info(target, cortex_m, target->tap);
+
+	if (target->private_config != NULL) {
+		struct adiv5_private_config *pc =
+				(struct adiv5_private_config *)target->private_config;
+		cortex_m->apsel = pc->ap_num;
+	} else
+		cortex_m->apsel = -1;
 
 	return ERROR_OK;
 }
@@ -2405,6 +2453,7 @@ struct target_type cortexm_target = {
 
 	.commands = cortex_m_command_handlers,
 	.target_create = cortex_m_target_create,
+	.target_jim_configure = adiv5_jim_configure,
 	.init_target = cortex_m_init_target,
 	.examine = cortex_m_examine,
 	.deinit_target = cortex_m_deinit_target,

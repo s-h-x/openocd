@@ -171,7 +171,8 @@ static int mdr_erase(struct flash_bank *bank, int first, int last)
 	if (retval != ERROR_OK)
 		goto reset_pg_and_lock;
 
-	if ((first == 0) && (last == (bank->num_sectors - 1))) {
+	if ((first == 0) && (last == (bank->num_sectors - 1)) &&
+		!mdr_info->mem_type) {
 		retval = mdr_mass_erase(bank);
 		goto reset_pg_and_lock;
 	}
@@ -468,6 +469,13 @@ reset_pg_and_lock:
 free_buffer:
 	if (new_buffer)
 		free(new_buffer);
+
+	/* read some bytes bytes to flush buffer in flash accelerator.
+	 * See errata for 1986VE1T and 1986VE3. Error 0007 */
+	if ((retval == ERROR_OK) && (!mdr_info->mem_type)) {
+		uint32_t tmp;
+		target_checksum_memory(bank->target, bank->base, 64, &tmp);
+	}
 
 	return retval;
 }
