@@ -1351,115 +1351,6 @@ static struct reg const def_FP_regs_array[] = {
 
 static char const def_CSR_regs_name[] = "system";
 static struct reg const CSR_not_exists = {.name = "",.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_csr_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_CSR_regs_name};
-#if 0
-#define DECLARE_CSR(NAME,VALUE) {.name = #NAME, .number = CSR_##NAME + RISCV_FIRST_CSR_REGNUM, .exist = true},
-static struct reg const def_CSR_regs_array[] = {
-DECLARE_CSR(fflags, CSR_FFLAGS)
-DECLARE_CSR(frm, CSR_FRM)
-DECLARE_CSR(fcsr, CSR_FCSR)
-DECLARE_CSR(cycle, CSR_CYCLE)
-DECLARE_CSR(time, CSR_TIME)
-DECLARE_CSR(instret, CSR_INSTRET)
-DECLARE_CSR(stats, CSR_STATS)
-DECLARE_CSR(uarch0, CSR_UARCH0)
-DECLARE_CSR(uarch1, CSR_UARCH1)
-DECLARE_CSR(uarch2, CSR_UARCH2)
-DECLARE_CSR(uarch3, CSR_UARCH3)
-DECLARE_CSR(uarch4, CSR_UARCH4)
-DECLARE_CSR(uarch5, CSR_UARCH5)
-DECLARE_CSR(uarch6, CSR_UARCH6)
-DECLARE_CSR(uarch7, CSR_UARCH7)
-DECLARE_CSR(uarch8, CSR_UARCH8)
-DECLARE_CSR(uarch9, CSR_UARCH9)
-DECLARE_CSR(uarch10, CSR_UARCH10)
-DECLARE_CSR(uarch11, CSR_UARCH11)
-DECLARE_CSR(uarch12, CSR_UARCH12)
-DECLARE_CSR(uarch13, CSR_UARCH13)
-DECLARE_CSR(uarch14, CSR_UARCH14)
-DECLARE_CSR(uarch15, CSR_UARCH15)
-DECLARE_CSR(sstatus, CSR_SSTATUS)
-DECLARE_CSR(stvec, CSR_STVEC)
-DECLARE_CSR(sie, CSR_SIE)
-DECLARE_CSR(sscratch, CSR_SSCRATCH)
-DECLARE_CSR(sepc, CSR_SEPC)
-DECLARE_CSR(sip, CSR_SIP)
-DECLARE_CSR(sptbr, CSR_SPTBR)
-DECLARE_CSR(sasid, CSR_SASID)
-DECLARE_CSR(cyclew, CSR_CYCLEW)
-DECLARE_CSR(timew, CSR_TIMEW)
-DECLARE_CSR(instretw, CSR_INSTRETW)
-DECLARE_CSR(stime, CSR_STIME)
-DECLARE_CSR(scause, CSR_SCAUSE)
-DECLARE_CSR(sbadaddr, CSR_SBADADDR)
-DECLARE_CSR(stimew, CSR_STIMEW)
-DECLARE_CSR(mstatus, CSR_MSTATUS)
-DECLARE_CSR(mtvec, CSR_MTVEC)
-DECLARE_CSR(mtdeleg, CSR_MTDELEG)
-DECLARE_CSR(mie, CSR_MIE)
-DECLARE_CSR(mtimecmp, CSR_MTIMECMP)
-DECLARE_CSR(mscratch, CSR_MSCRATCH)
-DECLARE_CSR(mepc, CSR_MEPC)
-DECLARE_CSR(mcause, CSR_MCAUSE)
-DECLARE_CSR(mbadaddr, CSR_MBADADDR)
-DECLARE_CSR(mip, CSR_MIP)
-DECLARE_CSR(mtime, CSR_MTIME)
-DECLARE_CSR(mcpuid, CSR_MCPUID)
-DECLARE_CSR(mimpid, CSR_MIMPID)
-DECLARE_CSR(mhartid, CSR_MHARTID)
-DECLARE_CSR(mtohost, CSR_MTOHOST)
-DECLARE_CSR(mfromhost, CSR_MFROMHOST)
-DECLARE_CSR(mreset, CSR_MRESET)
-DECLARE_CSR(mipi, CSR_MIPI)
-DECLARE_CSR(miobase, CSR_MIOBASE)
-DECLARE_CSR(cycleh, CSR_CYCLEH)
-DECLARE_CSR(timeh, CSR_TIMEH)
-DECLARE_CSR(instreth, CSR_INSTRETH)
-DECLARE_CSR(cyclehw, CSR_CYCLEHW)
-DECLARE_CSR(timehw, CSR_TIMEHW)
-DECLARE_CSR(instrethw, CSR_INSTRETHW)
-DECLARE_CSR(stimeh, CSR_STIMEH)
-DECLARE_CSR(stimehw, CSR_STIMEHW)
-DECLARE_CSR(mtimecmph, CSR_MTIMECMPH)
-DECLARE_CSR(mtimeh, CSR_MTIMEH)
-};
-#undef DECLARE_CSR
-static struct reg_cache* reg_cache__CSR_section_create(char const* name, struct reg const regs_templates[], size_t const num_regs, void* const p_arch_info)
-{
-	assert(name);
-	assert(0 < num_regs);
-	assert(p_arch_info);
-	struct reg* const p_dst_array = calloc(4096, sizeof(struct reg));
-	{
-		for ( size_t i = 0; i < 4096; ++i ) {
-			struct reg * p_reg = &p_dst_array[i];
-			*p_reg = CSR_not_exists;
-			p_reg->number = i + RISCV_FIRST_CSR_REGNUM;
-			p_reg->value = calloc(1, NUM_BITS_TO_SIZE(p_reg->size));;
-			p_reg->arch_info = p_arch_info;
-		}
-	}
-	{
-		struct reg const* p_src_iter = &regs_templates[0];
-		for ( size_t i = 0; i < num_regs; ++i ) {
-			struct reg* const p_dst_iter = &p_dst_array[p_src_iter->number - RISCV_FIRST_CSR_REGNUM];
-			p_dst_iter->name = p_src_iter->name;
-			p_dst_iter->exist = true;
-
-			++p_src_iter;
-		}
-	}
-	struct reg_cache const the_reg_cache = {
-		.name = name,
-		.reg_list = p_dst_array,
-		.num_regs = 4096,
-	};
-
-	struct reg_cache* const p_obj = calloc(1, sizeof(struct reg_cache));
-	assert(p_obj);
-	*p_obj = the_reg_cache;
-	return p_obj;
-}
-#else
 static char csr_names[4096][50] = {};
 static void init_csr_names(void)
 {
@@ -1498,7 +1389,7 @@ static struct reg_cache* reg_cache__CSR_section_create_gdb(char const* name, voi
 	*p_obj = the_reg_cache;
 	return p_obj;
 }
-#endif
+
 static void sc_rv32_init_regs_cache(struct target* const p_target)
 {
 	assert(p_target);
@@ -2245,16 +2136,7 @@ static int sc_rv32i__remove_breakpoint(struct target* const p_target, struct bre
 	}
 	return error_code__get_and_clear(p_target);
 }
-#if 0
-static size_t total_number_of_regs(struct reg_cache const *p_reg_cache)
-{
-	size_t total = 0;
-	for ( ; p_reg_cache; p_reg_cache = p_reg_cache->next ) {
-		total += p_reg_cache->num_regs;
-	}
-	return total;
-}
-#endif
+
 /// gdb_server expects valid reg values and will use set method for updating reg values
 static int sc_rv32i__get_gdb_reg_list(struct target* const p_target, struct reg **reg_list[], int* const reg_list_size, enum target_register_class const reg_class)
 {
