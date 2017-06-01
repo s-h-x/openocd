@@ -16,13 +16,8 @@ Syntacore RISC-V target
 #include "target/target_type.h"
 #include "target/breakpoints.h"
 #include "target/register.h"
-#include "helper/log.h"
-#include "helper/binarybuffer.h"
-#include "helper/types.h"
 #include "jtag/jtag.h"
-#include "static_assert.h"
 
-#include <stdbool.h>
 #include <limits.h>
 #include <memory.h>
 #include <limits.h>

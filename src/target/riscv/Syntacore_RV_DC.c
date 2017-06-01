@@ -10,11 +10,10 @@ Syntacore RISC-V target
 
 #include "Syntacore_RV_DC.h"
 #include "sc_rv32i__Arch.h"
-#include "target/target.h"
-#include "helper/log.h"
-#include "jtag/jtag.h"
-#include "static_assert.h"
 #include "sc_macro.h"
+
+#include "target/target.h"
+#include "jtag/jtag.h"
 
 #include <limits.h>
 #include <assert.h>
