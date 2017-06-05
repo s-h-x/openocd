@@ -1505,7 +1505,7 @@ static int dsp5680xx_read_buffer(struct target *t, uint32_t a, uint32_t size,
  * @param checksum
  *
  * @return always ERROR_FAIL
- * @bug useless return value
+ * @bug trivial return value ERROR_FAIL
  */
 static int dsp5680xx_checksum_memory(struct target *t, uint32_t a, uint32_t s,
 				     uint32_t *checksum)
