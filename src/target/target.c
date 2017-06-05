@@ -4739,9 +4739,9 @@ static int jim_target_mw(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
 /**
 *  @brief Reads an array of words/halfwords/bytes from target memory starting at specified address.
 *
-*  Usage: mdw [phys] <address> [<count>] - for 32 bit reads
-*         mdh [phys] <address> [<count>] - for 16 bit reads
-*         mdb [phys] <address> [<count>] - for  8 bit reads
+*  Usage: mdw [phys] \<address\> [\<count\>] - for 32 bit reads
+*         mdh [phys] \<address\> [\<count\>] - for 16 bit reads
+*         mdb [phys] \<address\> [\<count\>] - for  8 bit reads
 *
 *  Count defaults to 1.
 *
