@@ -67,7 +67,7 @@ int error_code__prepend(struct target const* const p_target, int const old_err_c
 
 struct sc_rv32i__Arch const sc_rv32_initial_arch = {
 	.error_code = ERROR_OK,
-	.last_DAP_ctrl = DAP_CTRL_INVALID_CODE,
+	.last_DAP_ctrl = DAP_CTRL_value_INVALID_CODE,
 
 	.use_ir_select_cache = !!(USE_IR_SELECT_CACHE),
 	.use_dap_control_cache = !!(USE_DAP_CONTROL_CACHE),

@@ -14,7 +14,7 @@ typedef int32_t riscv_signed_type;
 typedef int16_t riscv_short_signed_type;
 typedef uint16_t csr_num_type;
 
-enum RISCV_CSR
+enum e_RISCV_CSRs
 {
     CSR_fflags = 0x1,
     CSR_frm = 0x2,
@@ -115,17 +115,17 @@ enum RISCV_CSR
 
     /// Debug controller CSR
     /// privilege: MRW
-    CSR_SC_DBG_SCRATCH = 0x788u,
+    CSR_sc_dbg_scratch = 0x788u,
 };
 
-enum mstatus_context_field_e
+enum e_CSR_mstatus_context_field
 {
     ext_off = 0,
     ext_initial = 1,
     ext_clean = 2,
     ext_dirty = 3,
 };
-enum Privilege
+enum e_RISCV_privilege_levels
 {
     Priv_U = 0x0,
     Priv_S = 0x1,
@@ -133,7 +133,7 @@ enum Privilege
     Priv_M = 0x3,
 };
 
-enum VM_mode
+enum e_VM_modes
 {
     VM_Mbare = 0,
     VM_Mbb = 1,
@@ -146,35 +146,39 @@ enum VM_mode
 /// RISC-V opcodes
 ///@{
 
-uint32_t RV_ADD(reg_num_type rd, reg_num_type rs1, reg_num_type rs2);
-uint32_t RV_FMV_X_S(reg_num_type rd, reg_num_type rs1_fp);
-uint32_t RV_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1);
-uint32_t RV_LB(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
-uint32_t RV_LH(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
-uint32_t RV_LW(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
-uint32_t RV_LBU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
-uint32_t RV_LHU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
-uint32_t RV_ADDI(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
-uint32_t RV_JALR(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
-uint32_t RV_CSRRW(reg_num_type rd, csr_num_type csr, reg_num_type rs1);
-uint32_t RV_CSRRS(reg_num_type rd, csr_num_type csr, reg_num_type rs1);
-uint32_t RV_CSRRC(reg_num_type rd, csr_num_type csr, reg_num_type rs1);
-uint32_t RV_CSRRWI(reg_num_type rd, csr_num_type csr, uint8_t zimm);
-uint32_t RV_CSRRSI(reg_num_type rd, csr_num_type csr, uint8_t zimm);
-uint32_t RV_CSRRCI(reg_num_type rd, csr_num_type csr, uint8_t zimm);
-uint32_t RV_EBREAK(void);
-uint16_t RV_C_EBREAK(void);
-uint32_t RV_SB(reg_num_type rs_data, reg_num_type rs1, riscv_short_signed_type imm);
-uint32_t RV_SH(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm);
-uint32_t RV_SW(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm);
-uint32_t RV_AUIPC(reg_num_type rd, riscv_signed_type imm);
-uint32_t RV_JAL(reg_num_type rd, riscv_signed_type imm_20_01);
-uint32_t RV_NOP(void);
-uint32_t RV_CSRW(unsigned csr, reg_num_type rs1);
-uint32_t RV_CSRR(reg_num_type rd, csr_num_type csr);
+#if 0
+uint32_t RISCV_opcode_ADD(reg_num_type rd, reg_num_type rs1, reg_num_type rs2);
+#endif
+uint32_t RISCV_opcode_FMV_X_S(reg_num_type rd, reg_num_type rs1_fp);
+uint32_t RISCV_opcode_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1);
+uint32_t RISCV_opcode_LB(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
+uint32_t RISCV_opcode_LH(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
+uint32_t RISCV_opcode_LW(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
+#if 0
+uint32_t RISCV_opcode_LBU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
+uint32_t RISCV_opcode_LHU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
+#endif
+uint32_t RISCV_opcode_ADDI(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
+uint32_t RISCV_opcode_JALR(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
+uint32_t RISCV_opcode_CSRRW(reg_num_type rd, csr_num_type csr, reg_num_type rs1);
+uint32_t RISCV_opcode_CSRRS(reg_num_type rd, csr_num_type csr, reg_num_type rs1);
+uint32_t RISCV_opcode_CSRRC(reg_num_type rd, csr_num_type csr, reg_num_type rs1);
+uint32_t RISCV_opcode_CSRRWI(reg_num_type rd, csr_num_type csr, uint8_t zimm);
+uint32_t RISCV_opcode_CSRRSI(reg_num_type rd, csr_num_type csr, uint8_t zimm);
+uint32_t RISCV_opcode_CSRRCI(reg_num_type rd, csr_num_type csr, uint8_t zimm);
+uint32_t RISCV_opcode_EBREAK(void);
+uint16_t RISCV_opcode_C_EBREAK(void);
+uint32_t RISCV_opcode_SB(reg_num_type rs_data, reg_num_type rs1, riscv_short_signed_type imm);
+uint32_t RISCV_opcode_SH(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm);
+uint32_t RISCV_opcode_SW(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm);
+uint32_t RISCV_opcode_AUIPC(reg_num_type rd, riscv_signed_type imm);
+uint32_t RISCV_opcode_JAL(reg_num_type rd, riscv_signed_type imm_20_01);
+uint32_t RISCV_opcode_NOP(void);
+uint32_t RISCV_opcode_CSRW(unsigned csr, reg_num_type rs1);
+uint32_t RISCV_opcode_CSRR(reg_num_type rd, csr_num_type csr);
 
-uint32_t RV_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp);
-uint32_t RV_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo);
+uint32_t RISCV_opcode_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp);
+uint32_t RISCV_opcode_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo);
 ///@]
 
 #endif  // RISCV_I_H_

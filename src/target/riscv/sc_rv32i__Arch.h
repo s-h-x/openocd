@@ -12,20 +12,20 @@ Syntacore RISC-V target
 
 struct sc_rv32i__Arch
 {
-	int error_code;
-	uint8_t last_DAP_ctrl;
-	bool use_ir_select_cache;
-	bool use_dap_control_cache;
-	bool use_verify_dap_control;
-	bool use_check_pc_unchanged;
-	bool use_verify_hart_regtrans_write;
-	bool use_verify_core_regtrans_write;
-	bool use_pc_advmt_dsbl_bit;
-	bool use_queuing_for_dr_scans;
+    int error_code;
+    uint8_t last_DAP_ctrl;
+    bool use_ir_select_cache;
+    bool use_dap_control_cache;
+    bool use_verify_dap_control;
+    bool use_check_pc_unchanged;
+    bool use_verify_hart_regtrans_write;
+    bool use_verify_core_regtrans_write;
+    bool use_pc_advmt_dsbl_bit;
+    bool use_queuing_for_dr_scans;
 };
-enum DAP_CODE_enum
+enum e_DAP_CODE
 {
-	DAP_CTRL_INVALID_CODE = 0xFFu,
+    DAP_CTRL_value_INVALID_CODE = 0xFFu,
 };
 extern struct sc_rv32i__Arch const sc_rv32_initial_arch;
 

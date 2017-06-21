@@ -28,7 +28,7 @@ static riscv_short_signed_type csr_to_int(csr_num_type csr)
 	return NORMALIZE_INT_FIELD(csr, 11, 0);
 }
 
-static uint32_t RV_INSTR_R_TYPE(unsigned func7, reg_num_type rs2, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
+static uint32_t RISCV_opcode_INSTR_R_TYPE(unsigned func7, reg_num_type rs2, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
 	CHECK_FUNC3(func3);
@@ -44,7 +44,7 @@ static uint32_t RV_INSTR_R_TYPE(unsigned func7, reg_num_type rs2, reg_num_type r
 		MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) |
 		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
 }
-static uint32_t RV_INSTR_I_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
+static uint32_t RISCV_opcode_INSTR_I_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
 	CHECK_REG(rd);
@@ -58,7 +58,7 @@ static uint32_t RV_INSTR_I_TYPE(riscv_short_signed_type imm_11_00, reg_num_type 
 		MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) |
 		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
 }
-static uint32_t RV_INSTR_S_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
+static uint32_t RISCV_opcode_INSTR_S_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
 	CHECK_REG(rs2);
@@ -74,7 +74,7 @@ static uint32_t RV_INSTR_S_TYPE(riscv_short_signed_type imm_11_00, reg_num_type 
 		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
 }
 #if 0
-static uint32_t RV_INSTR_SB_TYPE(riscv_short_signed_type imm_01_12, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
+static uint32_t RISCV_opcode_INSTR_SB_TYPE(riscv_short_signed_type imm_01_12, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
 	CHECK_FUNC3(func3);
@@ -92,7 +92,7 @@ static uint32_t RV_INSTR_SB_TYPE(riscv_short_signed_type imm_01_12, reg_num_type
 		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
 }
 #endif
-static uint32_t RV_INSTR_U_TYPE(riscv_signed_type imm_31_12, reg_num_type rd, uint8_t opcode)
+static uint32_t RISCV_opcode_INSTR_U_TYPE(riscv_signed_type imm_31_12, reg_num_type rd, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
 	CHECK_REG(rd);
@@ -102,7 +102,7 @@ static uint32_t RV_INSTR_U_TYPE(riscv_signed_type imm_31_12, reg_num_type rd, ui
 		MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) |
 		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
 }
-static uint32_t RV_INSTR_UJ_TYPE(riscv_signed_type imm_20_01, reg_num_type rd, uint8_t opcode)
+static uint32_t RISCV_opcode_INSTR_UJ_TYPE(riscv_signed_type imm_20_01, reg_num_type rd, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
 	CHECK_REG(rd);
@@ -116,116 +116,118 @@ static uint32_t RV_INSTR_UJ_TYPE(riscv_signed_type imm_20_01, reg_num_type rd, u
 		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
 }
 
-uint32_t RV_ADD(reg_num_type rd, reg_num_type rs1, reg_num_type rs2)
+#if 0
+uint32_t RISCV_opcode_ADD(reg_num_type rd, reg_num_type rs1, reg_num_type rs2)
 {
-	return RV_INSTR_R_TYPE(0x00u, rs2, rs1, 0u, rd, 0x33u);
+	return RISCV_opcode_INSTR_R_TYPE(0x00u, rs2, rs1, 0u, rd, 0x33u);
 }
-uint32_t RV_FMV_X_S(reg_num_type rd, reg_num_type rs1_fp)
+#endif
+uint32_t RISCV_opcode_FMV_X_S(reg_num_type rd, reg_num_type rs1_fp)
 {
-	return RV_INSTR_R_TYPE(0x70u, 0u, rs1_fp, 0u, rd, 0x53u);
+	return RISCV_opcode_INSTR_R_TYPE(0x70u, 0u, rs1_fp, 0u, rd, 0x53u);
 }
-uint32_t RV_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp)
+uint32_t RISCV_opcode_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp)
 {
-	return RV_INSTR_R_TYPE(0x70u, rd_hi, rs1_fp, 0u, rd_lo, 0x53u);
+	return RISCV_opcode_INSTR_R_TYPE(0x70u, rd_hi, rs1_fp, 0u, rd_lo, 0x53u);
 }
-uint32_t RV_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1)
+uint32_t RISCV_opcode_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1)
 {
-	return RV_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd_fp, 0x53u);
+	return RISCV_opcode_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd_fp, 0x53u);
 }
-uint32_t RV_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo)
+uint32_t RISCV_opcode_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo)
 {
-	return RV_INSTR_R_TYPE(0x78u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
+	return RISCV_opcode_INSTR_R_TYPE(0x78u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
 }
-uint32_t RV_LB(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
+uint32_t RISCV_opcode_LB(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RV_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x03u);
+	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x03u);
 }
-uint32_t RV_LH(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
+uint32_t RISCV_opcode_LH(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RV_INSTR_I_TYPE(imm, rs1, 1u, rd, 0x03u);
+	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 1u, rd, 0x03u);
 }
-uint32_t RV_LW(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
+uint32_t RISCV_opcode_LW(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RV_INSTR_I_TYPE(imm, rs1, 2u, rd, 0x03u);
+	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 2u, rd, 0x03u);
 }
-uint32_t RV_LBU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
+uint32_t RISCV_opcode_LBU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RV_INSTR_I_TYPE(imm, rs1, 4u, rd, 0x03u);
+	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 4u, rd, 0x03u);
 }
-uint32_t RV_LHU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
+uint32_t RISCV_opcode_LHU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RV_INSTR_I_TYPE(imm, rs1, 5u, rd, 0x03u);
+	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 5u, rd, 0x03u);
 }
-uint32_t RV_ADDI(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
+uint32_t RISCV_opcode_ADDI(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RV_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x13u);
+	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x13u);
 }
-uint32_t RV_JALR(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
+uint32_t RISCV_opcode_JALR(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RV_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x67u);
+	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x67u);
 }
-uint32_t RV_CSRRW(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
+uint32_t RISCV_opcode_CSRRW(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
 {
-	return RV_INSTR_I_TYPE(csr_to_int(csr), rs1, 1u, rd, 0x73u);
+	return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), rs1, 1u, rd, 0x73u);
 }
-uint32_t RV_CSRRS(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
+uint32_t RISCV_opcode_CSRRS(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
 {
-	return RV_INSTR_I_TYPE(csr_to_int(csr), rs1, 2u, rd, 0x73u);
+	return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), rs1, 2u, rd, 0x73u);
 }
-uint32_t RV_CSRRC(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
+uint32_t RISCV_opcode_CSRRC(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
 {
-	return RV_INSTR_I_TYPE(csr_to_int(csr), rs1, 3u, rd, 0x73u);
+	return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), rs1, 3u, rd, 0x73u);
 }
-uint32_t RV_CSRRWI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
+uint32_t RISCV_opcode_CSRRWI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
 {
-	return RV_INSTR_I_TYPE(csr_to_int(csr), zimm, 5u, rd, 0x73u);
+	return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), zimm, 5u, rd, 0x73u);
 }
-uint32_t RV_CSRRSI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
+uint32_t RISCV_opcode_CSRRSI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
 {
-	return RV_INSTR_I_TYPE(csr_to_int(csr), zimm, 6u, rd, 0x73u);
+	return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), zimm, 6u, rd, 0x73u);
 }
-uint32_t RV_CSRRCI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
+uint32_t RISCV_opcode_CSRRCI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
 {
-	return RV_INSTR_I_TYPE(csr_to_int(csr), zimm, 7u, rd, 0x73u);
+	return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), zimm, 7u, rd, 0x73u);
 }
-uint32_t RV_EBREAK(void)
+uint32_t RISCV_opcode_EBREAK(void)
 {
-	return RV_INSTR_I_TYPE(1, 0u, 0u, 0u, 0x73u);
+	return RISCV_opcode_INSTR_I_TYPE(1, 0u, 0u, 0u, 0x73u);
 }
-uint32_t RV_SB(reg_num_type rs_data, reg_num_type rs1, riscv_short_signed_type imm)
+uint32_t RISCV_opcode_SB(reg_num_type rs_data, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RV_INSTR_S_TYPE(imm, rs_data, rs1, 0u, 0x23);
+	return RISCV_opcode_INSTR_S_TYPE(imm, rs_data, rs1, 0u, 0x23);
 }
-uint32_t RV_SH(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
+uint32_t RISCV_opcode_SH(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RV_INSTR_S_TYPE(imm, rs, rs1, 1u, 0x23);
+	return RISCV_opcode_INSTR_S_TYPE(imm, rs, rs1, 1u, 0x23);
 }
-uint32_t RV_SW(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
+uint32_t RISCV_opcode_SW(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RV_INSTR_S_TYPE(imm, rs, rs1, 2u, 0x23);
+	return RISCV_opcode_INSTR_S_TYPE(imm, rs, rs1, 2u, 0x23);
 }
-uint32_t RV_AUIPC(reg_num_type rd, riscv_signed_type imm)
+uint32_t RISCV_opcode_AUIPC(reg_num_type rd, riscv_signed_type imm)
 {
-	return RV_INSTR_U_TYPE(imm, rd, 0x17u);
+	return RISCV_opcode_INSTR_U_TYPE(imm, rd, 0x17u);
 }
-uint32_t RV_JAL(reg_num_type rd, riscv_signed_type imm_20_01)
+uint32_t RISCV_opcode_JAL(reg_num_type rd, riscv_signed_type imm_20_01)
 {
-	return RV_INSTR_UJ_TYPE(imm_20_01, rd, 0x6Fu);
+	return RISCV_opcode_INSTR_UJ_TYPE(imm_20_01, rd, 0x6Fu);
 }
-uint32_t RV_NOP(void)
+uint32_t RISCV_opcode_NOP(void)
 {
-	return RV_ADDI(0, 0, 0u);
+	return RISCV_opcode_ADDI(0, 0, 0u);
 }
-uint32_t RV_CSRW(unsigned csr, reg_num_type rs1)
+uint32_t RISCV_opcode_CSRW(unsigned csr, reg_num_type rs1)
 {
-	return RV_CSRRW(0, csr, rs1);
+	return RISCV_opcode_CSRRW(0, csr, rs1);
 }
-uint32_t RV_CSRR(reg_num_type rd, csr_num_type csr)
+uint32_t RISCV_opcode_CSRR(reg_num_type rd, csr_num_type csr)
 {
-	return RV_CSRRS(rd, csr, 0);
+	return RISCV_opcode_CSRRS(rd, csr, 0);
 }
 
-uint16_t RV_C_EBREAK(void)
+uint16_t RISCV_opcode_C_EBREAK(void)
 {
 	return 0x9002u;
 }
