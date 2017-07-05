@@ -4,7 +4,7 @@ else
 OOCD_TRACE_FILES =
 endif
 
-%C%_libtarget_la_LIBADD = %D%/openrisc/libopenrisc.la %D%/riscv/libriscv.la
+%C%_libtarget_la_LIBADD = %D%/openrisc/libopenrisc.la %D%/sc_riscv32/libsc_riscv32.la
 
 STARTUP_TCL_SRCS += %D%/startup.tcl
 
@@ -192,5 +192,5 @@ INTEL_IA32_SRC = \
 	%D%/x86_32_common.h
 
 include %D%/openrisc/Makefile.am
-include %D%/riscv/Makefile.am
+include %D%/sc_riscv32/Makefile.am
 

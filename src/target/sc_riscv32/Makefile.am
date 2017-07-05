@@ -1,5 +1,5 @@
-noinst_LTLIBRARIES += %D%/libriscv.la
-%C%_libriscv_la_SOURCES = \
+noinst_LTLIBRARIES += %D%/libsc_riscv32.la
+%C%_libsc_riscv32_la_SOURCES = \
 	%D%/syntacore_riscv32i.c \
 	%D%/riscv_opcodes.c \
 	%D%/Syntacore_RV_DC.c \
