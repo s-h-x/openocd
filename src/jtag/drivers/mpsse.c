@@ -30,7 +30,7 @@
 #endif
 
 #ifdef _DEBUG_JTAG_IO_
-#define DEBUG_IO(expr...) LOG_DEBUG(expr)
+#define DEBUG_IO(...) LOG_DEBUG(__VA_ARGS__)
 #define DEBUG_PRINT_BUF(buf, len) \
 	do { \
 		char buf_string[32 * 3 + 1]; \
@@ -46,7 +46,7 @@
 			LOG_DEBUG("%s", buf_string);\
 	} while (0)
 #else
-#define DEBUG_IO(expr...) do {} while (0)
+#define DEBUG_IO(...) do {} while (0)
 #define DEBUG_PRINT_BUF(buf, len) do {} while (0)
 #endif
 

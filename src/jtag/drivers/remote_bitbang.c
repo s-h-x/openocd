@@ -30,9 +30,9 @@
 /* arbitrary limit on host name length: */
 #define REMOTE_BITBANG_HOST_MAX 255
 
-#define REMOTE_BITBANG_RAISE_ERROR(expr ...) \
+#define REMOTE_BITBANG_RAISE_ERROR(...) \
 	do { \
-		LOG_ERROR(expr); \
+		LOG_ERROR(__VA_ARGS__); \
 		LOG_ERROR("Terminating openocd."); \
 		exit(-1); \
 	} while (0)

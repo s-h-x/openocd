@@ -74,8 +74,8 @@ struct command_invocation {
  * set provided by command.c.  This macro uses C99 magic to allow
  * defining all such derivative types using this macro.
  */
-#define __COMMAND_HANDLER(name, extra ...) \
-		int name(struct command_invocation *cmd, ## extra)
+#define __COMMAND_HANDLER(name, ...) \
+		int name(struct command_invocation *cmd, ## __VA_ARGS__)
 
 /**
  * Use this to macro to call a command helper (or a nested handler).
@@ -90,8 +90,8 @@ struct command_invocation {
  * helper function, or care must be taken to avoid redefining the same
  * variables in intervening scope(s) by accident.
  */
-#define CALL_COMMAND_HANDLER(name, extra ...) \
-		name(cmd, ## extra)
+#define CALL_COMMAND_HANDLER(name, ...) \
+		name(cmd, ## __VA_ARGS__)
 
 /**
  * Always use this macro to define new command handler functions.
@@ -107,7 +107,7 @@ struct command_invocation {
  * A helper is globally-scoped because it may be shared between several
  * source files (e.g. the s3c24xx device command helper).
  */
-#define COMMAND_HELPER(name, extra ...) __COMMAND_HANDLER(name, extra)
+#define COMMAND_HELPER(name, ...) __COMMAND_HANDLER(name, ## __VA_ARGS__)
 
 /**
  * Use this macro to access the context of the command being handled,

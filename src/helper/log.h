@@ -106,27 +106,26 @@ extern int debug_level;
 	do { \
 		if (debug_level >= LOG_LVL_DEBUG) \
 			log_printf_lf(LOG_LVL_DEBUG, \
-				__FILE__, __LINE__, __func__, \
-				__VA_ARGS__); \
+				__FILE__, __LINE__, __func__, ## __VA_ARGS__); \
 	} while (0)
 
 #define LOG_INFO(...) \
-	log_printf_lf(LOG_LVL_INFO, __FILE__, __LINE__, __func__, __VA_ARGS__)
+	log_printf_lf(LOG_LVL_INFO, __FILE__, __LINE__, __func__, ## __VA_ARGS__)
 
 #define LOG_WARNING(...) \
-	log_printf_lf(LOG_LVL_WARNING, __FILE__, __LINE__, __func__, __VA_ARGS__)
+	log_printf_lf(LOG_LVL_WARNING, __FILE__, __LINE__, __func__, ## __VA_ARGS__)
 
 #define LOG_ERROR(...) \
-	log_printf_lf(LOG_LVL_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
+	log_printf_lf(LOG_LVL_ERROR, __FILE__, __LINE__, __func__, ## __VA_ARGS__)
 
 #define LOG_USER(...) \
-	log_printf_lf(LOG_LVL_USER, __FILE__, __LINE__, __func__, __VA_ARGS__)
+	log_printf_lf(LOG_LVL_USER, __FILE__, __LINE__, __func__, ## __VA_ARGS__)
 
 #define LOG_USER_N(...) \
-	log_printf(LOG_LVL_USER, __FILE__, __LINE__, __func__, __VA_ARGS__)
+	log_printf(LOG_LVL_USER, __FILE__, __LINE__, __func__, ## __VA_ARGS__)
 
 #define LOG_OUTPUT(...) \
-	log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, __VA_ARGS__)
+	log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, ## __VA_ARGS__)
 
 /* general failures
  * error codes < 100
