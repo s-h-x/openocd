@@ -187,7 +187,7 @@ enum type_dbgc_hart_dmode_cause_reg_bits_e
     /// Show halt due to SW breakpoint
     DBGC_HART_HDMCR_SW_BRKPT_BIT = 3,
     /// Show halt after single step
-    DBGC_HART_HDMCR_SINGLE_STEP_BIT = 29,
+    DBGC_HART_HDMCR_SINGLE_STEP_BIT = 28,
     /// Show halt after reset
     DBGC_HART_HDMCR_RST_BREAK_BIT = 30,
     /// Show forced halt from debug controller
