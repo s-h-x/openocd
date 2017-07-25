@@ -2117,7 +2117,7 @@ static struct reg_arch_type const reg_pc_accessors = {
     .get = reg_pc__get,
     .set = reg_pc__set,
 };
-struct reg_data_type PC_reg_data_type = {
+static struct reg_data_type PC_reg_data_type = {
     .type = REG_TYPE_CODE_PTR,
 };
 #if FLEN == 32
