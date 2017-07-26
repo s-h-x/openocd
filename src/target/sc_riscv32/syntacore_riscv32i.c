@@ -1,8 +1,9 @@
 ﻿/** @file
 
-Syntacore RISC-V target
+    Syntacore RISC-V target
 
-@copyright Syntacore
+    @copyright Syntacore
+    @author sps (https://github.com/aka-sps)
 */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -23,6 +24,31 @@ Syntacore RISC-V target
 #include <stdbool.h>
 #include <stdint.h>
 
+/// Don't make irscan if IR is the same
+#define USE_IR_SELECT_CACHE 0
+
+/// Don't write DAP_CONTROL if it is the same 
+#define USE_DAP_CONTROL_CACHE 0
+
+/// Verify value of DAP_CONTROL after write
+#define USE_VERIFY_DAP_CONTROL 1
+
+/// Verify values of HART REGTRANS after write
+#define USE_VERIFY_HART_REGTRANS_WRITE 1
+
+/// Verify values of CORE REGTRANS after write
+#define USE_VERIFY_CORE_REGTRANS_WRITE 1
+
+#define USE_PC_ADVMT_DSBL_BIT 1
+
+#define USE_QUEUING_FOR_DR_SCANS 1
+
+#define USE_CHECK_PC_UNCHANGED 1
+
+#define WRITE_BUFFER_THRESHOLD (1u << 18)
+
+/// Parameters of RISC-V core
+/// @{
 /// Size of RISC-V GP registers in bits
 #define XLEN (32u)
 /// Size of RISC-V FP registers in bits
@@ -30,66 +56,214 @@ Syntacore RISC-V target
 #define FP_enabled !!1
 /// Size of RISC-V instruction
 #define ILEN (32u)
-#define VERIFY_REG_WRITE 0
-#define WRITE_BUFFER_THRESHOLD (1u << 18)
+/// @}
+
+
+/// TAP controller IDCODE
 #define EXPECTED_IDCODE      (0xC0DEDEB1u)
 #define EXPECTED_IDCODE_MASK (0xFFF0FFFFu)
+
+/// DBG_ID
+/// @{
 /// Lowest required DBG_ID
+/// Required and provided masked values should be equal.
 #define EXPECTED_DBG_ID        (0x00800001u)
 /// Mask of DBG_ID version.
-/// Required and provided masked values should be equal.
 #define DBG_ID_VERSION_MASK    (0xFFFFFF00u)
+
 /// Mask of DBG_ID subversion.
 /// Required value should be less or equal to provided subversion.
 #define DBG_ID_SUBVERSION_MASK (0x000000FFu)
-/// Don't make irscan if IR is the same
-#define USE_IR_SELECT_CACHE 0
-/// Don't write DAP_CONTROL if it is the same 
-#define USE_DAP_CONTROL_CACHE 0
-/// Verify value of DAP_CONTROL after write
-#define USE_VERIFY_DAP_CONTROL 1
-/// Verify values of HART REGTRANS after write
-#define USE_VERIFY_HART_REGTRANS_WRITE 1
-/// Verify values of CORE REGTRANS after write
-#define USE_VERIFY_CORE_REGTRANS_WRITE 1
-#define USE_PC_ADVMT_DSBL_BIT 1
-#define USE_QUEUING_FOR_DR_SCANS 1
-#define USE_CHECK_PC_UNCHANGED 1
+/// @}
 
+/// Back-end static assert macro that raise compile time division to zero when static 'COND' is false
 #define STATIC_ASSERT2(COND,LINE) enum {static_assertion_at_line_##LINE= 1 / !!(COND)}
+/// Intermediate macro
 #define STATIC_ASSERT1(COND,LINE) STATIC_ASSERT2(COND,LINE)
+/// Front-end static assert macro
 #define STATIC_ASSERT(COND)  STATIC_ASSERT1(COND,__LINE__)
+
+/// Bit operation set of macros
+/// @{
+
+/// Simple mask with only single bit 'bit_num' is set
+#define BIT_NUM_TO_MASK(bit_num) (1u << (bit_num))
+
 /// Bit mask value with low 'n' bits set
 #define LOW_BITS_MASK(n) (~(~0 << (n)))
+
 /// @return expression of TYPE with 'first_bit':'last_bit' bits set
 #define MAKE_TYPE_FIELD(TYPE, bits, first_bit, last_bit)     ((((TYPE)(bits)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
-/// Number of array 'arr' elements
-#define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
-/** Number of bytes need for 'num_bits' bits
+
+/** Number of octets required for 'num_bits' bits
 @param [in] num_bits number of bits
 @return number of bytes for 'num_bits' \f$\lceil {\frac{num\_bits}{CHAR\_BIT}} \rceil\f$.
 */
 #define NUM_BITS_TO_SIZE(num_bits) ( ( (size_t)(num_bits) + (CHAR_BIT - 1) ) / CHAR_BIT )
+
+/// Extract bit-field value
 #define EXTRACT_FIELD(bits, first_bit, last_bit) (((bits) >> (first_bit)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit)))
+
+/// Test that values bits except lower 'LEN' are zero
 #define IS_VALID_UNSIGNED_FIELD(FLD,LEN) ((FLD & ~LOW_BITS_MASK(LEN)) == 0)
 #define NORMALIZE_INT_FIELD(FLD, SIGN_BIT, ZEROS) ( ( ( ( -( ( (FLD) >> (SIGN_BIT) ) & LOW_BITS_MASK(1) ) ) << (SIGN_BIT) ) | (FLD) ) & ~LOW_BITS_MASK(ZEROS) )
 #define IS_VALID_SIGNED_IMMEDIATE_FIELD(FLD, SIGN_BIT, LOW_ZEROS) ( (FLD) == NORMALIZE_INT_FIELD((FLD), (SIGN_BIT), (LOW_ZEROS)) )
+
+/// @}
+
+/// Number of array 'arr' elements
+#define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
+
+/// Specialized assert check that register number is 5 bits only
 #define CHECK_REG(REG) assert(IS_VALID_UNSIGNED_FIELD(REG,5))
 #define CHECK_OPCODE(OPCODE) assert(IS_VALID_UNSIGNED_FIELD(OPCODE,7) && (OPCODE & LOW_BITS_MASK(2)) == LOW_BITS_MASK(2) && (OPCODE & LOW_BITS_MASK(5)) != LOW_BITS_MASK(5))
+/// Specialized asserts to check format of RISC-V immediates
+/// @{
 #define CHECK_IMM_11_00(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 11, 0));
 #define CHECK_IMM_12_01(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 12, 1));
 #define CHECK_IMM_20_01(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 20, 1));
+/// @}
+
 #define CHECK_FUNC7(F) assert(IS_VALID_UNSIGNED_FIELD(F,7))
 #define CHECK_FUNC3(F) assert(IS_VALID_UNSIGNED_FIELD(F,3))
-#define BIT_NUM_TO_MASK(bit_num) (1u << (bit_num))
 
 STATIC_ASSERT(CHAR_BIT == 8);
 
+typedef struct target target;
+typedef struct reg reg;
+typedef struct reg_cache reg_cache;
+typedef struct reg_arch_type reg_arch_type;
+typedef struct reg_data_type_union_field reg_data_type_union_field;
+typedef struct reg_data_type_union reg_data_type_union;
+typedef struct breakpoint breakpoint;
+typedef struct command_context command_context;
+typedef struct Jim_Interp Jim_Interp;
+typedef struct target_type target_type;
+typedef struct scan_field scan_field;
+typedef struct reg_data_type reg_data_type;
+typedef struct reg_feature reg_feature;
+typedef uint8_t reg_num_type;
+typedef int32_t riscv_signed_type;
+typedef int16_t riscv_short_signed_type;
+typedef uint16_t csr_num_type;
+typedef enum target_register_class target_register_class;
+typedef enum target_state target_state;
+typedef enum target_debug_reason target_debug_reason;
+
+/** @defgroup RISCV_TAPC_IR Syntacore TAP Controller Instructions
+*/
+/// @{
+
+/** @brief TAP Controller Instructions ID
+    ir_scan selects one of instruction registers IO to TDI/TDO
+*/
+typedef enum TAP_IR_e
+{
+    /** @brief DBG_ID Register Read
+
+        It connects DBG_ID_DR register between TDI and TDO pins.
+        Contains debug facilities version implemented in the given processor DBGC subsystem.
+    */
+    TAP_instruction_DBG_ID = 0b0011u,
+
+    /** @brief BLD_ID Register Read
+
+    Connects BLD_ID_DR between TDI and TDO pins. 
+    It identifies an entire processor system RTL build revision.
+    */
+    TAP_instruction_BLD_ID = 0b0100u,
+
+    /** @brief DBG_STATUS Register Read
+        Connects DBG_STATUS_DR register providing general status information about debug operations and core state.
+    */
+    TAP_instruction_DBG_STATUS = 0b0101u,
+
+    /** @brief DAP_CTRL Register Write
+
+    Connects DAP_CTRL_DR register is the control port of the upper level multiplexer 
+    for DAP_CMD register.
+    */
+    TAP_instruction_DAP_CTRL = 0b0110u,
+
+    /** @brief DAP_CTRL Register Read
+
+        Connects DAP_CTRL_RD_DR register allowing to read
+        current DAP Control Context (DAPCC) from the DAP_CONTEXT register.
+    */
+    TAP_instruction_DAP_CTRL_RD = 0b0111u,
+
+    /** @brief Debug Access Port Command (DAP Command)
+
+        Provide multiplexed IO to inner DC registers.
+
+        Multiplexing is controlled by DAP_CTRL
+        Connects DAP_CMD_DR register.
+    */
+    TAP_instruction_DAP_CMD = 0b1000u,
+
+    /** @brief SYS_CTRL Register Access
+
+        Connects SYS_CTRL_DR register, 
+        used to control state of the Processor Subsystem Reset net, 
+        and to get its current status.
+    */
+    TAP_instruction_SYS_CTRL = 0b1001u,
+
+    /** @brief MTAP_SWITCH Register Access
+
+        Connects MTAP_SWITCH_DR register, used to control state
+        of the Master TAP Switch Control output, and to
+        get its current status.
+    */
+    TAP_instruction_MTAP_SWITCH = 0b1101u,
+    /** @brief IDCODE Register Read
+        Conventional recommended Device Identification instruction compliant with IEEE 1149.1 Standard.
+        It connects IDCODE_DR register between TDI and TDO pins.()
+    */
+    TAP_instruction_IDCODE = 0b1110u,
+
+    /** @brief BYPASS instruction
+        IEEE 1149.1 Standard compliant mandatory instruction.
+        It connects BYPASS_DR single bit shiht register between TDI and TDO pins.
+    */
+    TAP_instruction_BYPASS = 0b1111,
+} TAP_IR_e;
+
+/// TAP registers size constants
 enum
 {
+    /**  @brief IR registers code size - 4 bits
+    */
+    TAP_length_of_IR = 4u,
+    TAP_length_of_RO_32 = 32u,
+    /// mandatory 32 bits, if supported
+    TAP_length_of_IDCODE = TAP_length_of_RO_32,
+    TAP_length_of_DBG_ID = TAP_length_of_RO_32,
+    TAP_length_of_BLD_ID = TAP_length_of_RO_32,
+    TAP_length_of_DBG_STATUS = TAP_length_of_RO_32,
+    TAP_length_of_DAP_CTRL_UNIT = 2u,
+    TAP_length_of_DAP_CTRL_FGROUP = 2u,
+    TAP_length_of_DAP_CTRL = TAP_length_of_DAP_CTRL_UNIT + TAP_length_of_DAP_CTRL_FGROUP,
+    TAP_number_of_fields_DAP_CMD = 2u,
+    TAP_length_of_DAP_CMD_OPCODE = 4u,
+    TAP_length_of_DAP_CMD_OPCODE_EXT = 32u,
+    TAP_length_of_DAP_CMD = TAP_length_of_DAP_CMD_OPCODE + TAP_length_of_DAP_CMD_OPCODE_EXT,
+    /// mandatory 1 bit shift register
+    TAP_length_of_BYPASS = 1,
+};
+/// @}
+
+STATIC_ASSERT(TAP_length_of_RO_32 == 32);
+STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_length_of_RO_32) <= sizeof(uint32_t));
+
+enum
+{
+    /// Marker of invalid value of Debug Access Port multiplexer control
     DAP_CTRL_value_INVALID_CODE = 0xFFu,
 };
 
+
+/// RISC-V Privileged ISA CSR
 enum
 {
     CSR_sptbr = 0x180,
@@ -119,11 +293,12 @@ enum
     CSR_mdbound = 0x385u,
     ///@}
 
-    /// Debug controller CSR
+    /// Syntacore Debug controller CSR (for Privileged ISA 1.7)
     /// privilege: MRW
     CSR_sc_dbg_scratch = 0x788u,
 };
-/// RISCV privilege levels
+
+/// RISC-V privilege levels
 enum
 {
     Priv_U = 0x0,
@@ -131,7 +306,8 @@ enum
     Priv_H = 0x2,
     Priv_M = 0x3,
 };
-/// VM modes
+
+/// RISC-V VM modes
 enum
 {
     VM_Mbare = 0,
@@ -140,23 +316,6 @@ enum
     VM_Sv32 = 8,
     VM_Sv39 = 9,
     VM_Sv48 = 10,
-};
-enum
-{
-    TAP_length_of_IR = 4,
-    TAP_length_of_RO_32 = 32,
-    TAP_length_of_IDCODE = TAP_length_of_RO_32,  ///< mandatory
-    TAP_length_of_DBG_ID = TAP_length_of_RO_32,
-    TAP_length_of_BLD_ID = TAP_length_of_RO_32,
-    TAP_length_of_DBG_STATUS = TAP_length_of_RO_32,
-    TAP_length_of_DAP_CTRL_UNIT = 2,
-    TAP_length_of_DAP_CTRL_FGROUP = 2,
-    TAP_length_of_DAP_CTRL = TAP_length_of_DAP_CTRL_UNIT + TAP_length_of_DAP_CTRL_FGROUP,
-    TAP_number_of_fields_DAP_CMD = 2,
-    TAP_length_of_DAP_CMD_OPCODE = 4,
-    TAP_length_of_DAP_CMD_OPCODE_EXT = 32,
-    TAP_length_of_DAP_CMD = TAP_length_of_DAP_CMD_OPCODE + TAP_length_of_DAP_CMD_OPCODE_EXT,
-    TAP_length_of_BYPASS = 1,  ///< mandatory
 };
 
 /// type_dbgc_core_dbg_sts_reg_bits_e
@@ -381,19 +540,6 @@ enum
 };
 ///@}
 
-/// IR id
-typedef enum TAP_IR_e
-{
-    TAP_instruction_DBG_ID = 3,
-    TAP_instruction_BLD_ID = 4,
-    TAP_instruction_DBG_STATUS = 5,
-    TAP_instruction_DAP_CTRL = 6,
-    TAP_instruction_DAP_CTRL_RD = 7,
-    TAP_instruction_DAP_CMD = 8,
-    TAP_instruction_IDCODE = 0xE,  ///< recommended
-    TAP_instruction_BYPASS = 0xF,  ///< mandatory
-} TAP_IR_e;
-
 /// RISC-V GP registers id
 enum
 {
@@ -411,27 +557,6 @@ enum
     number_of_regs_F = RISCV_regnum_FP_last - RISCV_regnum_FP_first + 1,
     number_of_regs_GDB = RISCV_rtegnum_CSR_last + 1,
 };
-
-typedef struct target target;
-typedef struct reg reg;
-typedef struct reg_cache reg_cache;
-typedef struct reg_arch_type reg_arch_type;
-typedef struct reg_data_type_union_field reg_data_type_union_field;
-typedef struct reg_data_type_union reg_data_type_union;
-typedef struct breakpoint breakpoint;
-typedef struct command_context command_context;
-typedef struct Jim_Interp Jim_Interp;
-typedef struct target_type target_type;
-typedef struct scan_field scan_field;
-typedef struct reg_data_type reg_data_type;
-typedef struct reg_feature reg_feature;
-typedef uint8_t reg_num_type;
-typedef int32_t riscv_signed_type;
-typedef int16_t riscv_short_signed_type;
-typedef uint16_t csr_num_type;
-typedef enum target_register_class target_register_class;
-typedef enum target_state target_state;
-typedef enum target_debug_reason target_debug_reason;
 
 typedef struct sc_rv32i__Arch
 {
@@ -469,49 +594,85 @@ static sc_rv32i__Arch const sc_rv32_initial_arch = {
 };
 /// Error code handling
 ///@{
-static inline int error_code__get(target const* const p_target)
+
+/** @brief Get operation code stored in the target context.
+*/
+static inline int
+error_code__get(target const* const p_target)
 {
     assert(p_target);
     sc_rv32i__Arch const* const p_arch = p_target->arch_info;
     assert(p_arch);
     return p_arch->error_code;
 }
-static inline int error_code__update(target const* const p_target, int const a_error_code)
+
+/** @brief Forced store operation code into target context.
+*/
+static inline int
+error_code__set(target const* const p_target, int const a_error_code)
+{
+    assert(p_target);
+    {
+        sc_rv32i__Arch* restrict const p_arch = p_target->arch_info;
+        assert(p_arch);
+        p_arch->error_code = a_error_code;
+    }
+    return a_error_code;
+}
+
+/** @brief get and set to ERROR_OK stored in target context operation code.
+*/
+static inline int
+error_code__get_and_clear(target const* const p_target)
+{
+    int const result = error_code__get(p_target);
+    error_code__set(p_target, ERROR_OK);
+    return result;
+}
+
+/** @brief Update error context.
+
+    Store first occurred code that is no equal to ERROR_OK into target context.
+*/
+static inline int
+error_code__update(target const* const p_target, int const a_error_code)
 {
     int const old_code = error_code__get(p_target);
     if (ERROR_OK != old_code || ERROR_OK == a_error_code) {
         return old_code;
     } else {
         LOG_DEBUG("Set new error code: %d", a_error_code);
-        sc_rv32i__Arch* restrict const p_arch = p_target->arch_info;
-        assert(p_arch);
-        p_arch->error_code = a_error_code;
-        return a_error_code;
+        return error_code__set(p_target, a_error_code);
     }
 }
-static inline int error_code__get_and_clear(target const* const p_target)
+
+/** @brief Update error context
+
+    If passed code is not equal to ERROR_OK - replace it in the target context.
+*/
+static inline int
+error_code__prepend(target const* const p_target, int const older_err_code)
 {
-    int const result = error_code__get(p_target);
-    {
-        sc_rv32i__Arch* restrict const p_arch = p_target->arch_info;
-        assert(p_arch);
-        p_arch->error_code = ERROR_OK;
-        return result;
+    if (ERROR_OK == older_err_code) {
+        return error_code__get(p_target);
+    } else {
+        LOG_DEBUG("Reset error code to previous state: %d", older_err_code);
+        return error_code__set(p_target, older_err_code);
     }
-}
-static inline int error_code__prepend(target const* const p_target, int const old_err_code)
-{
-    int const new_err_code = error_code__get_and_clear(p_target);
-    error_code__update(p_target, old_err_code);
-    return error_code__update(p_target, new_err_code);
 }
 /// @}
 
-static inline riscv_short_signed_type csr_to_int(csr_num_type csr)
+/** RISC-V instruction encoding.
+*/
+/// @{
+static inline riscv_short_signed_type
+csr_to_int(csr_num_type csr)
 {
     return NORMALIZE_INT_FIELD(csr, 11, 0);
 }
-static uint32_t RISCV_opcode_INSTR_R_TYPE(unsigned func7, reg_num_type rs2, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
+
+static uint32_t
+RISCV_opcode_INSTR_R_TYPE(unsigned func7, reg_num_type rs2, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
 {
     CHECK_OPCODE(opcode);
     CHECK_FUNC3(func3);
@@ -527,7 +688,9 @@ static uint32_t RISCV_opcode_INSTR_R_TYPE(unsigned func7, reg_num_type rs2, reg_
         MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) |
         MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
 }
-static uint32_t RISCV_opcode_INSTR_I_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
+
+static uint32_t
+RISCV_opcode_INSTR_I_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
 {
     CHECK_OPCODE(opcode);
     CHECK_REG(rd);
@@ -541,7 +704,9 @@ static uint32_t RISCV_opcode_INSTR_I_TYPE(riscv_short_signed_type imm_11_00, reg
         MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) |
         MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
 }
-static uint32_t RISCV_opcode_INSTR_S_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
+
+static uint32_t
+RISCV_opcode_INSTR_S_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
 {
     CHECK_OPCODE(opcode);
     CHECK_REG(rs2);
@@ -556,7 +721,9 @@ static uint32_t RISCV_opcode_INSTR_S_TYPE(riscv_short_signed_type imm_11_00, reg
         MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_11_00, 0, 4), 7, 11) |
         MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
 }
-static uint32_t RISCV_opcode_INSTR_UJ_TYPE(riscv_signed_type imm_20_01, reg_num_type rd, uint8_t opcode)
+
+static uint32_t
+RISCV_opcode_INSTR_UJ_TYPE(riscv_signed_type imm_20_01, reg_num_type rd, uint8_t opcode)
 {
     CHECK_OPCODE(opcode);
     CHECK_REG(rd);
@@ -569,82 +736,121 @@ static uint32_t RISCV_opcode_INSTR_UJ_TYPE(riscv_signed_type imm_20_01, reg_num_
         MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) |
         MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
 }
-static uint32_t RISCV_opcode_FMV_X_S(reg_num_type rd, reg_num_type rs1_fp)
+
+static uint32_t
+RISCV_opcode_FMV_X_S(reg_num_type rd, reg_num_type rs1_fp)
 {
     return RISCV_opcode_INSTR_R_TYPE(0x70u, 0u, rs1_fp, 0u, rd, 0x53u);
 }
-static uint32_t RISCV_opcode_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp)
+
+static uint32_t
+RISCV_opcode_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp)
 {
     return RISCV_opcode_INSTR_R_TYPE(0x70u, rd_hi, rs1_fp, 0u, rd_lo, 0x53u);
 }
-static uint32_t RISCV_opcode_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1)
+
+static uint32_t
+RISCV_opcode_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1)
 {
     return RISCV_opcode_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd_fp, 0x53u);
 }
-static uint32_t RISCV_opcode_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo)
+
+static uint32_t
+RISCV_opcode_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo)
 {
     return RISCV_opcode_INSTR_R_TYPE(0x78u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
 }
-static uint32_t RISCV_opcode_LB(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
+
+static uint32_t
+RISCV_opcode_LB(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
     return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x03u);
 }
-static uint32_t RISCV_opcode_LH(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
+
+static uint32_t
+RISCV_opcode_LH(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
     return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 1u, rd, 0x03u);
 }
-static uint32_t RISCV_opcode_LW(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
+
+static uint32_t
+RISCV_opcode_LW(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
     return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 2u, rd, 0x03u);
 }
-static uint32_t RISCV_opcode_ADDI(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
+
+static uint32_t
+RISCV_opcode_ADDI(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
     return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x13u);
 }
-static uint32_t RISCV_opcode_JALR(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
+
+static uint32_t
+RISCV_opcode_JALR(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
     return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x67u);
 }
-static uint32_t RISCV_opcode_CSRRW(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
+
+static uint32_t
+RISCV_opcode_CSRRW(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
 {
     return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), rs1, 1u, rd, 0x73u);
 }
-static uint32_t RISCV_opcode_CSRRS(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
+
+static uint32_t
+RISCV_opcode_CSRRS(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
 {
     return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), rs1, 2u, rd, 0x73u);
 }
-static uint32_t RISCV_opcode_EBREAK(void)
+
+static uint32_t
+RISCV_opcode_EBREAK(void)
 {
     return RISCV_opcode_INSTR_I_TYPE(1, 0u, 0u, 0u, 0x73u);
 }
-static uint32_t RISCV_opcode_SB(reg_num_type rs_data, reg_num_type rs1, riscv_short_signed_type imm)
+
+static uint32_t
+RISCV_opcode_SB(reg_num_type rs_data, reg_num_type rs1, riscv_short_signed_type imm)
 {
     return RISCV_opcode_INSTR_S_TYPE(imm, rs_data, rs1, 0u, 0x23);
 }
-static uint32_t RISCV_opcode_SH(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
+
+static uint32_t
+RISCV_opcode_SH(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
 {
     return RISCV_opcode_INSTR_S_TYPE(imm, rs, rs1, 1u, 0x23);
 }
-static uint32_t RISCV_opcode_SW(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
+
+static uint32_t
+RISCV_opcode_SW(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
 {
     return RISCV_opcode_INSTR_S_TYPE(imm, rs, rs1, 2u, 0x23);
 }
-static uint32_t RISCV_opcode_JAL(reg_num_type rd, riscv_signed_type imm_20_01)
+
+static uint32_t
+RISCV_opcode_JAL(reg_num_type rd, riscv_signed_type imm_20_01)
 {
     return RISCV_opcode_INSTR_UJ_TYPE(imm_20_01, rd, 0x6Fu);
 }
-static uint32_t RISCV_opcode_CSRW(unsigned csr, reg_num_type rs1)
+
+static uint32_t
+RISCV_opcode_CSRW(unsigned csr, reg_num_type rs1)
 {
     return RISCV_opcode_CSRRW(0, csr, rs1);
 }
-static uint32_t RISCV_opcode_CSRR(reg_num_type rd, csr_num_type csr)
+
+static uint32_t
+RISCV_opcode_CSRR(reg_num_type rd, csr_num_type csr)
 {
     return RISCV_opcode_CSRRS(rd, csr, 0);
 }
-static uint16_t RISCV_opcode_C_EBREAK(void)
+
+static uint16_t
+RISCV_opcode_C_EBREAK(void)
 {
     return 0x9002u;
 }
+
 #if 0
 static uint32_t RISCV_opcode_INSTR_SB_TYPE(riscv_short_signed_type imm_01_12, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
 {
@@ -712,12 +918,12 @@ static uint32_t RISCV_opcode_NOP(void)
     return RISCV_opcode_ADDI(0, 0, 0u);
 }
 #endif
+/// @}
 
 /** @brief Always perform scan to write instruction register
-
-Method can update error_code, but ignore previous errors
 */
-static inline void IR_select_force(target const* const p_target, TAP_IR_e const new_instr)
+static inline void
+IR_select_force(target const* const p_target, TAP_IR_e const new_instr)
 {
     assert(p_target);
     assert(p_target->tap);
@@ -728,12 +934,11 @@ static inline void IR_select_force(target const* const p_target, TAP_IR_e const 
     jtag_add_ir_scan(p_target->tap, &field, TAP_IDLE);
     LOG_DEBUG("irscan %s %d", p_target->cmd_name, new_instr);
 }
-/** @brief Cached version of instruction register
 
-Method can update error_code, but ignore previous errors
-
+/** @brief Cached version of instruction register selection
 */
-static void IR_select(target const* const p_target, TAP_IR_e const new_instr)
+static void
+IR_select(target const* const p_target, TAP_IR_e const new_instr)
 {
     assert(p_target);
     sc_rv32i__Arch const* const p_arch = p_target->arch_info;
@@ -752,22 +957,24 @@ static void IR_select(target const* const p_target, TAP_IR_e const new_instr)
     /// or call real IR scan
     IR_select_force(p_target, new_instr);
 }
-/** @brief Common method to retrieve data of read-only 32-bits TAPs
 
-Method store and update error_code, but ignore previous errors and
-allows to repair error state of debug controller.
+/** @brief Common method to retrieve data of read-only 32-bits TAP IR
+
+    Method store and update error_code, but ignore previous errors and
+    allows to repair error state of debug controller.
 */
-static uint32_t read_only_32_bits_regs(target const* const p_target, TAP_IR_e ir)
+static uint32_t
+read_only_32_bits_regs(target const* const p_target, TAP_IR_e ir)
 {
     assert(p_target);
     uint32_t result = 0xBADC0DE0u;
+
     /// Low-level method save but ignore previous errors.
     int const old_err_code = error_code__get_and_clear(p_target);
     /// Error state can be updated in IR_select
     IR_select(p_target, ir);
 
     if (ERROR_OK == error_code__get(p_target)) {
-        STATIC_ASSERT(TAP_length_of_RO_32 == 32);
         uint8_t result_buffer[NUM_BITS_TO_SIZE(TAP_length_of_RO_32)] = {};
         scan_field const field = {
             .num_bits = TAP_length_of_RO_32,
@@ -784,7 +991,6 @@ static uint32_t read_only_32_bits_regs(target const* const p_target, TAP_IR_e ir
             /// Error state can be updated in DR scan
             LOG_ERROR("JTAG error %d", error_code__get(p_target));
         } else {
-            STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_length_of_RO_32) <= sizeof(uint32_t));
             result = buf_get_u32(result_buffer, 0, TAP_length_of_RO_32);
         }
     }
@@ -792,26 +998,42 @@ static uint32_t read_only_32_bits_regs(target const* const p_target, TAP_IR_e ir
     error_code__prepend(p_target, old_err_code);
     return result;
 }
-static inline uint32_t sc_rv32_IDCODE_get(target const* const p_target)
+
+/// @brief IDCODE get accessors
+static inline uint32_t
+sc_rv32_IDCODE_get(target const* const p_target)
 {
-    STATIC_ASSERT(TAP_length_of_IDCODE == TAP_length_of_RO_32);
     return read_only_32_bits_regs(p_target, TAP_instruction_IDCODE);
 }
-static inline uint32_t sc_rv32_DBG_ID_get(target const* const p_target)
+
+/// @brief DBG_ID get accessors
+static inline uint32_t
+sc_rv32_DBG_ID_get(target const* const p_target)
 {
-    STATIC_ASSERT(TAP_length_of_DBG_ID == TAP_length_of_RO_32);
     return read_only_32_bits_regs(p_target, TAP_instruction_DBG_ID);
 }
-static inline uint32_t sc_rv32_BLD_ID_get(target const* const p_target)
+
+/// @brief BLD_ID get accessors
+static inline uint32_t
+sc_rv32_BLD_ID_get(target const* const p_target)
 {
-    STATIC_ASSERT(TAP_length_of_BLD_ID == TAP_length_of_RO_32);
     return read_only_32_bits_regs(p_target, TAP_instruction_BLD_ID);
 }
-static uint32_t sc_rv32_DBG_STATUS_get(target const* const p_target)
+
+/// @brief DBG_STATUS get accessors
+static uint32_t
+sc_rv32_DBG_STATUS_get(target const* const p_target)
 {
-    assert(p_target);
-    STATIC_ASSERT(TAP_length_of_DBG_STATUS == TAP_length_of_RO_32);
     uint32_t const result = read_only_32_bits_regs(p_target, TAP_instruction_DBG_STATUS);
+
+    /** Sensitivity mask is union of bits
+        - HART0_ERR
+        - ERR
+        - ERR_HWCORE
+        - ERR_FSMBUSY
+        - LOCK
+        - READY
+    */
     static uint32_t const result_mask =
         BIT_NUM_TO_MASK(DBGC_CORE_CDSR_HART0_ERR_BIT) |
         BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_BIT) |
@@ -820,6 +1042,8 @@ static uint32_t sc_rv32_DBG_STATUS_get(target const* const p_target)
         BIT_NUM_TO_MASK(DBGC_CORE_CDSR_ERR_DAP_OPCODE_BIT) |
         BIT_NUM_TO_MASK(DBGC_CORE_CDSR_LOCK_BIT) |
         BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
+
+    /** In normal state only READY bit is allowed */
     static uint32_t const good_result = BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
 
     if ((result & result_mask) != (good_result & result_mask)) {
@@ -828,45 +1052,69 @@ static uint32_t sc_rv32_DBG_STATUS_get(target const* const p_target)
 
     return result;
 }
-static inline void update_DAP_CTRL_cache(target const* const p_target, uint8_t const set_dap_unit_group)
+
+/** @brief Upper level DAP_CTRL multiplexer control port cache update method.
+*/
+static inline void
+update_DAP_CTRL_cache(target const* const p_target, uint8_t const set_dap_unit_group)
 {
     assert(p_target);
     sc_rv32i__Arch* restrict const p_arch = p_target->arch_info;
     assert(p_arch);
     p_arch->last_DAP_ctrl = set_dap_unit_group;
 }
-static inline void invalidate_DAP_CTR_cache(target const* const p_target)
+
+/** @brief Upper level DAP_CTRL multiplexer control port cache invalidation.
+*/
+static inline void
+invalidate_DAP_CTR_cache(target const* const p_target)
 {
     update_DAP_CTRL_cache(p_target, DAP_CTRL_value_INVALID_CODE);
 }
-/// set unit/group
-static inline void DAP_CTRL_REG_set_force(target const* const p_target, uint8_t const set_dap_unit_group)
+
+/** @brief Forced variant of upper level multiplexer control port DAP_CTRL set method (don't use cache state)
+*/
+static inline void
+DAP_CTRL_REG_set_force(target const* const p_target, uint8_t const set_dap_unit_group)
 {
     assert(p_target);
-    int const old_err_code = error_code__get_and_clear(p_target);
+    /// Save but ignore previous error state.
+    int const older_err_code = error_code__get_and_clear(p_target);
     IR_select(p_target, TAP_instruction_DAP_CTRL);
 
     if (ERROR_OK == error_code__get(p_target)) {
-        // clear status bits
+        /// Invalidate cache of DAP_CTRL
+        invalidate_DAP_CTR_cache(p_target);
+
+        /// Prepare clear status bits
         uint8_t status = 0;
         STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_length_of_DAP_CTRL) == sizeof status);
         STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_length_of_DAP_CTRL) == sizeof set_dap_unit_group);
+        /// Prepare DR scan
         scan_field const field = {
+            /// for 4 bits
             .num_bits = TAP_length_of_DAP_CTRL,
+            /// send DAP unit/group
             .out_value = &set_dap_unit_group,
+            /// and receive old status
             .in_value = &status,
+            /// with status check that only READY bit is active
             .check_value = &obj_DAP_opstatus_GOOD,
+            /// sensitivity to mask ERROR | LOCK | READY bits
             .check_mask = &obj_DAP_status_MASK,
         };
 
-        invalidate_DAP_CTR_cache(p_target);
         jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
 
-        // enforce jtag_execute_queue() to get status
+        /// Enforce jtag_execute_queue() to get status.
         int const jtag_status = jtag_execute_queue();
         LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
 
-        if (ERROR_OK != jtag_status) {
+        if (ERROR_OK == jtag_status) {
+            /// Update DAP_CTRL cache if no errors
+            update_DAP_CTRL_cache(p_target, set_dap_unit_group);
+        } else {
+            /// or report current error.
             uint32_t const dbg_status = sc_rv32_DBG_STATUS_get(p_target);
             static uint32_t const dbg_status_check_value = BIT_NUM_TO_MASK(DBGC_CORE_CDSR_READY_BIT);
             static uint32_t const dbg_status_mask =
@@ -879,70 +1127,100 @@ static inline void DAP_CTRL_REG_set_force(target const* const p_target, uint8_t 
             } else {
                 LOG_WARNING("JTAG error %d, operation_status=0x%1X, but dbg_status=0x%08X", jtag_status, (uint32_t)status, dbg_status);
             }
-        } else {
-            update_DAP_CTRL_cache(p_target, set_dap_unit_group);
         }
     }
 
-    error_code__prepend(p_target, old_err_code);
+    /// Restore previous error (if it was)
+    error_code__prepend(p_target, older_err_code);
 }
-/// verify unit/group
-static inline void DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_group)
+
+/// @brief Verify unit/group selection.
+static inline void
+DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_group)
 {
+    /// First of all invalidate DAP_CTR cache.
     invalidate_DAP_CTR_cache(p_target);
+    /// Ignore bu save previous error state.
     int const old_err_code = error_code__get_and_clear(p_target);
+    /// Select read function of DAP_CTRL.
     IR_select(p_target, TAP_instruction_DAP_CTRL_RD);
 
     if (ERROR_OK == error_code__get(p_target)) {
+        /// Prepare DR scan to read actual value of DAP_CTR.
         uint8_t get_dap_unit_group = 0;
         uint8_t set_dap_unit_group_mask = 0x0Fu;
         STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_length_of_DAP_CTRL) == sizeof get_dap_unit_group);
         scan_field const field = {
             .num_bits = TAP_length_of_DAP_CTRL,
             .in_value = &get_dap_unit_group,
+            /// with checking for expected value.
             .check_value = &set_dap_unit_group,
             .check_mask = &set_dap_unit_group_mask,
         };
-        // enforce jtag_execute_queue() to get get_dap_unit_group
         jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
+
+        /// Enforce jtag_execute_queue() to get get_dap_unit_group.
         error_code__update(p_target, jtag_execute_queue());
         LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
 
         if (ERROR_OK == error_code__get(p_target)) {
+            /// If no errors
             if (get_dap_unit_group == set_dap_unit_group) {
+                /// and read value is equal to expected then update DAP_CTRL cache,
                 update_DAP_CTRL_cache(p_target, get_dap_unit_group);
             } else {
+                /// else report error.
                 LOG_ERROR("Unit/Group verification error: set 0x%1X, but get 0x%1X!", set_dap_unit_group, get_dap_unit_group);
                 error_code__update(p_target, ERROR_TARGET_FAILURE);
             }
         }
     }
 
+    /// Restore previous error (if it was)
     error_code__prepend(p_target, old_err_code);
 }
-static void sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT, uint32_t* p_result)
+
+/** @brief Common DR scan of DAP_CMD multiplexed port.
+
+    @par[in]  p_target current target pointer
+    @par[in]  DAP_OPCODE 4-bits: R/W bit and 3-bits next level multiplexer selector
+    @par[in]  DAP_OPCODE_EXT 32-bits payload
+    @par[out] p_result pointer to place for input payload
+*/
+static void
+sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT, uint32_t* p_result)
 {
-    assert(p_target);
+    /// Ignore but save previous error state.
     int const old_err_code = error_code__get_and_clear(p_target);
+    /// Select DAP_CMD IR.
     IR_select(p_target, TAP_instruction_DAP_CMD);
 
     if (ERROR_OK == error_code__get(p_target)) {
-        // Input fields
-        uint8_t DAP_OPSTATUS = 0;
-        STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_length_of_DAP_CMD_OPCODE) == sizeof DAP_OPSTATUS);
+        /// Prepare DR scan for two fields.
 
-        uint8_t dbg_data[NUM_BITS_TO_SIZE(TAP_length_of_DAP_CMD_OPCODE_EXT)] = {};
+        /// Copy output payload to buffer.
         uint8_t dap_opcode_ext[NUM_BITS_TO_SIZE(TAP_length_of_DAP_CMD_OPCODE_EXT)] = {};
         buf_set_u32(dap_opcode_ext, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, DAP_OPCODE_EXT);
+
+        /// Reserve and init buffer for payload input.
+        uint8_t dbg_data[NUM_BITS_TO_SIZE(TAP_length_of_DAP_CMD_OPCODE_EXT)] = {};
+
+        /// Prepare operation status buffer.
+        uint8_t DAP_OPSTATUS = 0;
+        STATIC_ASSERT(NUM_BITS_TO_SIZE(TAP_length_of_DAP_CMD_OPCODE) == sizeof DAP_OPSTATUS);
         scan_field const fields[2] = {
             {.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext,.in_value = dbg_data},
+            /// Pass DAP_OPCODE bits. Check receiving DAP_OPSTATUS good/error bits.
             {.num_bits = TAP_length_of_DAP_CMD_OPCODE,.out_value = &DAP_OPCODE,.in_value = &DAP_OPSTATUS,.check_value = &obj_DAP_opstatus_GOOD,.check_mask = &obj_DAP_status_MASK,},
         };
 
+        /// Add DR scan to queue.
         assert(p_target->tap);
         jtag_add_dr_scan_check(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
-        // enforse jtag_execute_queue() to get values
+
+        /// Enforse jtag_execute_queue() to get values
         error_code__update(p_target, jtag_execute_queue());
+        /// Log DR scan debug information.
         LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X ; # %08X %1X", p_target->cmd_name,
                   fields[0].num_bits, DAP_OPCODE_EXT,
                   fields[1].num_bits, DAP_OPCODE,
@@ -950,27 +1228,31 @@ static void sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP
 
         if (ERROR_OK == error_code__get(p_target)) {
             if ((DAP_OPSTATUS & DAP_status_MASK) != DAP_status_good) {
+                /// Check and report if error was detected.
                 LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
                 error_code__update(p_target, ERROR_TARGET_FAILURE);
             } else if (p_result) {
+                /// or copy result bits to output if 'p_result' pointer is not NULL.
                 *p_result = buf_get_u32(dbg_data, 0, TAP_length_of_DAP_CMD_OPCODE_EXT);
             }
         }
     }
 
+    /// Restore previous error (if it was)
     error_code__prepend(p_target, old_err_code);
 }
-/**
-@brief Try to unlock debug controller
 
-@warning Clear previous error_code and set ERROR_TARGET_FAILURE if unlock was unsuccessful
-@return lock context
+/** @brief Try to unlock debug controller.
+
+    @warning Clear previous error_code and set ERROR_TARGET_FAILURE if unlock was unsuccessful
+    @return lock context
 */
-static inline uint32_t sc_rv32_DC__unlock(target const* const p_target)
+static inline uint32_t
+sc_rv32_DC__unlock(target const* const p_target)
 {
-    assert(p_target);
     LOG_WARNING("========= Try to unlock ==============");
 
+    assert(p_target);
     assert(p_target->tap);
     assert(p_target->tap->ir_length == TAP_length_of_IR);
 
@@ -1740,23 +2022,9 @@ static int reg_x__store(reg* const p_reg)
         return error_code__get_and_clear(p_target);
     }
 
-#if VERIFY_REG_WRITE
-    sc_rv32_EXEC__push_data_to_CSR(p_target, 0xFEEDBEEF);
-    (void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(CSR_sc_dbg_scratch, p_reg->number));
-    advance_pc_counter += instr_step;
-#endif
     /// Correct pc back after each instruction
     assert(advance_pc_counter % NUM_BITS_TO_SIZE(ILEN) == 0);
-#if VERIFY_REG_WRITE
-    uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_JAL(0, -advance_pc_counter));
-
-    if (buf_get_u32(p_reg->value, 0, p_reg->size) != value) {
-        LOG_ERROR("Register %s write error: write 0x%08X, but re-read 0x%08X", p_reg->name, buf_get_u32(p_reg->value, 0, p_reg->size), value);
-    }
-
-#else
     (void)sc_rv32_EXEC__step(p_target, RISCV_opcode_JAL(0, -advance_pc_counter));
-#endif
     advance_pc_counter = 0;
 
     if (p_arch->use_pc_advmt_dsbl_bit) {
