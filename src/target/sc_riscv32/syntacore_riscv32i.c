@@ -2772,6 +2772,7 @@ reg_fd__get(reg* const p_reg)
 		return error_code__get_and_clear(p_target);
 	}
 
+	/// @todo replace 12 by 1.7 FS bit offset
 	if (0 == (mstatus & (3u << 12))) {
 		LOG_ERROR("FPU is disabled");
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
@@ -2908,6 +2909,7 @@ reg_fd__set(reg* const p_reg, uint8_t* const buf)
 		return error_code__get_and_clear(p_target);
 	}
 
+	/// @todo replace 12 by 1.7 FS bit offset
 	if (0 == (mstatus & (3u << 12))) {
 		LOG_ERROR("FPU is disabled");
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
@@ -3721,12 +3723,15 @@ sc_rv32i__mmu(target* p_target, int* p_mmu_enabled)
 	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
 
 	if (ERROR_OK == error_code__get(p_target)) {
+		/// @todo Privileged Instruction 1.7 version
 		uint32_t const privilege_level = (mstatus >> 1) & LOW_BITS_MASK(2);
 		assert(p_mmu_enabled);
 
+		/// @todo Privileged Instruction 1.7 version
 		if (privilege_level == Priv_M || privilege_level == Priv_H) {
 			*p_mmu_enabled = 0;
 		} else {
+			/// @todo Privileged Instruction 1.7 version
 			uint32_t const VM = (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
 
 			switch (VM) {
@@ -3757,7 +3762,9 @@ virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t*
 	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
 
 	if (ERROR_OK == error_code__get(p_target)) {
+		/// @todo Privileged Instruction 1.7 version
 		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
+		/// @todo Privileged Instruction 1.7 version
 		uint32_t const VM = PRV == Priv_M || PRV == Priv_H ? VM_Mbare : (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
 		assert(p_physical);
 
