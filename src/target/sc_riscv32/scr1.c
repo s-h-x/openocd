@@ -2727,7 +2727,8 @@ reg_fd__get(reg* const p_reg)
 		return error_code__get_and_clear(p_target);
 	}
 
-	if (0 == (mstatus & (3u << 12))) {
+	/// @todo Privileged Instruction 1.10 version
+	if (0 == (mstatus & (3u << 13))) {
 		LOG_ERROR("FPU is disabled");
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return error_code__get_and_clear(p_target);
@@ -2863,7 +2864,8 @@ reg_fd__set(reg* const p_reg, uint8_t* const buf)
 		return error_code__get_and_clear(p_target);
 	}
 
-	if (0 == (mstatus & (3u << 12))) {
+	/// @todo Privileged Instruction 1.10 version
+	if (0 == (mstatus & (3u << 13))) {
 		LOG_ERROR("FPU is disabled");
 		error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return error_code__get_and_clear(p_target);
