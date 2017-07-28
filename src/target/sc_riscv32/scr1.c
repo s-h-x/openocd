@@ -274,7 +274,7 @@ enum
 
 	/// Syntacore Debug controller CSR (for Privileged ISA 1.7)
 	/// privilege: MRW
-	CSR_sc_dbg_scratch = 0x7B2u,
+	CSR_sc_dbg_scratch = 0x7C8u,
 };
 
 /// type_dbgc_core_dbg_sts_reg_bits_e
