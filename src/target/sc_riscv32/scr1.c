@@ -67,7 +67,7 @@
 /// @{
 /// Lowest required DBG_ID
 /// Required and provided masked values should be equal.
-#define EXPECTED_DBG_ID        (0x00800001u)
+#define EXPECTED_DBG_ID        (0x00810000u)
 /// Mask of DBG_ID version.
 #define DBG_ID_VERSION_MASK    (0xFFFFFF00u)
 
@@ -3546,7 +3546,7 @@ scr1__examine(target* const p_target)
 			uint32_t const DBG_ID = sc_rv32_DBG_ID_get(p_target);
 
 			if ((DBG_ID & DBG_ID_VERSION_MASK) != (DBG_ID_VERSION_MASK & EXPECTED_DBG_ID) ||
-				(DBG_ID & DBG_ID_SUBVERSION_MASK) < (EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK)) {
+				!((EXPECTED_DBG_ID & DBG_ID_SUBVERSION_MASK) <= (DBG_ID & DBG_ID_SUBVERSION_MASK)) ) {
 				LOG_ERROR("Unsupported DBG_ID=0x%08X!", DBG_ID);
 				error_code__update(p_target, ERROR_TARGET_FAILURE);
 			} else {
