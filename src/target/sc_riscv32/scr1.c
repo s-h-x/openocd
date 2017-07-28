@@ -1,6 +1,6 @@
 ﻿/** @file
 
-	Syntacore RISC-V target
+	Syntacore scr1 RISC-V target
 
 	@copyright Syntacore
 	@author sps (https://github.com/aka-sps)
@@ -54,14 +54,14 @@
 #define XLEN (32u)
 /// Size of RISC-V FP registers in bits
 #define FLEN (64u)
-#define FP_enabled !!1
+#define FP_enabled (!!0)
 /// Size of RISC-V instruction
 #define ILEN (32u)
 /// @}
 
 /// TAP controller IDCODE
-#define EXPECTED_IDCODE      (0xC0DEDEB1u)
-#define EXPECTED_IDCODE_MASK (0xFFF0FFFFu)
+#define EXPECTED_IDCODE      (0xC0D1DEB1u)
+#define EXPECTED_IDCODE_MASK (0xFFFFFFFFu)
 
 /// DBG_ID
 /// @{
@@ -269,56 +269,12 @@ enum
 /// RISC-V Privileged ISA CSR
 enum
 {
-	CSR_sptbr = 0x180,
 	CSR_mstatus = 0x300,
-	CSR_mcpuid = 0xf00,
-
-	/// Machine Protection and Translation
-	/// privilege: MRW
-	///@{
-
-	/// @brief Base register
-	CSR_mbase = 0x380u,
-
-	/// @brief Base register
-	CSR_mbound = 0x381u,
-
-	/// @brief Bound register.
-	CSR_mibase = 0x382u,
-
-	/// @brief Instruction base register.
-	CSR_mibound = 0x383u,
-
-	/// @brief Data base register
-	CSR_mdbase = 0x384u,
-
-	/// @brief Data bound register
-	CSR_mdbound = 0x385u,
-	///@}
+	CSR_misa = 0x301u,
 
 	/// Syntacore Debug controller CSR (for Privileged ISA 1.7)
 	/// privilege: MRW
-	CSR_sc_dbg_scratch = 0x788u,
-};
-
-/// RISC-V privilege levels
-enum
-{
-	Priv_U = 0x0,
-	Priv_S = 0x1,
-	Priv_H = 0x2,
-	Priv_M = 0x3,
-};
-
-/// RISC-V VM modes
-enum
-{
-	VM_Mbare = 0,
-	VM_Mbb = 1,
-	VM_Mbbid = 2,
-	VM_Sv32 = 8,
-	VM_Sv39 = 9,
-	VM_Sv48 = 10,
+	CSR_sc_dbg_scratch = 0x7B2u,
 };
 
 /// type_dbgc_core_dbg_sts_reg_bits_e
@@ -572,7 +528,7 @@ static reg_feature feature_riscv_org = {
 };
 static char const def_GP_regs_name[] = "general";
 
-struct sc_rv32i__Arch
+struct scr1__Arch
 {
 	/// stored sub-operations error_code
 	error_code error_code;
@@ -588,9 +544,9 @@ struct sc_rv32i__Arch
 	bool use_pc_advmt_dsbl_bit;
 	bool use_queuing_for_dr_scans;
 };
-typedef struct sc_rv32i__Arch sc_rv32i__Arch;
+typedef struct scr1__Arch scr1__Arch;
 
-static sc_rv32i__Arch const sc_rv32_initial_arch = {
+static scr1__Arch const sc_rv32_initial_arch = {
 	.error_code = ERROR_OK,
 	.last_DAP_ctrl = DAP_CTRL_value_INVALID_CODE,
 
@@ -612,7 +568,7 @@ static inline error_code
 error_code__get(target const* const p_target)
 {
 	assert(p_target);
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	scr1__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	return p_arch->error_code;
 }
@@ -624,7 +580,7 @@ error_code__set(target const* const p_target, error_code const a_error_code)
 {
 	assert(p_target);
 	{
-		sc_rv32i__Arch* restrict const p_arch = p_target->arch_info;
+		scr1__Arch* restrict const p_arch = p_target->arch_info;
 		assert(p_arch);
 		p_arch->error_code = a_error_code;
 	}
@@ -976,7 +932,7 @@ static void
 IR_select(target const* const p_target, TAP_IR_e const new_instr)
 {
 	assert(p_target);
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	scr1__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 
 	if (p_arch->use_ir_select_cache) {
@@ -1094,7 +1050,7 @@ static inline void
 update_DAP_CTRL_cache(target const* const p_target, uint8_t const set_dap_unit_group)
 {
 	assert(p_target);
-	sc_rv32i__Arch* restrict const p_arch = p_target->arch_info;
+	scr1__Arch* restrict const p_arch = p_target->arch_info;
 	assert(p_arch);
 	p_arch->last_DAP_ctrl = set_dap_unit_group;
 }
@@ -1376,7 +1332,7 @@ sc_rv32_HART0_clear_sticky(target* const p_target)
 {
 	LOG_DEBUG("========= Try to clear HART0 errors ============");
 	assert(p_target);
-	sc_rv32i__Arch* const p_arch = p_target->arch_info;
+	scr1__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	assert(p_target->tap);
 	assert(p_target->tap->ir_length == TAP_length_of_IR);
@@ -1450,7 +1406,7 @@ sc_rv32_CORE_clear_errors(target* const p_target)
 {
 	LOG_DEBUG("========= Try to clear core errors ============");
 	assert(p_target);
-	sc_rv32i__Arch* const p_arch = p_target->arch_info;
+	scr1__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	assert(p_target->tap);
 	assert(p_target->tap->ir_length == TAP_length_of_IR);
@@ -1524,7 +1480,7 @@ sc_rv32_DAP_CTRL_REG_set(target const* const p_target, type_dbgc_unit_id_e const
 						0,
 						TAP_length_of_DAP_CTRL_FGROUP + TAP_length_of_DAP_CTRL_UNIT - 1);
 
-	sc_rv32i__Arch* const p_arch = p_target->arch_info;
+	scr1__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
 
 	if (p_arch->use_dap_control_cache) {
@@ -1649,7 +1605,7 @@ sc_rv32_HART_REGTRANS_write_and_check(target const* const p_target, type_dbgc_re
 	HART_REGTRANS_write(p_target, index, set_value);
 
 	if (error_code__get(p_target) == ERROR_OK) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		scr1__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 
 		if (p_arch->use_verify_hart_regtrans_write) {
@@ -1732,7 +1688,7 @@ static uint32_t
 sc_rv32_get_PC(target const* const p_target)
 {
 	assert(p_target);
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	scr1__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 
 	/// @todo Verify use_check_pc_unchanged
@@ -2106,7 +2062,7 @@ static void
 sc_rv32_check_PC_value(target const* const p_target, uint32_t const previous_pc)
 {
 	assert(p_target);
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	scr1__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 
 	if (p_arch->use_check_pc_unchanged) {
@@ -2138,7 +2094,7 @@ reg_x__get(reg* const p_reg)
 		uint32_t const previous_pc = sc_rv32_get_PC(p_target);
 
 		if (ERROR_OK == error_code__get(p_target)) {
-			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			scr1__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
 			size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -2201,7 +2157,7 @@ reg_x__store(reg* const p_reg)
 		return error_code__get_and_clear(p_target);
 	}
 
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	scr1__Arch const* const p_arch = p_target->arch_info;
 
 	assert(p_arch);
 
@@ -2354,7 +2310,7 @@ static uint32_t csr_get_value(target* const p_target, uint32_t const csr_number)
 		uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 		if (ERROR_OK == error_code__get(p_target)) {
-			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			scr1__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
 			size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -2412,7 +2368,7 @@ static uint32_t csr_get_value(target* const p_target, uint32_t const csr_number)
 static inline bool
 is_RVC_enable(target* const p_target)
 {
-	uint32_t const mcpuid = csr_get_value(p_target, CSR_mcpuid);
+	uint32_t const mcpuid = csr_get_value(p_target, CSR_misa);
 	return 0 != (mcpuid & (1u << ('C' - 'A')));
 }
 
@@ -2427,7 +2383,7 @@ reg_pc__get(reg* const p_reg)
 	/// Find temporary GP register
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	scr1__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	uint32_t const pc_sample = sc_rv32_HART_REGTRANS_read(p_target, DBGC_HART_register_PC_SAMPLE);
 
@@ -2482,7 +2438,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 
 	reg__set_new_cache_value(p_reg, buf);
 
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	scr1__Arch const* const p_arch = p_target->arch_info;
 
 	assert(p_arch);
 
@@ -2583,7 +2539,7 @@ reg_fs__get(reg* const p_reg)
 	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 	if (error_code__get(p_target) == ERROR_OK) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		scr1__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -2668,7 +2624,7 @@ reg_fs__set(reg* const p_reg, uint8_t* const buf)
 	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 	if (error_code__get(p_target) == ERROR_OK) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		scr1__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -2753,7 +2709,7 @@ reg_fd__get(reg* const p_reg)
 		return error_code__get_and_clear(p_target);
 	}
 
-	uint32_t const mcpuid = csr_get_value(p_target, CSR_mcpuid);
+	uint32_t const mcpuid = csr_get_value(p_target, CSR_misa);
 
 	if (ERROR_OK != error_code__get(p_target)) {
 		return error_code__get_and_clear(p_target);
@@ -2788,7 +2744,7 @@ reg_fd__get(reg* const p_reg)
 	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 	if (ERROR_OK == error_code__get(p_target)) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		scr1__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -2889,7 +2845,7 @@ reg_fd__set(reg* const p_reg, uint8_t* const buf)
 		return error_code__get_and_clear(p_target);
 	}
 
-	uint32_t const mcpuid = csr_get_value(p_target, CSR_mcpuid);
+	uint32_t const mcpuid = csr_get_value(p_target, CSR_misa);
 
 	if (ERROR_OK != error_code__get(p_target)) {
 		return error_code__get_and_clear(p_target);
@@ -2929,7 +2885,7 @@ reg_fd__set(reg* const p_reg, uint8_t* const buf)
 	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 	if (ERROR_OK == error_code__get(p_target)) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		scr1__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -3076,7 +3032,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 	if (ERROR_OK == error_code__get(p_target)) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		scr1__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -3223,7 +3179,7 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 
 			if (p_next_bkp) {
 				// exec single step without breakpoint
-				sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+				scr1__Arch const* const p_arch = p_target->arch_info;
 				assert(p_arch);
 				// save breakpoint
 				breakpoint next_bkp = *p_next_bkp;
@@ -3316,7 +3272,7 @@ reset__set(target* const p_target, bool const active)
 		sc_rv32_CORE_REGTRANS_write(p_target, DBGC_CORE_REGS_DBG_CTRL, set_value);
 
 		if (error_code__get(p_target) == ERROR_OK) {
-			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			scr1__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
 
 			if (p_arch->use_verify_core_regtrans_write) {
@@ -3516,11 +3472,11 @@ static void sc_rv32_init_regs_cache(target* const p_target)
 }
 
 static error_code
-sc_rv32i__init_target(command_context* cmd_ctx, target* const p_target)
+scr1__init_target(command_context* cmd_ctx, target* const p_target)
 {
 	sc_rv32_init_regs_cache(p_target);
 
-	sc_rv32i__Arch* p_arch_info = calloc(1, sizeof(sc_rv32i__Arch));
+	scr1__Arch* p_arch_info = calloc(1, sizeof(scr1__Arch));
 	assert(p_arch_info);
 	*p_arch_info = sc_rv32_initial_arch;
 
@@ -3529,7 +3485,7 @@ sc_rv32i__init_target(command_context* cmd_ctx, target* const p_target)
 }
 
 static void
-sc_rv32i__deinit_target(target* const p_target)
+scr1__deinit_target(target* const p_target)
 {
 	assert(p_target);
 
@@ -3555,14 +3511,14 @@ sc_rv32i__deinit_target(target* const p_target)
 }
 
 static error_code
-sc_rv32i__target_create(target* const p_target, Jim_Interp* interp)
+scr1__target_create(target* const p_target, Jim_Interp* interp)
 {
 	assert(p_target);
 	return ERROR_OK;
 }
 
 static error_code
-sc_rv32i__examine(target* const p_target)
+scr1__examine(target* const p_target)
 {
 	assert(p_target);
 
@@ -3607,7 +3563,7 @@ sc_rv32i__examine(target* const p_target)
 }
 
 static error_code
-sc_rv32i__poll(target* const p_target)
+scr1__poll(target* const p_target)
 {
 	assert(p_target);
 	sc_rv32_update_status(p_target);
@@ -3615,7 +3571,7 @@ sc_rv32i__poll(target* const p_target)
 }
 
 static error_code
-sc_rv32i__arch_state(target* const p_target)
+scr1__arch_state(target* const p_target)
 {
 	assert(p_target);
 	sc_rv32_update_status(p_target);
@@ -3623,7 +3579,7 @@ sc_rv32i__arch_state(target* const p_target)
 }
 
 static error_code
-sc_rv32i__halt(target* const p_target)
+scr1__halt(target* const p_target)
 {
 	assert(p_target);
 	// May be already halted?
@@ -3661,7 +3617,7 @@ sc_rv32i__halt(target* const p_target)
 }
 
 static error_code
-sc_rv32i__resume(target* const p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
+scr1__resume(target* const p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	LOG_DEBUG("resume: current=%d address=0x%08x handle_breakpoints=%d debug_execution=%d", current, address, handle_breakpoints, debug_execution);
 	assert(p_target);
@@ -3670,7 +3626,7 @@ sc_rv32i__resume(target* const p_target, int const current, uint32_t const addre
 }
 
 static error_code
-sc_rv32i__step(target* const p_target, int const current, uint32_t const address, int const handle_breakpoints)
+scr1__step(target* const p_target, int const current, uint32_t const address, int const handle_breakpoints)
 {
 	LOG_DEBUG("step: current=%d address=0x%08x handle_breakpoints=%d", current, address, handle_breakpoints);
 	assert(p_target);
@@ -3680,21 +3636,21 @@ sc_rv32i__step(target* const p_target, int const current, uint32_t const address
 }
 
 static error_code
-sc_rv32i__assert_reset(target* const p_target)
+scr1__assert_reset(target* const p_target)
 {
 	LOG_DEBUG("Assert reset");
 	return reset__set(p_target, true);
 }
 
 static error_code
-sc_rv32i__deassert_reset(target* const p_target)
+scr1__deassert_reset(target* const p_target)
 {
 	LOG_DEBUG("Deassert reset");
 	return reset__set(p_target, false);
 }
 
 static error_code
-sc_rv32i__soft_reset_halt(target* const p_target)
+scr1__soft_reset_halt(target* const p_target)
 {
 	LOG_DEBUG("Soft reset called");
 	reset__set(p_target, true);
@@ -3715,153 +3671,26 @@ sc_rv32i__soft_reset_halt(target* const p_target)
 }
 
 static error_code
-sc_rv32i__mmu(target* p_target, int* p_mmu_enabled)
+scr1__mmu(target* p_target, int* p_mmu_enabled)
 {
-	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
+	*p_mmu_enabled = 0;
 
-	if (ERROR_OK == error_code__get(p_target)) {
-		uint32_t const privilege_level = (mstatus >> 1) & LOW_BITS_MASK(2);
-		assert(p_mmu_enabled);
-
-		if (privilege_level == Priv_M || privilege_level == Priv_H) {
-			*p_mmu_enabled = 0;
-		} else {
-			uint32_t const VM = (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
-
-			switch (VM) {
-			case VM_Mbb:
-			case VM_Mbbid:
-			case VM_Sv32:
-			case VM_Sv39:
-			case VM_Sv48:
-				*p_mmu_enabled = 1;
-				break;
-
-			case VM_Mbare:
-			default:
-				*p_mmu_enabled = 0;
-				break;
-			}
-		}
-	} else {
-		sc_rv32_update_status(p_target);
-	}
-
-	return error_code__get_and_clear(p_target);
+	return ERROR_OK;
 }
 
 static void
 virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
 {
-	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
+	assert(p_physical);
+	*p_physical = address;
 
-	if (ERROR_OK == error_code__get(p_target)) {
-		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
-		uint32_t const VM = PRV == Priv_M || PRV == Priv_H ? VM_Mbare : (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
-		assert(p_physical);
-
-		switch (VM) {
-		case VM_Mbare:
-			*p_physical = address;
-
-			if (p_bound) {
-				*p_bound = UINT32_MAX;
-			}
-
-			break;
-
-		case VM_Mbb:
-		case VM_Mbbid:
-			{
-				uint32_t const bound = csr_get_value(p_target, VM == VM_Mbb ? CSR_mbound : /*VM == VM_Mbbid*/instruction_space ? CSR_mibound : CSR_mdbound);
-
-				if (ERROR_OK == error_code__get(p_target)) {
-					if (!(address < bound)) {
-						error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-					} else {
-						uint32_t const base = csr_get_value(p_target, VM_Mbb ? CSR_mbase : /*VM == VM_Mbbid*/instruction_space ? CSR_mibase : CSR_mdbase);
-
-						if (ERROR_OK == error_code__get(p_target)) {
-							*p_physical = address + base;
-
-							if (p_bound) {
-								*p_bound = bound - address;
-							}
-						} else {
-							sc_rv32_update_status(p_target);
-						}
-					}
-				} else {
-					sc_rv32_update_status(p_target);
-				}
-			}
-			break;
-
-		case VM_Sv32:
-			{
-				static uint32_t const offset_mask = LOW_BITS_MASK(10) << 2;
-				uint32_t const main_page = csr_get_value(p_target, CSR_sptbr);
-
-				if (ERROR_OK == error_code__get(p_target)) {
-					// lower bits should be zero
-					assert(0 == (main_page & LOW_BITS_MASK(12)));
-					uint32_t const offset_bits1 = address >> 20 & offset_mask;
-					uint8_t pte1_buf[4];
-
-					if (ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, main_page | offset_bits1, 4, 1, pte1_buf))) {
-						uint32_t const pte1 = buf_get_u32(pte1_buf, 0, 32);
-
-						if (0 == (pte1 & BIT_MASK(0))) {
-							error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-						} else if ((pte1 >> 1 & LOW_BITS_MASK(4)) >= 2) {
-							*p_physical = (pte1 << 2 & ~LOW_BITS_MASK(22)) | (address & LOW_BITS_MASK(22));
-
-							if (p_bound) {
-								*p_bound = BIT_MASK(22) - (address & LOW_BITS_MASK(22));
-							}
-						} else {
-							uint32_t const base_0 = pte1 << 2 & ~LOW_BITS_MASK(12);
-							uint32_t const offset_bits0 = address >> 10 & offset_mask;
-							uint8_t pte0_buf[4];
-
-							if (ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, base_0 | offset_bits0, 4, 1, pte0_buf))) {
-								uint32_t const pte0 = buf_get_u32(pte0_buf, 0, 32);
-
-								if (0 == (pte0 & BIT_MASK(0)) || (pte0 >> 1 & LOW_BITS_MASK(4)) < 2) {
-									error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-								} else {
-									*p_physical = (pte0 << 2 & ~LOW_BITS_MASK(12)) | (address & LOW_BITS_MASK(12));
-
-									if (p_bound) {
-										*p_bound = BIT_MASK(12) - (address & LOW_BITS_MASK(12));
-									}
-								}
-							} else {
-								sc_rv32_update_status(p_target);
-							}
-						}
-					} else {
-						sc_rv32_update_status(p_target);
-					}
-				} else {
-					sc_rv32_update_status(p_target);
-				}
-			}
-			break;
-
-		case VM_Sv39:
-		case VM_Sv48:
-		default:
-			error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-			break;
-		}
-	} else {
-		sc_rv32_update_status(p_target);
+	if (p_bound) {
+		*p_bound = UINT32_MAX;
 	}
 }
 
 static error_code
-sc_rv32i__virt2phys(target* p_target, uint32_t address, uint32_t* p_physical)
+scr1__virt2phys(target* p_target, uint32_t address, uint32_t* p_physical)
 {
 	virt_to_phis(p_target, address, p_physical, NULL, false);
 	return error_code__get_and_clear(p_target);
@@ -3901,7 +3730,9 @@ read_memory_space(target* const p_target, uint32_t address, uint32_t const size,
 		}
 	}
 }
-static void write_memory_space(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* p_buffer, bool const instruction_space)
+
+static void
+write_memory_space(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* p_buffer, bool const instruction_space)
 {
 	if (!(size == 1 || size == 2 || size == 4)) {
 		LOG_ERROR("Invalid item size %d", size);
@@ -3936,21 +3767,21 @@ static void write_memory_space(target* const p_target, uint32_t address, uint32_
 }
 
 static error_code
-sc_rv32i__read_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
+scr1__read_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
 {
 	read_memory_space(p_target, address, size, count, buffer, false);
 	return error_code__get_and_clear(p_target);
 }
 
 static error_code
-sc_rv32i__write_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
+scr1__write_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
 {
 	write_memory_space(p_target, address, size, count, buffer, false);
 	return error_code__get_and_clear(p_target);
 }
 
 static error_code
-sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
+scr1__read_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
 {
 	LOG_DEBUG("Read_memory at 0x%08X, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
 
@@ -3984,7 +3815,7 @@ sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t co
 				size == 2 ? RISCV_opcode_LH(p_wrk_reg->number, p_wrk_reg->number, 0) :
 				/*size == 1*/RISCV_opcode_LB(p_wrk_reg->number, p_wrk_reg->number, 0);
 
-			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			scr1__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
 			size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -4070,7 +3901,7 @@ sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t co
 }
 
 static error_code
-sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
+scr1__write_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
 {
 	LOG_DEBUG("Write_memory at 0x%08X, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
 
@@ -4107,7 +3938,7 @@ sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t c
 	assert(p_addr_reg->number != p_data_reg->number);
 
 	if (ERROR_OK == error_code__get(p_target)) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		scr1__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -4295,7 +4126,7 @@ sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t c
 }
 
 static error_code
-sc_rv32i__add_breakpoint(target* const p_target, breakpoint* const p_breakpoint)
+scr1__add_breakpoint(target* const p_target, breakpoint* const p_breakpoint)
 {
 	assert(p_breakpoint);
 
@@ -4346,7 +4177,7 @@ sc_rv32i__add_breakpoint(target* const p_target, breakpoint* const p_breakpoint)
 }
 
 static error_code
-sc_rv32i__remove_breakpoint(target* const p_target, breakpoint* const p_breakpoint)
+scr1__remove_breakpoint(target* const p_target, breakpoint* const p_breakpoint)
 {
 	sc_rv32_check_that_target_halted(p_target);
 
@@ -4375,7 +4206,7 @@ sc_rv32i__remove_breakpoint(target* const p_target, breakpoint* const p_breakpoi
 
 /// gdb_server expects valid reg values and will use set method for updating reg values
 static error_code
-sc_rv32i__get_gdb_reg_list(target* const p_target, reg** reg_list[], int* const reg_list_size, target_register_class const reg_class)
+scr1__get_gdb_reg_list(target* const p_target, reg** reg_list[], int* const reg_list_size, target_register_class const reg_class)
 {
 	assert(p_target);
 	assert(reg_list_size);
@@ -4399,26 +4230,27 @@ sc_rv32i__get_gdb_reg_list(target* const p_target, reg** reg_list[], int* const 
 	*reg_list_size = num_regs - regs_left;
 	return error_code__get_and_clear(p_target);
 }
+
 /// @todo make const
 target_type scr1_target = {
-	.name = "syntacore_riscv32i",
+	.name = "scr1",
 
-	.poll = sc_rv32i__poll,
-	.arch_state = sc_rv32i__arch_state,
+	.poll = scr1__poll,
+	.arch_state = scr1__arch_state,
 	.target_request_data = NULL,
 
-	.halt = sc_rv32i__halt,
-	.resume = sc_rv32i__resume,
-	.step = sc_rv32i__step,
+	.halt = scr1__halt,
+	.resume = scr1__resume,
+	.step = scr1__step,
 
-	.assert_reset = sc_rv32i__assert_reset,
-	.deassert_reset = sc_rv32i__deassert_reset,
-	.soft_reset_halt = sc_rv32i__soft_reset_halt,
+	.assert_reset = scr1__assert_reset,
+	.deassert_reset = scr1__deassert_reset,
+	.soft_reset_halt = scr1__soft_reset_halt,
 
-	.get_gdb_reg_list = sc_rv32i__get_gdb_reg_list,
+	.get_gdb_reg_list = scr1__get_gdb_reg_list,
 
-	.read_memory = sc_rv32i__read_memory,
-	.write_memory = sc_rv32i__write_memory,
+	.read_memory = scr1__read_memory,
+	.write_memory = scr1__write_memory,
 
 	.read_buffer = NULL,
 	.write_buffer = NULL,
@@ -4426,11 +4258,11 @@ target_type scr1_target = {
 	.checksum_memory = NULL,
 	.blank_check_memory = NULL,
 
-	.add_breakpoint = sc_rv32i__add_breakpoint,
+	.add_breakpoint = scr1__add_breakpoint,
 	.add_context_breakpoint = NULL,
 	.add_hybrid_breakpoint = NULL,
 
-	.remove_breakpoint = sc_rv32i__remove_breakpoint,
+	.remove_breakpoint = scr1__remove_breakpoint,
 
 	.add_watchpoint = NULL,
 	.remove_watchpoint = NULL,
@@ -4443,20 +4275,20 @@ target_type scr1_target = {
 
 	.commands = NULL,
 
-	.target_create = sc_rv32i__target_create,
+	.target_create = scr1__target_create,
 	.target_jim_configure = NULL,
 	.target_jim_commands = NULL,
 
-	.examine = sc_rv32i__examine,
+	.examine = scr1__examine,
 
-	.init_target = sc_rv32i__init_target,
-	.deinit_target = sc_rv32i__deinit_target,
+	.init_target = scr1__init_target,
+	.deinit_target = scr1__deinit_target,
 
-	.virt2phys = sc_rv32i__virt2phys,
-	.read_phys_memory = sc_rv32i__read_phys_memory,
-	.write_phys_memory = sc_rv32i__write_phys_memory,
+	.virt2phys = scr1__virt2phys,
+	.read_phys_memory = scr1__read_phys_memory,
+	.write_phys_memory = scr1__write_phys_memory,
 
-	.mmu = sc_rv32i__mmu,
+	.mmu = scr1__mmu,
 	.check_reset = NULL,
 	.get_gdb_fileio_info = NULL,
 	.gdb_fileio_end = NULL,
