@@ -59,7 +59,6 @@
 #define ILEN (32u)
 /// @}
 
-
 /// TAP controller IDCODE
 #define EXPECTED_IDCODE      (0xC0DEDEB1u)
 #define EXPECTED_IDCODE_MASK (0xFFF0FFFFu)
@@ -267,7 +266,7 @@ enum
 	DAP_CTRL_value_INVALID_CODE = 0xFFu,
 };
 
-/// RISC-V Privileged ISA CSR
+/// RISC-V Privileged ISA 1.7 CSR
 enum
 {
 	CSR_sptbr = 0x180,
@@ -297,7 +296,7 @@ enum
 	CSR_mdbound = 0x385u,
 	///@}
 
-	/// Syntacore Debug controller CSR (for Privileged ISA 1.7)
+	/// Syntacore Debug controller CSR
 	/// privilege: MRW
 	CSR_sc_dbg_scratch = 0x788u,
 };
