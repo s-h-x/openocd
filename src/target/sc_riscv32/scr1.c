@@ -25,27 +25,6 @@
 
 #include <stdbool.h>
 
-/// Don't make irscan if IR is the same
-#define USE_IR_SELECT_CACHE 0
-
-/// Don't write DAP_CONTROL if it is the same
-#define USE_DAP_CONTROL_CACHE 0
-
-/// Verify value of DAP_CONTROL after write
-#define USE_VERIFY_DAP_CONTROL 1
-
-/// Verify values of HART REGTRANS after write
-#define USE_VERIFY_HART_REGTRANS_WRITE 1
-
-/// Verify values of CORE REGTRANS after write
-#define USE_VERIFY_CORE_REGTRANS_WRITE 1
-
-#define USE_PC_ADVMT_DSBL_BIT 1
-
-#define USE_QUEUING_FOR_DR_SCANS 1
-
-#define USE_CHECK_PC_UNCHANGED 1
-
 #define WRITE_BUFFER_THRESHOLD (1u << 18)
 
 /// Parameters of RISC-V core
@@ -59,15 +38,8 @@
 #define ILEN (32u)
 /// @}
 
-/// TAP controller IDCODE
-#define SCR1_EXPECTED_IDCODE      (0xC0D1DEB1u)
-#define SCR1_EXPECTED_IDCODE_MASK (0xFFFFFFFFu)
-
 /// DBG_ID
 /// @{
-/// Lowest required DBG_ID
-/// Required and provided masked values should be equal.
-#define SCR1_EXPECTED_DBG_ID        (0x00810000u)
 /// Mask of DBG_ID version.
 #define DBG_ID_VERSION_MASK    (0xFFFFFF00u)
 
@@ -271,10 +243,6 @@ enum
 {
 	CSR_mstatus = 0x300,
 	CSR_misa = 0x301u,
-
-	/// Syntacore Debug controller CSR
-	/// privilege: MRW
-	CSR_sc_1_10_dbg_scratch = 0x7C8u,
 };
 
 /// type_dbgc_core_dbg_sts_reg_bits_e
@@ -533,17 +501,34 @@ static char const def_GP_regs_name[] = "general";
 
 struct sc_riscv32__Arch_constants
 {
+	/// Don't make irscan if IR is the same
 	bool use_ir_select_cache;
+
+	/// Don't write DAP_CONTROL if it is the same
 	bool use_dap_control_cache;
+
+	/// Verify value of DAP_CONTROL after write
 	bool use_verify_dap_control;
 	bool use_check_pc_unchanged;
+
+	/// Verify values of HART REGTRANS after write
 	bool use_verify_hart_regtrans_write;
+
+	/// Verify values of CORE REGTRANS after write
 	bool use_verify_core_regtrans_write;
 	bool use_pc_advmt_dsbl_bit;
 	bool use_queuing_for_dr_scans;
+	/// expected TAP controller IDCODE
 	uint32_t expected_idcode;
+	/// expected TAP controller IDCODE mask
 	uint32_t expected_idcode_mask;
+
+	/** Lowest required DBG_ID
+		Required and provided masked values should be equal.
+	*/
 	uint32_t expected_dbg_id;
+	/// Syntacore Debug controller CSR
+	csr_num_type debug_scratch_CSR;
 };
 typedef struct sc_riscv32__Arch_constants sc_riscv32__Arch_constants;
 
@@ -558,17 +543,18 @@ struct sc_riscv32__Arch
 typedef struct sc_riscv32__Arch sc_riscv32__Arch;
 
 static sc_riscv32__Arch_constants scr1_constants = {
-	.use_ir_select_cache = !!(USE_IR_SELECT_CACHE),
-	.use_dap_control_cache = !!(USE_DAP_CONTROL_CACHE),
-	.use_verify_dap_control = !!(USE_VERIFY_DAP_CONTROL),
-	.use_check_pc_unchanged = !!(USE_CHECK_PC_UNCHANGED),
-	.use_verify_hart_regtrans_write = !!(USE_VERIFY_HART_REGTRANS_WRITE),
-	.use_verify_core_regtrans_write = !!(USE_VERIFY_CORE_REGTRANS_WRITE),
-	.use_pc_advmt_dsbl_bit = !!(USE_PC_ADVMT_DSBL_BIT),
-	.use_queuing_for_dr_scans = !!(USE_QUEUING_FOR_DR_SCANS),
-	.expected_idcode = SCR1_EXPECTED_IDCODE,
-	.expected_idcode_mask = SCR1_EXPECTED_IDCODE_MASK,
-	.expected_dbg_id = SCR1_EXPECTED_DBG_ID
+	.use_ir_select_cache = false,
+	.use_dap_control_cache = false,
+	.use_verify_dap_control = true,
+	.use_check_pc_unchanged = true,
+	.use_verify_hart_regtrans_write = true,
+	.use_verify_core_regtrans_write = true,
+	.use_pc_advmt_dsbl_bit = true,
+	.use_queuing_for_dr_scans = true,
+	.expected_idcode = 0xC0D1DEB1u,
+	.expected_idcode_mask = 0xFFFFFFFFu,
+	.expected_dbg_id = 0x00810000u,
+	.debug_scratch_CSR = 0x7C8u
 };
 static sc_riscv32__Arch const scr1_initial_arch = {
 	.error_code = ERROR_OK,
@@ -2151,7 +2137,7 @@ reg_x__get(reg* const p_reg)
 				}
 
 				// Save p_reg->number register to CSR_DBG_SCRATCH CSR
-				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(CSR_sc_1_10_dbg_scratch, p_reg->number));
+				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_reg->number));
 				advance_pc_counter += instr_step;
 
 				if (ERROR_OK != error_code__get(p_target)) {
@@ -2219,7 +2205,7 @@ reg_x__store(reg* const p_reg)
 
 	assert(p_reg->valid);
 	assert(p_reg->dirty);
-	(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_reg->number, CSR_sc_1_10_dbg_scratch));
+	(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_reg->number, p_arch->constants->debug_scratch_CSR));
 	advance_pc_counter += instr_step;
 	p_reg->dirty = false;
 
@@ -2370,7 +2356,7 @@ csr_get_value(target* const p_target, uint32_t const csr_number)
 
 				if (error_code__get(p_target) == ERROR_OK) {
 					/// and store temporary register to CSR_DBG_SCRATCH CSR.
-					(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(CSR_sc_1_10_dbg_scratch, p_wrk_reg->number));
+					(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg->number));
 					advance_pc_counter += instr_step;
 
 					if (error_code__get(p_target) == ERROR_OK) {
@@ -2500,7 +2486,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 
 		if (ERROR_OK == error_code__get(p_target)) {
 			// set temporary register value to restoring pc value
-			(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, CSR_sc_1_10_dbg_scratch));
+			(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR));
 			advance_pc_counter += instr_step;
 
 			if (ERROR_OK == error_code__get(p_target)) {
@@ -2606,7 +2592,8 @@ reg_fs__get(reg* const p_reg)
 
 			if (error_code__get(p_target) == ERROR_OK) {
 				/// and store temporary register to CSR_DBG_SCRATCH CSR.
-				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(CSR_sc_1_10_dbg_scratch, p_wrk_reg_1->number));
+				sc_riscv32__Arch const* const p_arch = p_target->arch_info;
+				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_1->number));
 				advance_pc_counter += instr_step;
 
 				if (error_code__get(p_target) == ERROR_OK) {
@@ -2691,7 +2678,8 @@ reg_fs__set(reg* const p_reg, uint8_t* const buf)
 
 			if (error_code__get(p_target) == ERROR_OK) {
 				// set temporary register value to restoring pc value
-				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, CSR_sc_1_10_dbg_scratch));
+				sc_riscv32__Arch const* const p_arch = p_target->arch_info;
+				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR));
 				advance_pc_counter += instr_step;
 
 				if (error_code__get(p_target) == ERROR_OK) {
@@ -2815,11 +2803,11 @@ reg_fd__get(reg* const p_reg)
 
 			if (ERROR_OK == error_code__get(p_target)) {
 				/// and store temporary register to CSR_DBG_SCRATCH CSR.
-				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(CSR_sc_1_10_dbg_scratch, p_wrk_reg_1->number));
+				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_1->number));
 				advance_pc_counter += instr_step;
 
 				if (ERROR_OK == error_code__get(p_target)) {
-					uint32_t const value_lo = sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(CSR_sc_1_10_dbg_scratch, p_wrk_reg_2->number));
+					uint32_t const value_lo = sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_2->number));
 					advance_pc_counter += instr_step;
 
 					if (ERROR_OK == error_code__get(p_target)) {
@@ -2951,14 +2939,14 @@ reg_fd__set(reg* const p_reg, uint8_t* const buf)
 
 			if (ERROR_OK == error_code__get(p_target)) {
 				// set temporary register value to restoring pc value
-				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg_1->number, CSR_sc_1_10_dbg_scratch));
+				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg_1->number, p_arch->constants->debug_scratch_CSR));
 				advance_pc_counter += instr_step;
 
 				if (ERROR_OK == error_code__get(p_target)) {
 					sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(&((uint8_t const*)p_reg->value)[4], 0, p_reg->size));
 
 					if (ERROR_OK == error_code__get(p_target)) {
-						(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg_2->number, CSR_sc_1_10_dbg_scratch));
+						(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg_2->number, p_arch->constants->debug_scratch_CSR));
 						advance_pc_counter += instr_step;
 
 						if (ERROR_OK == error_code__get(p_target)) {
@@ -3100,7 +3088,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 
 			if (ERROR_OK == error_code__get(p_target)) {
 				// set temporary register value
-				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, CSR_sc_1_10_dbg_scratch));
+				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR));
 				advance_pc_counter += instr_step;
 
 				if (ERROR_OK == error_code__get(p_target)) {
@@ -3899,7 +3887,7 @@ sc_riscv32__read_phys_memory(target* const p_target, uint32_t address, uint32_t 
 					}
 
 					/// Load address to work register
-					(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, CSR_sc_1_10_dbg_scratch));
+					(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR));
 					advance_pc_counter += instr_step;
 
 					if (ERROR_OK != error_code__get(p_target)) {
@@ -3915,7 +3903,7 @@ sc_riscv32__read_phys_memory(target* const p_target, uint32_t address, uint32_t 
 					}
 
 					/// Exec store work register to csr
-					(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(CSR_sc_1_10_dbg_scratch, p_wrk_reg->number));
+					(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg->number));
 					advance_pc_counter += instr_step;
 
 					/// get data from csr and jump back to correct pc
@@ -4015,12 +4003,12 @@ sc_riscv32__write_phys_memory(target* const p_target, uint32_t address, uint32_t
 
 			if (error_code__get(p_target) == ERROR_OK) {
 				/// Load address to work register
-				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_addr_reg->number, CSR_sc_1_10_dbg_scratch));
+				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_addr_reg->number, p_arch->constants->debug_scratch_CSR));
 				advance_pc_counter += instr_step;
 
 				// Opcodes
 				uint32_t const instructions[3] = {
-					RISCV_opcode_CSRR(p_data_reg->number, CSR_sc_1_10_dbg_scratch),
+					RISCV_opcode_CSRR(p_data_reg->number, p_arch->constants->debug_scratch_CSR),
 					(size == 4 ? RISCV_opcode_SW(p_data_reg->number, p_addr_reg->number, 0) :
 					 size == 2 ? RISCV_opcode_SH(p_data_reg->number, p_addr_reg->number, 0) :
 					 /*size == 1*/ RISCV_opcode_SB(p_data_reg->number, p_addr_reg->number, 0)),
