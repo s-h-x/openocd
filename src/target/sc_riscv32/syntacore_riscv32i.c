@@ -564,6 +564,9 @@ enum
 	number_of_regs_GDB = RISCV_rtegnum_CSR_last + 1,
 };
 
+typedef uint32_t rv_instruction32_type;
+typedef uint16_t rv_instruction16_type;
+
 static uint8_t const obj_DAP_opstatus_GOOD = DAP_status_good;
 static uint8_t const obj_DAP_status_MASK = DAP_status_MASK;
 static reg_data_type GP_reg_data_type = {.type = REG_TYPE_INT32,};
@@ -572,7 +575,7 @@ static reg_feature feature_riscv_org = {
 };
 static char const def_GP_regs_name[] = "general";
 
-struct sc_rv32i__Arch
+struct sc_riscv32__Arch
 {
 	/// stored sub-operations error_code
 	error_code error_code;
@@ -588,9 +591,9 @@ struct sc_rv32i__Arch
 	bool use_pc_advmt_dsbl_bit;
 	bool use_queuing_for_dr_scans;
 };
-typedef struct sc_rv32i__Arch sc_rv32i__Arch;
+typedef struct sc_riscv32__Arch sc_riscv32__Arch;
 
-static sc_rv32i__Arch const sc_rv32_initial_arch = {
+static sc_riscv32__Arch const sc_rv32_initial_arch = {
 	.error_code = ERROR_OK,
 	.last_DAP_ctrl = DAP_CTRL_value_INVALID_CODE,
 
@@ -612,7 +615,7 @@ static inline error_code
 error_code__get(target const* const p_target)
 {
 	assert(p_target);
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	return p_arch->error_code;
 }
@@ -624,7 +627,7 @@ error_code__set(target const* const p_target, error_code const a_error_code)
 {
 	assert(p_target);
 	{
-		sc_rv32i__Arch* restrict const p_arch = p_target->arch_info;
+		sc_riscv32__Arch* restrict const p_arch = p_target->arch_info;
 		assert(p_arch);
 		p_arch->error_code = a_error_code;
 	}
@@ -683,8 +686,8 @@ csr_to_int(csr_num_type csr)
 	return NORMALIZE_INT_FIELD(csr, 11, 0);
 }
 
-static uint32_t
-RISCV_opcode_INSTR_R_TYPE(unsigned func7, reg_num_type rs2, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
+static rv_instruction32_type
+RISCV_opcode_INSTR_R_TYPE(uint8_t func7, reg_num_type rs2, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
 	CHECK_FUNC3(func3);
@@ -693,15 +696,15 @@ RISCV_opcode_INSTR_R_TYPE(unsigned func7, reg_num_type rs2, reg_num_type rs1, ui
 	CHECK_REG(rs1);
 	CHECK_REG(rd);
 	return
-		MAKE_TYPE_FIELD(uint32_t, func7, 25, 31) |
-		MAKE_TYPE_FIELD(uint32_t, rs2, 20, 24) |
-		MAKE_TYPE_FIELD(uint32_t, rs1, 15, 19) |
-		MAKE_TYPE_FIELD(uint32_t, func3, 12, 14) |
-		MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) |
-		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
+		MAKE_TYPE_FIELD(rv_instruction32_type, func7, 25, 31) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, rs2, 20, 24) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, rd, 7, 11) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_INSTR_I_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
@@ -710,14 +713,14 @@ RISCV_opcode_INSTR_I_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs1, u
 	CHECK_FUNC3(func3);
 	CHECK_IMM_11_00(imm_11_00);
 	return
-		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_11_00, 0, 11), 20, 31) |
-		MAKE_TYPE_FIELD(uint32_t, rs1, 15, 19) |
-		MAKE_TYPE_FIELD(uint32_t, func3, 12, 14) |
-		MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) |
-		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 0, 11), 20, 31) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, rd, 7, 11) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_INSTR_S_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
@@ -726,145 +729,147 @@ RISCV_opcode_INSTR_S_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs2, r
 	CHECK_FUNC3(func3);
 	CHECK_IMM_11_00(imm_11_00);
 	return
-		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_11_00, 5, 11), 25, 31) |
-		MAKE_TYPE_FIELD(uint32_t, rs2, 20, 24) |
-		MAKE_TYPE_FIELD(uint32_t, rs1, 15, 19) |
-		MAKE_TYPE_FIELD(uint32_t, func3, 12, 14) |
-		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_11_00, 0, 4), 7, 11) |
-		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 5, 11), 25, 31) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, rs2, 20, 24) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 0, 4), 7, 11) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_INSTR_UJ_TYPE(riscv_signed_type imm_20_01, reg_num_type rd, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
 	CHECK_REG(rd);
 	CHECK_IMM_20_01(imm_20_01);
 	return
-		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_20_01, 20, 20), 31, 31) |
-		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_20_01, 1, 10), 21, 30) |
-		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_20_01, 11, 11), 20, 20) |
-		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_20_01, 12, 19), 12, 19) |
-		MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) |
-		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_20_01, 20, 20), 31, 31) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_20_01, 1, 10), 21, 30) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_20_01, 11, 11), 20, 20) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_20_01, 12, 19), 12, 19) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, rd, 7, 11) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_FMV_X_S(reg_num_type rd, reg_num_type rs1_fp)
 {
 	return RISCV_opcode_INSTR_R_TYPE(0x70u, 0u, rs1_fp, 0u, rd, 0x53u);
 }
 
-static uint32_t
+/// SC custom instruction copy FPU double precision register value to two 32-bits GP registers (based on S-extention opcode)
+static rv_instruction32_type
 RISCV_opcode_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp)
 {
 	return RISCV_opcode_INSTR_R_TYPE(0x70u, rd_hi, rs1_fp, 0u, rd_lo, 0x53u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1)
 {
 	return RISCV_opcode_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd_fp, 0x53u);
 }
 
-static uint32_t
+/// SC custom instruction to combine from two GP registers values to FPU double precision register value (based on S-extention opcode)
+static rv_instruction32_type
 RISCV_opcode_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo)
 {
 	return RISCV_opcode_INSTR_R_TYPE(0x78u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_LB(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x03u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_LH(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 1u, rd, 0x03u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_LW(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 2u, rd, 0x03u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_ADDI(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x13u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_JALR(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x67u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_CSRRW(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
 {
 	return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), rs1, 1u, rd, 0x73u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_CSRRS(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
 {
 	return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), rs1, 2u, rd, 0x73u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_EBREAK(void)
 {
 	return RISCV_opcode_INSTR_I_TYPE(1, 0u, 0u, 0u, 0x73u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_SB(reg_num_type rs_data, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_S_TYPE(imm, rs_data, rs1, 0u, 0x23);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_SH(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_S_TYPE(imm, rs, rs1, 1u, 0x23);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_SW(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_S_TYPE(imm, rs, rs1, 2u, 0x23);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_JAL(reg_num_type rd, riscv_signed_type imm_20_01)
 {
 	return RISCV_opcode_INSTR_UJ_TYPE(imm_20_01, rd, 0x6Fu);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_CSRW(unsigned csr, reg_num_type rs1)
 {
 	return RISCV_opcode_CSRRW(0, csr, rs1);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_CSRR(reg_num_type rd, csr_num_type csr)
 {
 	return RISCV_opcode_CSRRS(rd, csr, 0);
 }
 
-static uint16_t
+static rv_instruction16_type
 RISCV_opcode_C_EBREAK(void)
 {
 	return 0x9002u;
 }
 
 #if 0
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_INSTR_SB_TYPE(riscv_short_signed_type imm_01_12, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
@@ -873,17 +878,17 @@ RISCV_opcode_INSTR_SB_TYPE(riscv_short_signed_type imm_01_12, reg_num_type rs2, 
 	CHECK_REG(rs2);
 	CHECK_IMM_12_01(imm_01_12);
 	return
-		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_01_12, 12, 12), 31, 31) |
-		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_01_12, 5, 10), 25, 30) |
-		MAKE_TYPE_FIELD(uint32_t, rs2, 20, 24) |
-		MAKE_TYPE_FIELD(uint32_t, rs1, 15, 19) |
-		MAKE_TYPE_FIELD(uint32_t, func3, 12, 14) |
-		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_01_12, 1, 4), 8, 11) |
-		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_01_12, 11, 11), 7, 7) |
-		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_01_12, 12, 12), 31, 31) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_01_12, 5, 10), 25, 30) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, rs2, 20, 24) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_01_12, 1, 4), 8, 11) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_01_12, 11, 11), 7, 7) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_INSTR_U_TYPE(riscv_signed_type imm_31_12, reg_num_type rd, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
@@ -892,60 +897,60 @@ RISCV_opcode_INSTR_U_TYPE(riscv_signed_type imm_31_12, reg_num_type rd, uint8_t 
 	CHECK_IMM_31_12(imm_31_12);
 #undef CHECK_IMM_31_12
 	return
-		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_31_12, 12, 31), 12, 31) |
-		MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) |
-		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6);
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_31_12, 12, 31), 12, 31) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, rd, 7, 11) |
+		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_ADD(reg_num_type rd, reg_num_type rs1, reg_num_type rs2)
 {
 	return RISCV_opcode_INSTR_R_TYPE(0x00u, rs2, rs1, 0u, rd, 0x33u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_LBU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 4u, rd, 0x03u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_LHU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 5u, rd, 0x03u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_CSRRC(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
 {
 	return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), rs1, 3u, rd, 0x73u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_CSRRWI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), zimm, 5u, rd, 0x73u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_CSRRSI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), zimm, 6u, rd, 0x73u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_CSRRCI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(csr_to_int(csr), zimm, 7u, rd, 0x73u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_AUIPC(reg_num_type rd, riscv_signed_type imm)
 {
 	return RISCV_opcode_INSTR_U_TYPE(imm, rd, 0x17u);
 }
 
-static uint32_t
+static rv_instruction32_type
 RISCV_opcode_NOP(void)
 {
 	return RISCV_opcode_ADDI(0, 0, 0u);
@@ -976,7 +981,7 @@ static void
 IR_select(target const* const p_target, TAP_IR_e const new_instr)
 {
 	assert(p_target);
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 
 	if (p_arch->use_ir_select_cache) {
@@ -1094,7 +1099,7 @@ static inline void
 update_DAP_CTRL_cache(target const* const p_target, uint8_t const set_dap_unit_group)
 {
 	assert(p_target);
-	sc_rv32i__Arch* restrict const p_arch = p_target->arch_info;
+	sc_riscv32__Arch* restrict const p_arch = p_target->arch_info;
 	assert(p_arch);
 	p_arch->last_DAP_ctrl = set_dap_unit_group;
 }
@@ -1376,7 +1381,7 @@ sc_rv32_HART0_clear_sticky(target* const p_target)
 {
 	LOG_DEBUG("========= Try to clear HART0 errors ============");
 	assert(p_target);
-	sc_rv32i__Arch* const p_arch = p_target->arch_info;
+	sc_riscv32__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	assert(p_target->tap);
 	assert(p_target->tap->ir_length == TAP_length_of_IR);
@@ -1450,7 +1455,7 @@ sc_rv32_CORE_clear_errors(target* const p_target)
 {
 	LOG_DEBUG("========= Try to clear core errors ============");
 	assert(p_target);
-	sc_rv32i__Arch* const p_arch = p_target->arch_info;
+	sc_riscv32__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	assert(p_target->tap);
 	assert(p_target->tap->ir_length == TAP_length_of_IR);
@@ -1524,7 +1529,7 @@ sc_rv32_DAP_CTRL_REG_set(target const* const p_target, type_dbgc_unit_id_e const
 						0,
 						TAP_length_of_DAP_CTRL_FGROUP + TAP_length_of_DAP_CTRL_UNIT - 1);
 
-	sc_rv32i__Arch* const p_arch = p_target->arch_info;
+	sc_riscv32__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
 
 	if (p_arch->use_dap_control_cache) {
@@ -1649,7 +1654,7 @@ sc_rv32_HART_REGTRANS_write_and_check(target const* const p_target, type_dbgc_re
 	HART_REGTRANS_write(p_target, index, set_value);
 
 	if (error_code__get(p_target) == ERROR_OK) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 
 		if (p_arch->use_verify_hart_regtrans_write) {
@@ -1732,7 +1737,7 @@ static uint32_t
 sc_rv32_get_PC(target const* const p_target)
 {
 	assert(p_target);
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 
 	/// @todo Verify use_check_pc_unchanged
@@ -2106,7 +2111,7 @@ static void
 sc_rv32_check_PC_value(target const* const p_target, uint32_t const previous_pc)
 {
 	assert(p_target);
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 
 	if (p_arch->use_check_pc_unchanged) {
@@ -2138,7 +2143,7 @@ reg_x__get(reg* const p_reg)
 		uint32_t const previous_pc = sc_rv32_get_PC(p_target);
 
 		if (ERROR_OK == error_code__get(p_target)) {
-			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
 			size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -2201,7 +2206,7 @@ reg_x__store(reg* const p_reg)
 		return error_code__get_and_clear(p_target);
 	}
 
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 
 	assert(p_arch);
 
@@ -2356,7 +2361,7 @@ csr_get_value(target* const p_target, uint32_t const csr_number)
 		uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 		if (ERROR_OK == error_code__get(p_target)) {
-			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
 			size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -2429,7 +2434,7 @@ reg_pc__get(reg* const p_reg)
 	/// Find temporary GP register
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	uint32_t const pc_sample = sc_rv32_HART_REGTRANS_read(p_target, DBGC_HART_register_PC_SAMPLE);
 
@@ -2484,7 +2489,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 
 	reg__set_new_cache_value(p_reg, buf);
 
-	sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 
 	assert(p_arch);
 
@@ -2547,7 +2552,6 @@ static reg_arch_type const reg_pc_accessors = {
 	.get = reg_pc__get,
 	.set = reg_pc__set,
 };
-
 static reg_data_type PC_reg_data_type = {
 	.type = REG_TYPE_CODE_PTR,
 };
@@ -2585,7 +2589,7 @@ reg_fs__get(reg* const p_reg)
 	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 	if (error_code__get(p_target) == ERROR_OK) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -2670,7 +2674,7 @@ reg_fs__set(reg* const p_reg, uint8_t* const buf)
 	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 	if (error_code__get(p_target) == ERROR_OK) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -2791,7 +2795,7 @@ reg_fd__get(reg* const p_reg)
 	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 	if (ERROR_OK == error_code__get(p_target)) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -2933,7 +2937,7 @@ reg_fd__set(reg* const p_reg, uint8_t* const buf)
 	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 	if (ERROR_OK == error_code__get(p_target)) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -3081,7 +3085,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 	uint32_t const pc_sample_1 = sc_rv32_get_PC(p_target);
 
 	if (ERROR_OK == error_code__get(p_target)) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -3231,7 +3235,7 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 
 			if (p_next_bkp) {
 				// exec single step without breakpoint
-				sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+				sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 				assert(p_arch);
 				// save breakpoint
 				breakpoint next_bkp = *p_next_bkp;
@@ -3324,7 +3328,7 @@ reset__set(target* const p_target, bool const active)
 		sc_rv32_CORE_REGTRANS_write(p_target, DBGC_CORE_REGS_DBG_CTRL, set_value);
 
 		if (error_code__get(p_target) == ERROR_OK) {
-			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
 
 			if (p_arch->use_verify_core_regtrans_write) {
@@ -3531,11 +3535,11 @@ sc_rv32_init_regs_cache(target* const p_target)
 }
 
 static error_code
-sc_rv32i__init_target(command_context* cmd_ctx, target* const p_target)
+sc_riscv32__init_target(command_context* cmd_ctx, target* const p_target)
 {
 	sc_rv32_init_regs_cache(p_target);
 
-	sc_rv32i__Arch* p_arch_info = calloc(1, sizeof(sc_rv32i__Arch));
+	sc_riscv32__Arch* p_arch_info = calloc(1, sizeof(sc_riscv32__Arch));
 	assert(p_arch_info);
 	*p_arch_info = sc_rv32_initial_arch;
 
@@ -3544,7 +3548,7 @@ sc_rv32i__init_target(command_context* cmd_ctx, target* const p_target)
 }
 
 static void
-sc_rv32i__deinit_target(target* const p_target)
+sc_riscv32__deinit_target(target* const p_target)
 {
 	assert(p_target);
 
@@ -3570,14 +3574,14 @@ sc_rv32i__deinit_target(target* const p_target)
 }
 
 static error_code
-sc_rv32i__target_create(target* const p_target, Jim_Interp* interp)
+sc_riscv32__target_create(target* const p_target, Jim_Interp* interp)
 {
 	assert(p_target);
 	return ERROR_OK;
 }
 
 static error_code
-sc_rv32i__examine(target* const p_target)
+sc_riscv32__examine(target* const p_target)
 {
 	assert(p_target);
 
@@ -3625,7 +3629,7 @@ sc_rv32i__examine(target* const p_target)
 }
 
 static error_code
-sc_rv32i__poll(target* const p_target)
+sc_riscv32__poll(target* const p_target)
 {
 	assert(p_target);
 	sc_rv32_update_status(p_target);
@@ -3633,7 +3637,7 @@ sc_rv32i__poll(target* const p_target)
 }
 
 static error_code
-sc_rv32i__arch_state(target* const p_target)
+sc_riscv32__arch_state(target* const p_target)
 {
 	assert(p_target);
 	sc_rv32_update_status(p_target);
@@ -3641,7 +3645,7 @@ sc_rv32i__arch_state(target* const p_target)
 }
 
 static error_code
-sc_rv32i__halt(target* const p_target)
+sc_riscv32__halt(target* const p_target)
 {
 	assert(p_target);
 	// May be already halted?
@@ -3679,7 +3683,7 @@ sc_rv32i__halt(target* const p_target)
 }
 
 static error_code
-sc_rv32i__resume(target* const p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
+sc_riscv32__resume(target* const p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
 	LOG_DEBUG("resume: current=%d address=0x%08x handle_breakpoints=%d debug_execution=%d", current, address, handle_breakpoints, debug_execution);
 	assert(p_target);
@@ -3688,7 +3692,7 @@ sc_rv32i__resume(target* const p_target, int const current, uint32_t const addre
 }
 
 static error_code
-sc_rv32i__step(target* const p_target, int const current, uint32_t const address, int const handle_breakpoints)
+sc_riscv32__step(target* const p_target, int const current, uint32_t const address, int const handle_breakpoints)
 {
 	LOG_DEBUG("step: current=%d address=0x%08x handle_breakpoints=%d", current, address, handle_breakpoints);
 	assert(p_target);
@@ -3698,21 +3702,21 @@ sc_rv32i__step(target* const p_target, int const current, uint32_t const address
 }
 
 static error_code
-sc_rv32i__assert_reset(target* const p_target)
+sc_riscv32__assert_reset(target* const p_target)
 {
 	LOG_DEBUG("Assert reset");
 	return reset__set(p_target, true);
 }
 
 static error_code
-sc_rv32i__deassert_reset(target* const p_target)
+sc_riscv32__deassert_reset(target* const p_target)
 {
 	LOG_DEBUG("Deassert reset");
 	return reset__set(p_target, false);
 }
 
 static error_code
-sc_rv32i__soft_reset_halt(target* const p_target)
+sc_riscv32__soft_reset_halt(target* const p_target)
 {
 	LOG_DEBUG("Soft reset called");
 	reset__set(p_target, true);
@@ -3733,7 +3737,7 @@ sc_rv32i__soft_reset_halt(target* const p_target)
 }
 
 static error_code
-sc_rv32i__mmu(target* p_target, int* p_mmu_enabled)
+sc_riscv32__mmu(target* p_target, int* p_mmu_enabled)
 {
 	uint32_t const mstatus = csr_get_value(p_target, CSR_mstatus);
 
@@ -3884,7 +3888,7 @@ virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t*
 }
 
 static error_code
-sc_rv32i__virt2phys(target* p_target, uint32_t address, uint32_t* p_physical)
+sc_riscv32__virt2phys(target* p_target, uint32_t address, uint32_t* p_physical)
 {
 	virt_to_phis(p_target, address, p_physical, NULL, false);
 	return error_code__get_and_clear(p_target);
@@ -3961,21 +3965,21 @@ write_memory_space(target* const p_target, uint32_t address, uint32_t const size
 }
 
 static error_code
-sc_rv32i__read_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
+sc_riscv32__read_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
 {
 	read_memory_space(p_target, address, size, count, buffer, false);
 	return error_code__get_and_clear(p_target);
 }
 
 static error_code
-sc_rv32i__write_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
+sc_riscv32__write_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
 {
 	write_memory_space(p_target, address, size, count, buffer, false);
 	return error_code__get_and_clear(p_target);
 }
 
 static error_code
-sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
+sc_riscv32__read_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
 {
 	LOG_DEBUG("Read_memory at 0x%08X, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
 
@@ -4009,7 +4013,7 @@ sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t co
 				size == 2 ? RISCV_opcode_LH(p_wrk_reg->number, p_wrk_reg->number, 0) :
 				/*size == 1*/RISCV_opcode_LB(p_wrk_reg->number, p_wrk_reg->number, 0);
 
-			sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
 			size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -4095,7 +4099,7 @@ sc_rv32i__read_phys_memory(target* const p_target, uint32_t address, uint32_t co
 }
 
 static error_code
-sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
+sc_riscv32__write_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
 {
 	LOG_DEBUG("Write_memory at 0x%08X, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
 
@@ -4132,7 +4136,7 @@ sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t c
 	assert(p_addr_reg->number != p_data_reg->number);
 
 	if (ERROR_OK == error_code__get(p_target)) {
-		sc_rv32i__Arch const* const p_arch = p_target->arch_info;
+		sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		size_t const instr_step = p_arch->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
@@ -4320,7 +4324,7 @@ sc_rv32i__write_phys_memory(target* const p_target, uint32_t address, uint32_t c
 }
 
 static error_code
-sc_rv32i__add_breakpoint(target* const p_target, breakpoint* const p_breakpoint)
+sc_riscv32__add_breakpoint(target* const p_target, breakpoint* const p_breakpoint)
 {
 	assert(p_breakpoint);
 
@@ -4371,7 +4375,7 @@ sc_rv32i__add_breakpoint(target* const p_target, breakpoint* const p_breakpoint)
 }
 
 static error_code
-sc_rv32i__remove_breakpoint(target* const p_target, breakpoint* const p_breakpoint)
+sc_riscv32__remove_breakpoint(target* const p_target, breakpoint* const p_breakpoint)
 {
 	sc_rv32_check_that_target_halted(p_target);
 
@@ -4400,7 +4404,7 @@ sc_rv32i__remove_breakpoint(target* const p_target, breakpoint* const p_breakpoi
 
 /// gdb_server expects valid reg values and will use set method for updating reg values
 static error_code
-sc_rv32i__get_gdb_reg_list(target* const p_target, reg** reg_list[], int* const reg_list_size, target_register_class const reg_class)
+sc_riscv32__get_gdb_reg_list(target* const p_target, reg** reg_list[], int* const reg_list_size, target_register_class const reg_class)
 {
 	assert(p_target);
 	assert(reg_list_size);
@@ -4429,22 +4433,22 @@ sc_rv32i__get_gdb_reg_list(target* const p_target, reg** reg_list[], int* const 
 target_type syntacore_riscv32i_target = {
 	.name = "syntacore_riscv32i",
 
-	.poll = sc_rv32i__poll,
-	.arch_state = sc_rv32i__arch_state,
+	.poll = sc_riscv32__poll,
+	.arch_state = sc_riscv32__arch_state,
 	.target_request_data = NULL,
 
-	.halt = sc_rv32i__halt,
-	.resume = sc_rv32i__resume,
-	.step = sc_rv32i__step,
+	.halt = sc_riscv32__halt,
+	.resume = sc_riscv32__resume,
+	.step = sc_riscv32__step,
 
-	.assert_reset = sc_rv32i__assert_reset,
-	.deassert_reset = sc_rv32i__deassert_reset,
-	.soft_reset_halt = sc_rv32i__soft_reset_halt,
+	.assert_reset = sc_riscv32__assert_reset,
+	.deassert_reset = sc_riscv32__deassert_reset,
+	.soft_reset_halt = sc_riscv32__soft_reset_halt,
 
-	.get_gdb_reg_list = sc_rv32i__get_gdb_reg_list,
+	.get_gdb_reg_list = sc_riscv32__get_gdb_reg_list,
 
-	.read_memory = sc_rv32i__read_memory,
-	.write_memory = sc_rv32i__write_memory,
+	.read_memory = sc_riscv32__read_memory,
+	.write_memory = sc_riscv32__write_memory,
 
 	.read_buffer = NULL,
 	.write_buffer = NULL,
@@ -4452,11 +4456,11 @@ target_type syntacore_riscv32i_target = {
 	.checksum_memory = NULL,
 	.blank_check_memory = NULL,
 
-	.add_breakpoint = sc_rv32i__add_breakpoint,
+	.add_breakpoint = sc_riscv32__add_breakpoint,
 	.add_context_breakpoint = NULL,
 	.add_hybrid_breakpoint = NULL,
 
-	.remove_breakpoint = sc_rv32i__remove_breakpoint,
+	.remove_breakpoint = sc_riscv32__remove_breakpoint,
 
 	.add_watchpoint = NULL,
 	.remove_watchpoint = NULL,
@@ -4469,20 +4473,20 @@ target_type syntacore_riscv32i_target = {
 
 	.commands = NULL,
 
-	.target_create = sc_rv32i__target_create,
+	.target_create = sc_riscv32__target_create,
 	.target_jim_configure = NULL,
 	.target_jim_commands = NULL,
 
-	.examine = sc_rv32i__examine,
+	.examine = sc_riscv32__examine,
 
-	.init_target = sc_rv32i__init_target,
-	.deinit_target = sc_rv32i__deinit_target,
+	.init_target = sc_riscv32__init_target,
+	.deinit_target = sc_riscv32__deinit_target,
 
-	.virt2phys = sc_rv32i__virt2phys,
-	.read_phys_memory = sc_rv32i__read_phys_memory,
-	.write_phys_memory = sc_rv32i__write_phys_memory,
+	.virt2phys = sc_riscv32__virt2phys,
+	.read_phys_memory = sc_riscv32__read_phys_memory,
+	.write_phys_memory = sc_riscv32__write_phys_memory,
 
-	.mmu = sc_rv32i__mmu,
+	.mmu = sc_riscv32__mmu,
 	.check_reset = NULL,
 	.get_gdb_fileio_info = NULL,
 	.gdb_fileio_end = NULL,
