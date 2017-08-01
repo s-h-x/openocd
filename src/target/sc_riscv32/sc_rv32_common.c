@@ -20,23 +20,6 @@
 #define ILEN (32u)
 /// @}
 
-/// DBG_ID
-/// @{
-/// Mask of DBG_ID version.
-#define DBG_ID_VERSION_MASK    (0xFFFFFF00u)
-
-/// Mask of DBG_ID subversion.
-/// Required value should be less or equal to provided subversion.
-#define DBG_ID_SUBVERSION_MASK (0x000000FFu)
-/// @}
-
-/// Back-end static assert macro that raise compile time division to zero when static 'COND' is false
-#define STATIC_ASSERT2(COND,LINE) enum {static_assertion_at_line_##LINE= 1 / !!(COND)}
-/// Intermediate macro
-#define STATIC_ASSERT1(COND,LINE) STATIC_ASSERT2(COND,LINE)
-/// Front-end static assert macro
-#define STATIC_ASSERT(COND)  STATIC_ASSERT1(COND,__LINE__)
-
 /// Number of array 'arr' elements
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
 
@@ -71,7 +54,7 @@
 /// @return bit-field value
 #define EXTRACT_FIELD(bits, first_bit, last_bit) (((bits) >> (first_bit)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit)))
 
-STATIC_ASSERT(CHAR_BIT == 8);
+static_assert(CHAR_BIT == 8, "Unsupported char size");
 
 typedef uint16_t rv_instruction16_type;
 typedef enum target_debug_reason target_debug_reason;
@@ -412,8 +395,7 @@ enum
 };
 /// @}
 
-STATIC_ASSERT(TAP_length_of_RO_32 == 32);
-STATIC_ASSERT(NUM_BYTES_FOR_BITS(TAP_length_of_RO_32) <= sizeof(uint32_t));
+static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_RO_32) <= sizeof(uint32_t), "Inconsistent uint32_t size");
 
 /// RISC-V GP registers id
 enum
@@ -458,9 +440,15 @@ sc_rv32__is_DBG_ID_valid(target* const p_target, uint32_t const DBG_ID)
 	assert(p_arch);
 	sc_riscv32__Arch_constants const* const p_const = p_arch->constants;
 	assert(p_const);
+	/// Mask of DBG_ID version.
+	// Required value should be equal to provided version.
+	static uint32_t const DBG_ID_major_version_mask = 0xFFFFFF00u;
+	// Mask of DBG_ID subversion.
+	// Required value should be less or equal to provided subversion.
+	static uint32_t const DBG_ID_subversion_mask = 0x000000FFu;
 	return
-		(DBG_ID & (DBG_ID_VERSION_MASK)) == (p_const->expected_dbg_id & (DBG_ID_VERSION_MASK)) &&
-		(DBG_ID & (DBG_ID_SUBVERSION_MASK)) >= (p_const->expected_dbg_id & (DBG_ID_SUBVERSION_MASK));
+		(DBG_ID & (DBG_ID_major_version_mask)) == (p_const->expected_dbg_id & (DBG_ID_major_version_mask)) &&
+		(DBG_ID & (DBG_ID_subversion_mask)) >= (p_const->expected_dbg_id & (DBG_ID_subversion_mask));
 }
 
 /// Error code handling
@@ -999,8 +987,8 @@ DAP_CTRL_REG_set_force(target const* const p_target, uint8_t const set_dap_unit_
 
 		/// Prepare clear status bits
 		uint8_t status = 0;
-		STATIC_ASSERT(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof status);
-		STATIC_ASSERT(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof set_dap_unit_group);
+		static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof status, "Bad size");
+		static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof set_dap_unit_group, "Bad size");
 		/// Prepare DR scan
 		scan_field const field = {
 			/// for 4 bits
@@ -1060,7 +1048,7 @@ DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_gro
 		/// Prepare DR scan to read actual value of DAP_CTR.
 		uint8_t get_dap_unit_group = 0;
 		uint8_t set_dap_unit_group_mask = 0x0Fu;
-		STATIC_ASSERT(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof get_dap_unit_group);
+		static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof get_dap_unit_group, "Bad size");
 		scan_field const field = {
 			.num_bits = TAP_length_of_DAP_CTRL,
 			.in_value = &get_dap_unit_group,
@@ -1118,7 +1106,7 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 
 		/// Prepare operation status buffer.
 		uint8_t DAP_OPSTATUS = 0;
-		STATIC_ASSERT(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE) == sizeof DAP_OPSTATUS);
+		static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE) == sizeof DAP_OPSTATUS, "Bad size");
 		scan_field const fields[2] = {
 			{.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext,.in_value = dbg_data},
 			/// Pass DAP_OPCODE bits. Check receiving DAP_OPSTATUS good/error bits.
@@ -1179,7 +1167,7 @@ sc_rv32_DC__unlock(target const* const p_target)
 	{
 		/// Enqueue write DAP_CTRL to select HART_DBGCMD group and HART_0 unit.
 		static uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_unit_id_HART_0, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_functional_group_HART_DBGCMD, 0, 1);
-		STATIC_ASSERT(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof set_dap_unit_group);
+		static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof set_dap_unit_group, "Bad size");
 		static scan_field const dr_field_DAP_CTRL = {.num_bits = TAP_length_of_DAP_CTRL,.out_value = &set_dap_unit_group};
 		invalidate_DAP_CTR_cache(p_target);
 		LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name,
@@ -1880,7 +1868,7 @@ reg__set_valid_value_to_cache(reg* const p_reg, uint32_t const value)
 	assert(p_reg);
 	assert(p_reg->exist);
 
-	STATIC_ASSERT(CHAR_BIT == 8);
+	static_assert(CHAR_BIT == 8, "Unsupported char size");
 	assert(p_reg->size <= CHAR_BIT * sizeof value);
 
 	LOG_DEBUG("Updating cache from register %s to 0x%08X", p_reg->name, value);
