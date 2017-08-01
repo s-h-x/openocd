@@ -2285,7 +2285,7 @@ is_RVC_enable(target* const p_target)
 {
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	uint32_t const mcpuid = p_arch->constants->get_isa_CSR(p_target);
+	uint32_t const mcpuid = sc_rv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
 	return 0 != (mcpuid & (UINT32_C(1) << ('C' - 'A')));
 }
 
@@ -2605,7 +2605,7 @@ reg_fd__get(reg* const p_reg)
 
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	uint32_t const mcpuid = p_arch->constants->get_isa_CSR(p_target);
+	uint32_t const mcpuid = sc_rv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
 
 	if (ERROR_OK != error_code__get(p_target)) {
 		return error_code__get_and_clear(p_target);
@@ -2741,7 +2741,7 @@ reg_fd__set(reg* const p_reg, uint8_t* const buf)
 
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	uint32_t const mcpuid = p_arch->constants->get_isa_CSR(p_target);
+	uint32_t const mcpuid = sc_rv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
 
 	if (ERROR_OK != error_code__get(p_target)) {
 		return error_code__get_and_clear(p_target);

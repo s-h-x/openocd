@@ -43,12 +43,6 @@ RISCV_opcode_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo
 	return RISCV_opcode_INSTR_R_TYPE(0x79u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
 }
 
-static uint32_t
-get_isa_CSR_1_10(target* const p_target)
-{
-	return sc_rv32__csr_get_value(p_target, CSR_misa);
-}
-
 /// @todo Privileged Instruction 1.10 version
 static uint32_t
 scr1__get_mstatus_FS(uint32_t const mstatus)
@@ -57,7 +51,7 @@ scr1__get_mstatus_FS(uint32_t const mstatus)
 	return (mstatus >> 13) & 3u;
 }
 
-static sc_riscv32__Arch_constants scr1_constants = {
+static sc_riscv32__Arch_constants const scr1_constants = {
 	.use_ir_select_cache = false,
 	.use_dap_control_cache = false,
 	.use_verify_dap_control = true,
@@ -70,10 +64,10 @@ static sc_riscv32__Arch_constants scr1_constants = {
 	.expected_idcode_mask = 0xFFFFFFFFu,
 	.expected_dbg_id = 0x00810000u,
 	.debug_scratch_CSR = 0x7C8u,
+	.isa_CSR = CSR_misa,
 	.opcode_FMV_D_2X = &RISCV_opcode_FMV_D_2X,
 	.opcode_FMV_2X_D = &RISCV_opcode_FMV_2X_D,
 	.get_mstatus_FS = &scr1__get_mstatus_FS,
-	.get_isa_CSR = &get_isa_CSR_1_10,
 	.virt_to_phis = &scr1__virt_to_phis
 };
 

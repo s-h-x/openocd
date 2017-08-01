@@ -191,12 +191,6 @@ RISCV_opcode_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo
 	return RISCV_opcode_INSTR_R_TYPE(0x78u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
 }
 
-static uint32_t
-get_cpuid_CSR_1_7(target* const p_target)
-{
-	return sc_rv32__csr_get_value(p_target, CSR_mcpuid_Pr_ISA_1_7);
-}
-
 /// @todo Privileged Instruction 1.7 version
 static uint32_t
 scrx_1_7__get_mstatus_FS(uint32_t const mstatus)
@@ -218,10 +212,10 @@ static sc_riscv32__Arch_constants scrx_constants = {
 	.expected_idcode_mask = 0xFFF0FFFFu,
 	.expected_dbg_id = 0x00800001u,
 	.debug_scratch_CSR = 0x788u,
+	.isa_CSR = CSR_mcpuid_Pr_ISA_1_7,
 	.opcode_FMV_D_2X = &RISCV_opcode_FMV_D_2X,
 	.opcode_FMV_2X_D = &RISCV_opcode_FMV_2X_D,
 	.get_mstatus_FS = &scrx_1_7__get_mstatus_FS,
-	.get_isa_CSR = &get_cpuid_CSR_1_7,
 	.virt_to_phis = &scrx_1_7__virt_to_phis
 };
 
