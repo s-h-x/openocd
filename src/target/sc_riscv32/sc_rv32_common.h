@@ -92,13 +92,13 @@ struct sc_riscv32__Arch {
 typedef struct sc_riscv32__Arch sc_riscv32__Arch;
 
 error_code
-error_code__get(target const* const p_target);
+sc_error_code__get(target const* const p_target);
 
 error_code
-error_code__get_and_clear(target const* const p_target);
+sc_error_code__get_and_clear(target const* const p_target);
 
 error_code
-error_code__update(target const* const p_target, error_code const a_error_code);
+sc_error_code__update(target const* const p_target, error_code const a_error_code);
 
 void
 sc_rv32_update_status(target* const p_target);

@@ -70,7 +70,7 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 {
 	uint32_t const mstatus = sc_riscv32__csr_get_value(p_target, CSR_mstatus);
 
-	if (ERROR_OK == error_code__get(p_target)) {
+	if (ERROR_OK == sc_error_code__get(p_target)) {
 		/// @todo Privileged Instruction 1.7 version
 		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
 		/// @todo Privileged Instruction 1.7 version
@@ -92,13 +92,13 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 			{
 				uint32_t const bound = sc_riscv32__csr_get_value(p_target, VM == VM_Mbb ? CSR_mbound_Pr_ISA_1_7 : /*VM == VM_Mbbid*/instruction_space ? CSR_mibound_Pr_ISA_1_7 : CSR_mdbound_Pr_ISA_1_7);
 
-				if (ERROR_OK == error_code__get(p_target)) {
+				if (ERROR_OK == sc_error_code__get(p_target)) {
 					if (!(address < bound)) {
-						error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+						sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 					} else {
 						uint32_t const base = sc_riscv32__csr_get_value(p_target, VM_Mbb ? CSR_mbase_Pr_ISA_1_7 : /*VM == VM_Mbbid*/instruction_space ? CSR_mibase_Pr_ISA_1_7 : CSR_mdbase_Pr_ISA_1_7);
 
-						if (ERROR_OK == error_code__get(p_target)) {
+						if (ERROR_OK == sc_error_code__get(p_target)) {
 							*p_physical = address + base;
 
 							if (p_bound) {
@@ -119,17 +119,17 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 				static uint32_t const offset_mask = LOW_BITS_MASK(10) << 2;
 				uint32_t const main_page = sc_riscv32__csr_get_value(p_target, CSR_sptbr_Pr_ISA_1_7);
 
-				if (ERROR_OK == error_code__get(p_target)) {
+				if (ERROR_OK == sc_error_code__get(p_target)) {
 					// lower bits should be zero
 					assert(0 == (main_page & LOW_BITS_MASK(12)));
 					uint32_t const offset_bits1 = address >> 20 & offset_mask;
 					uint8_t pte1_buf[4];
 
-					if (ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, main_page | offset_bits1, 4, 1, pte1_buf))) {
+					if (ERROR_OK == sc_error_code__update(p_target, target_read_phys_memory(p_target, main_page | offset_bits1, 4, 1, pte1_buf))) {
 						uint32_t const pte1 = buf_get_u32(pte1_buf, 0, 32);
 
 						if (0 == (pte1 & BIT_MASK(0))) {
-							error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+							sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 						} else if ((pte1 >> 1 & LOW_BITS_MASK(4)) >= 2) {
 							*p_physical = (pte1 << 2 & ~LOW_BITS_MASK(22)) | (address & LOW_BITS_MASK(22));
 
@@ -141,11 +141,11 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 							uint32_t const offset_bits0 = address >> 10 & offset_mask;
 							uint8_t pte0_buf[4];
 
-							if (ERROR_OK == error_code__update(p_target, target_read_phys_memory(p_target, base_0 | offset_bits0, 4, 1, pte0_buf))) {
+							if (ERROR_OK == sc_error_code__update(p_target, target_read_phys_memory(p_target, base_0 | offset_bits0, 4, 1, pte0_buf))) {
 								uint32_t const pte0 = buf_get_u32(pte0_buf, 0, 32);
 
 								if (0 == (pte0 & BIT_MASK(0)) || (pte0 >> 1 & LOW_BITS_MASK(4)) < 2) {
-									error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+									sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 								} else {
 									*p_physical = (pte0 << 2 & ~LOW_BITS_MASK(12)) | (address & LOW_BITS_MASK(12));
 
@@ -169,7 +169,7 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 		case VM_Sv39:
 		case VM_Sv48:
 		default:
-			error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+			sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 			break;
 		}
 	} else {
@@ -221,7 +221,7 @@ scrx_1_7__mmu(target* p_target, int* p_mmu_enabled)
 {
 	uint32_t const mstatus = sc_riscv32__csr_get_value(p_target, CSR_mstatus);
 
-	if (ERROR_OK == error_code__get(p_target)) {
+	if (ERROR_OK == sc_error_code__get(p_target)) {
 		/// @todo Privileged Instruction 1.7 version
 		uint32_t const privilege_level = (mstatus >> 1) & LOW_BITS_MASK(2);
 		assert(p_mmu_enabled);
@@ -252,7 +252,7 @@ scrx_1_7__mmu(target* p_target, int* p_mmu_enabled)
 		sc_rv32_update_status(p_target);
 	}
 
-	return error_code__get_and_clear(p_target);
+	return sc_error_code__get_and_clear(p_target);
 }
 
 /// @todo make const
