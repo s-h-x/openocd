@@ -75,9 +75,9 @@ struct sc_riscv32__Arch_constants
 	/// Syntacore Debug controller CSR
 	csr_num_type debug_scratch_CSR;
 	csr_num_type isa_CSR;
+	unsigned mstatus_FS_offset;
 	rv_instruction32_type(*opcode_FMV_D_2X)(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo);
 	rv_instruction32_type(*opcode_FMV_2X_D)(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp);
-	uint32_t(*get_mstatus_FS)(uint32_t const mstatus);
 	void(*virt_to_phis)(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
 };
 typedef struct sc_riscv32__Arch_constants sc_riscv32__Arch_constants;

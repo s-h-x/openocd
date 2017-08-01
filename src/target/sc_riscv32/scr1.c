@@ -43,14 +43,6 @@ RISCV_opcode_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo
 	return RISCV_opcode_INSTR_R_TYPE(0x79u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
 }
 
-/// @todo Privileged Instruction 1.10 version
-static uint32_t
-scr1__get_mstatus_FS(uint32_t const mstatus)
-{
-	/// @todo replace 13 by 1.10 FS bit offset
-	return (mstatus >> 13) & 3u;
-}
-
 static sc_riscv32__Arch_constants const scr1_constants = {
 	.use_ir_select_cache = false,
 	.use_dap_control_cache = false,
@@ -65,9 +57,9 @@ static sc_riscv32__Arch_constants const scr1_constants = {
 	.expected_dbg_id = 0x00810000u,
 	.debug_scratch_CSR = 0x7C8u,
 	.isa_CSR = CSR_misa,
+	.mstatus_FS_offset = 13u,
 	.opcode_FMV_D_2X = &RISCV_opcode_FMV_D_2X,
 	.opcode_FMV_2X_D = &RISCV_opcode_FMV_2X_D,
-	.get_mstatus_FS = &scr1__get_mstatus_FS,
 	.virt_to_phis = &scr1__virt_to_phis
 };
 
