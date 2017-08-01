@@ -543,7 +543,7 @@ csr_to_int(csr_num_type csr)
 	return NORMALIZE_INT_FIELD(csr, 11, 0);
 }
 
-rv_instruction32_type
+static rv_instruction32_type
 RISCV_opcode_INSTR_R_TYPE(uint8_t func7, reg_num_type rs2, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
 {
 	CHECK_OPCODE(opcode);
@@ -709,6 +709,34 @@ static rv_instruction16_type
 RISCV_opcode_C_EBREAK(void)
 {
 	return 0x9002u;
+}
+
+/// SC custom instruction copy FPU double precision register value to two 32-bits GP registers (based on S-extension opcode)
+rv_instruction32_type
+sc_RISCV_opcode_S_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp)
+{
+	return RISCV_opcode_INSTR_R_TYPE(0x70u, rd_hi, rs1_fp, 0u, rd_lo, 0x53u);
+}
+
+/// SC custom instruction to combine from two GP registers values to FPU double precision register value (based on S-extension opcode)
+rv_instruction32_type
+sc_RISCV_opcode_S_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo)
+{
+	return RISCV_opcode_INSTR_R_TYPE(0x78u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
+}
+
+/// SC custom instruction copy FPU double precision register value to two 32-bits GP registers (based on D-extension opcode)
+rv_instruction32_type
+sc_RISCV_opcode_D_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp)
+{
+	return RISCV_opcode_INSTR_R_TYPE(0x71u, rd_hi, rs1_fp, 0u, rd_lo, 0x53u);
+}
+
+/// SC custom instruction to combine from two GP registers values to FPU double precision register value (based on D-extension opcode)
+rv_instruction32_type
+sc_RISCV_opcode_D_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo)
+{
+	return RISCV_opcode_INSTR_R_TYPE(0x79u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
 }
 
 #if 0
@@ -2188,7 +2216,7 @@ prepare_temporary_GP_register(target const* const p_target, int const after_reg)
 }
 
 uint32_t
-sc_rv32__csr_get_value(target* const p_target, uint32_t const csr_number)
+sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 {
 	uint32_t value = 0xBADBAD;
 	sc_rv32_check_that_target_halted(p_target);
@@ -2285,7 +2313,7 @@ is_RVC_enable(target* const p_target)
 {
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	uint32_t const mcpuid = sc_rv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
+	uint32_t const mcpuid = sc_riscv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
 	return 0 != (mcpuid & (UINT32_C(1) << ('C' - 'A')));
 }
 
@@ -2605,7 +2633,7 @@ reg_fd__get(reg* const p_reg)
 
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	uint32_t const mcpuid = sc_rv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
+	uint32_t const mcpuid = sc_riscv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
 
 	if (ERROR_OK != error_code__get(p_target)) {
 		return error_code__get_and_clear(p_target);
@@ -2617,7 +2645,7 @@ reg_fd__get(reg* const p_reg)
 		return error_code__get_and_clear(p_target);
 	}
 
-	uint32_t const mstatus = sc_rv32__csr_get_value(p_target, CSR_mstatus);
+	uint32_t const mstatus = sc_riscv32__csr_get_value(p_target, CSR_mstatus);
 
 	if (ERROR_OK != error_code__get(p_target)) {
 		return error_code__get_and_clear(p_target);
@@ -2741,7 +2769,7 @@ reg_fd__set(reg* const p_reg, uint8_t* const buf)
 
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	uint32_t const mcpuid = sc_rv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
+	uint32_t const mcpuid = sc_riscv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
 
 	if (ERROR_OK != error_code__get(p_target)) {
 		return error_code__get_and_clear(p_target);
@@ -2753,7 +2781,7 @@ reg_fd__set(reg* const p_reg, uint8_t* const buf)
 		return error_code__get_and_clear(p_target);
 	}
 
-	uint32_t const mstatus = sc_rv32__csr_get_value(p_target, CSR_mstatus);
+	uint32_t const mstatus = sc_riscv32__csr_get_value(p_target, CSR_mstatus);
 
 	if (ERROR_OK != error_code__get(p_target)) {
 		return error_code__get_and_clear(p_target);
@@ -2889,7 +2917,7 @@ reg_csr__get(reg* const p_reg)
 	assert(reg__check(p_reg));
 	target* const p_target = p_reg->arch_info;
 	assert(p_target);
-	uint32_t const value = sc_rv32__csr_get_value(p_target, csr_number);
+	uint32_t const value = sc_riscv32__csr_get_value(p_target, csr_number);
 
 	if (ERROR_OK == error_code__get(p_target)) {
 		reg__set_valid_value_to_cache(p_reg, value);
@@ -3361,7 +3389,7 @@ reg_cache__CSR_section_create_gdb(char const* name, void* const p_arch_info)
 }
 
 void
-sc_rv32_init_regs_cache(target* const p_target)
+sc_riscv32__init_regs_cache(target* const p_target)
 {
 	assert(p_target);
 	reg_cache* p_reg_cache_last = p_target->reg_cache = reg_cache__section_create(def_GP_regs_name, def_GP_regs_array, ARRAY_LEN(def_GP_regs_array), p_target);

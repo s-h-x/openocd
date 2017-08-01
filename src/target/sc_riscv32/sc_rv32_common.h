@@ -92,6 +92,18 @@ struct sc_riscv32__Arch {
 typedef struct sc_riscv32__Arch sc_riscv32__Arch;
 
 error_code
+error_code__get(target const* const p_target);
+
+error_code
+error_code__get_and_clear(target const* const p_target);
+
+error_code
+error_code__update(target const* const p_target, error_code const a_error_code);
+
+void
+sc_rv32_update_status(target* const p_target);
+
+error_code
 sc_riscv32__poll(target* const p_target);
 
 error_code
@@ -146,27 +158,24 @@ error_code
 sc_riscv32__write_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer);
 
 uint32_t
-sc_rv32__csr_get_value(target* const p_target, uint32_t const csr_number);
-
-error_code
-error_code__get(target const* const p_target);
-
-error_code
-error_code__get_and_clear(target const* const p_target);
-
-error_code
-error_code__update(target const* const p_target, error_code const a_error_code);
+sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number);
 
 void
-sc_rv32_update_status(target* const p_target);
-
-rv_instruction32_type
-RISCV_opcode_INSTR_R_TYPE(uint8_t func7, reg_num_type rs2, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode);
-
-void
-sc_rv32_init_regs_cache(target* const p_target);
+sc_riscv32__init_regs_cache(target* const p_target);
 
 error_code
 sc_riscv32__virt2phys(target* p_target, uint32_t address, uint32_t* p_physical);
+
+rv_instruction32_type
+sc_RISCV_opcode_S_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp);
+
+rv_instruction32_type
+sc_RISCV_opcode_S_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo);
+
+rv_instruction32_type
+sc_RISCV_opcode_D_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp);
+
+rv_instruction32_type
+sc_RISCV_opcode_D_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo);
 
 #endif  // TARGET_SC_RV32_COMMON_H_

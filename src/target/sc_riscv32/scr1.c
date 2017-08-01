@@ -29,20 +29,6 @@ scr1__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical, uin
 	}
 }
 
-/// SC custom instruction copy FPU double precision register value to two 32-bits GP registers (based on D-extention opcode)
-static rv_instruction32_type
-RISCV_opcode_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp)
-{
-	return RISCV_opcode_INSTR_R_TYPE(0x71u, rd_hi, rs1_fp, 0u, rd_lo, 0x53u);
-}
-
-/// SC custom instruction to combine from two GP registers values to FPU double precision register value (based on D-extention opcode)
-static rv_instruction32_type
-RISCV_opcode_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo)
-{
-	return RISCV_opcode_INSTR_R_TYPE(0x79u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
-}
-
 static sc_riscv32__Arch_constants const scr1_constants = {
 	.use_ir_select_cache = false,
 	.use_dap_control_cache = false,
@@ -58,8 +44,8 @@ static sc_riscv32__Arch_constants const scr1_constants = {
 	.debug_scratch_CSR = 0x7C8u,
 	.isa_CSR = CSR_misa,
 	.mstatus_FS_offset = 13u,
-	.opcode_FMV_D_2X = &RISCV_opcode_FMV_D_2X,
-	.opcode_FMV_2X_D = &RISCV_opcode_FMV_2X_D,
+	.opcode_FMV_D_2X = &sc_RISCV_opcode_D_FMV_D_2X,
+	.opcode_FMV_2X_D = &sc_RISCV_opcode_D_FMV_2X_D,
 	.virt_to_phis = &scr1__virt_to_phis
 };
 
@@ -72,7 +58,7 @@ static sc_riscv32__Arch const scr1_initial_arch = {
 static error_code
 scr1__init_target(command_context* cmd_ctx, target* const p_target)
 {
-	sc_rv32_init_regs_cache(p_target);
+	sc_riscv32__init_regs_cache(p_target);
 
 	sc_riscv32__Arch* p_arch_info = calloc(1, sizeof(sc_riscv32__Arch));
 	assert(p_arch_info);
