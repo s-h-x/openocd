@@ -9,6 +9,12 @@
 */
 #include "sc_rv32_common.h"
 
+#include "target/target_type.h"
+#include "helper/log.h"
+#include "helper/binarybuffer.h"
+
+#include <assert.h>
+
 /// RISC-V Privileged ISA 1.7 CSR
 enum
 {
@@ -186,16 +192,9 @@ RISCV_opcode_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo
 }
 
 static uint32_t
-get_isa_CSR(target* const p_target)
+get_cpuid_CSR_1_7(target* const p_target)
 {
 	return sc_rv32__csr_get_value(p_target, CSR_mcpuid_Pr_ISA_1_7);
-}
-
-static bool
-scrx__is_RVC_enable(target* const p_target)
-{
-	uint32_t const mcpuid = get_isa_CSR(p_target);
-	return 0 != (mcpuid & (1u << ('C' - 'A')));
 }
 
 /// @todo Privileged Instruction 1.7 version
@@ -221,9 +220,8 @@ static sc_riscv32__Arch_constants scrx_constants = {
 	.debug_scratch_CSR = 0x788u,
 	.opcode_FMV_D_2X = &RISCV_opcode_FMV_D_2X,
 	.opcode_FMV_2X_D = &RISCV_opcode_FMV_2X_D,
-	.is_RVC_enable = &scrx__is_RVC_enable,
 	.get_mstatus_FS = &scrx_1_7__get_mstatus_FS,
-	.get_isa_CSR = &get_isa_CSR,
+	.get_isa_CSR = &get_cpuid_CSR_1_7,
 	.virt_to_phis = &scrx_1_7__virt_to_phis
 };
 

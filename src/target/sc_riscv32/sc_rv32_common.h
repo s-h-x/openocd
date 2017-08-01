@@ -6,16 +6,9 @@
 #endif
 
 #include "target/target.h"
-#include "target/target_type.h"
-#include "target/breakpoints.h"
 #include "target/register.h"
-#include "jtag/jtag.h"
-#include "helper/log.h"
-
-#include <limits.h>
-#include <memory.h>
-#include <limits.h>
-#include <assert.h>
+#include "target/breakpoints.h"
+#include "jimtcl/jim.h"
 
 #include <stdbool.h>
 
@@ -83,7 +76,6 @@ struct sc_riscv32__Arch_constants
 	csr_num_type debug_scratch_CSR;
 	rv_instruction32_type(*opcode_FMV_D_2X)(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo);
 	rv_instruction32_type(*opcode_FMV_2X_D)(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp);
-	bool(*is_RVC_enable)(target* const p_target);
 	uint32_t(*get_mstatus_FS)(uint32_t const mstatus);
 	uint32_t(*get_isa_CSR)(target* const p_target);
 	void(*virt_to_phis)(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);

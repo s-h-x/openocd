@@ -1,5 +1,12 @@
 #include "sc_rv32_common.h"
 
+#include "jtag/jtag.h"
+#include "helper/log.h"
+
+#include <assert.h>
+#include <limits.h>
+#include <memory.h>
+
 #define FPU_ENABLE (!!1)
 #define WRITE_BUFFER_THRESHOLD (1u << 18)
 
@@ -2273,6 +2280,15 @@ reg_pc__get(reg* const p_reg)
 	return error_code__get_and_clear(p_target);
 }
 
+static bool
+is_RVC_enable(target* const p_target)
+{
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
+	assert(p_arch);
+	uint32_t const mcpuid = p_arch->constants->get_isa_CSR(p_target);
+	return 0 != (mcpuid & (UINT32_C(1) << ('C' - 'A')));
+}
+
 static error_code
 reg_pc__set(reg* const p_reg, uint8_t* const buf)
 {
@@ -2298,9 +2314,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 
 	/// @note odd address is valid for pc, bit 0 value is ignored.
 	if (0 != (new_pc & (1u << 1))) {
-		sc_riscv32__Arch const* const p_arch = p_target->arch_info;
-		assert(p_arch);
-		bool const RVC_enable = p_arch->constants->is_RVC_enable(p_target);
+		bool const RVC_enable = is_RVC_enable(p_target);
 
 		if (ERROR_OK != error_code__get(p_target)) {
 			return error_code__get_and_clear(p_target);
@@ -3990,9 +4004,7 @@ sc_riscv32__add_breakpoint(target* const p_target, breakpoint* const p_breakpoin
 	sc_rv32_check_that_target_halted(p_target);
 
 	if (ERROR_OK == error_code__get(p_target)) {
-		sc_riscv32__Arch const* const p_arch = p_target->arch_info;
-		assert(p_arch);
-		bool const RVC_enable = p_arch->constants->is_RVC_enable(p_target);
+		bool const RVC_enable = is_RVC_enable(p_target);
 
 		if (!(p_breakpoint->length == NUM_BYTES_FOR_BITS(ILEN) || (RVC_enable && p_breakpoint->length == 2))) {
 			LOG_ERROR("Invalid breakpoint size: %d", p_breakpoint->length);
