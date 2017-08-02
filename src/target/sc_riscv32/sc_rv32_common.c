@@ -844,96 +844,6 @@ sc_RISCV_opcode_D_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type 
 	return RISCV_opcode_INSTR_R_TYPE(0x79u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
 }
 
-#if 0
-static rv_instruction32_type
-RISCV_opcode_INSTR_SB_TYPE(riscv_short_signed_type imm_01_12, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
-{
-	CHECK_OPCODE(opcode);
-	CHECK_FUNC3(func3);
-	CHECK_REG(rs1);
-	CHECK_REG(rs2);
-	CHECK_IMM_12_01(imm_01_12);
-	return
-		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_01_12, 12, 12), 31, 31) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_01_12, 5, 10), 25, 30) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, rs2, 20, 24) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_01_12, 1, 4), 8, 11) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_01_12, 11, 11), 7, 7) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
-}
-
-static rv_instruction32_type
-RISCV_opcode_INSTR_U_TYPE(riscv_signed_type imm_31_12, reg_num_type rd, uint8_t opcode)
-{
-	CHECK_OPCODE(opcode);
-	CHECK_REG(rd);
-#define CHECK_IMM_31_12(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 31, 12));
-	CHECK_IMM_31_12(imm_31_12);
-#undef CHECK_IMM_31_12
-	return
-		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_31_12, 12, 31), 12, 31) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, rd, 7, 11) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
-}
-
-static rv_instruction32_type
-RISCV_opcode_ADD(reg_num_type rd, reg_num_type rs1, reg_num_type rs2)
-{
-	return RISCV_opcode_INSTR_R_TYPE(0x00u, rs2, rs1, 0u, rd, 0x33u);
-}
-
-static rv_instruction32_type
-RISCV_opcode_LBU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 4u, rd, 0x03u);
-}
-
-static rv_instruction32_type
-RISCV_opcode_LHU(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 5u, rd, 0x03u);
-}
-
-static rv_instruction32_type
-RISCV_opcode_CSRRC(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
-{
-	return RISCV_opcode_INSTR_I_TYPE(NORMALIZE_INT_FIELD(csr, 11, 0), rs1, 3u, rd, 0x73u);
-}
-
-static rv_instruction32_type
-RISCV_opcode_CSRRWI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
-{
-	return RISCV_opcode_INSTR_I_TYPE(NORMALIZE_INT_FIELD(csr, 11, 0), zimm, 5u, rd, 0x73u);
-}
-
-static rv_instruction32_type
-RISCV_opcode_CSRRSI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
-{
-	return RISCV_opcode_INSTR_I_TYPE(NORMALIZE_INT_FIELD(csr, 11, 0), zimm, 6u, rd, 0x73u);
-}
-
-static rv_instruction32_type
-RISCV_opcode_CSRRCI(reg_num_type rd, csr_num_type csr, uint8_t zimm)
-{
-	return RISCV_opcode_INSTR_I_TYPE(NORMALIZE_INT_FIELD(csr, 11, 0), zimm, 7u, rd, 0x73u);
-}
-
-static rv_instruction32_type
-RISCV_opcode_AUIPC(reg_num_type rd, riscv_signed_type imm)
-{
-	return RISCV_opcode_INSTR_U_TYPE(imm, rd, 0x17u);
-}
-
-static rv_instruction32_type
-RISCV_opcode_NOP(void)
-{
-	return RISCV_opcode_ADDI(0, 0, 0u);
-}
-
-#endif
-
 /// @}
 
 /**	@brief Always perform scan to write instruction register
@@ -2537,13 +2447,6 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 
 	sc_riscv32__update_status(p_target);
 
-#if 0
-
-	if (p_arch->constants->use_pc_advmt_dsbl_bit) {
-		HART_REGTRANS_write_and_check(p_target, DBGC_HART_REGS_DBG_CTRL, 0);
-	}
-
-#endif
 	// restore temporary register
 	error_code const old_err_code = sc_error_code__get_and_clear(p_target);
 	sc_error_code__update(p_target, reg_x__store(p_wrk_reg));
@@ -3265,12 +3168,6 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 				}
 			}
 		}
-
-		// dmode_enabled |= HART_DMODE_ENBL_bit_Brkpt;
-#if 0
-	} else {
-		dmode_enabled &= ~HART_DMODE_ENBL_bit_Brkpt;
-#endif
 	}
 
 	// prepare for execution continue
@@ -4260,12 +4157,6 @@ sc_riscv32__remove_breakpoint(target* const p_target, breakpoint* const p_breakp
 	if (ERROR_OK == sc_error_code__get(p_target)) {
 		assert(p_breakpoint);
 		assert(p_breakpoint->orig_instr);
-#if 0
-		LOG_INFO("Remove breakpoint at 0x%08x, length=%d (0x%08x)",
-				 p_breakpoint->address,
-				 p_breakpoint->length,
-				 buf_get_u32(p_breakpoint->orig_instr, 0, p_breakpoint->length * CHAR_BIT));
-#endif
 		write_memory_space(p_target, p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true);
 
 		if (ERROR_OK == sc_error_code__get(p_target)) {
