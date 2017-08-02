@@ -699,118 +699,97 @@ RISCV_opcode_INSTR_S_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs2, r
 		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
 }
 
-static rv_instruction32_type
-RISCV_opcode_INSTR_UJ_TYPE(riscv_signed_type imm_20_01, reg_num_type rd, uint8_t opcode)
-{
-	CHECK_OPCODE(opcode);
-	CHECK_REG(rd);
-	CHECK_IMM_20_01(imm_20_01);
-	return
-		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_20_01, 20, 20), 31, 31) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_20_01, 1, 10), 21, 30) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_20_01, 11, 11), 20, 20) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_20_01, 12, 19), 12, 19) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, rd, 7, 11) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
-}
-
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_FMV_X_S(reg_num_type rd, reg_num_type rs1_fp)
 {
 	return RISCV_opcode_INSTR_R_TYPE(0x70u, 0u, rs1_fp, 0u, rd, 0x53u);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1)
 {
 	return RISCV_opcode_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd_fp, 0x53u);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_LB(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x03u);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_LH(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 1u, rd, 0x03u);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_LW(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 2u, rd, 0x03u);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_ADDI(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x13u);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_JALR(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x67u);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_CSRRW(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
 {
 	return RISCV_opcode_INSTR_I_TYPE(NORMALIZE_INT_FIELD(csr, 11, 0), rs1, 1u, rd, 0x73u);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_CSRRS(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
 {
 	return RISCV_opcode_INSTR_I_TYPE(NORMALIZE_INT_FIELD(csr, 11, 0), rs1, 2u, rd, 0x73u);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_EBREAK(void)
 {
 	return RISCV_opcode_INSTR_I_TYPE(1, 0u, 0u, 0u, 0x73u);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_SB(reg_num_type rs_data, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_S_TYPE(imm, rs_data, rs1, 0u, 0x23);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_SH(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_S_TYPE(imm, rs, rs1, 1u, 0x23);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_SW(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_S_TYPE(imm, rs, rs1, 2u, 0x23);
 }
 
-static rv_instruction32_type
-RISCV_opcode_JAL(reg_num_type rd, riscv_signed_type imm_20_01)
-{
-	return RISCV_opcode_INSTR_UJ_TYPE(imm_20_01, rd, 0x6Fu);
-}
-
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_CSRW(unsigned csr, reg_num_type rs1)
 {
 	return RISCV_opcode_CSRRW(0, csr, rs1);
 }
 
-static rv_instruction32_type
+static inline rv_instruction32_type
 RISCV_opcode_CSRR(reg_num_type rd, csr_num_type csr)
 {
 	return RISCV_opcode_CSRRS(rd, csr, 0);
 }
 
-static rv_instruction16_type
+static inline rv_instruction16_type
 RISCV_opcode_C_EBREAK(void)
 {
 	return 0x9002u;
@@ -2070,8 +2049,8 @@ reg_x__get(reg* const p_reg)
 						return sc_error_code__get_and_clear(p_target);
 					}
 
-					// Exec jump back to previous instruction and get saved into Debug scratch CSR value
-					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_JAL(0, 0));
+					/// Exec NOP instruction and get previous instruction SCR result.
+					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_ADDI(0, 0, 0));
 
 					if (ERROR_OK != sc_error_code__get(p_target)) {
 						return sc_error_code__get_and_clear(p_target);
@@ -2264,8 +2243,8 @@ sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 					(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg->number));
 
 					if (sc_error_code__get(p_target) == ERROR_OK) {
-						/// Correct pc by jump 2 instructions back and get previous command result.
-						value = sc_rv32_EXEC__step(p_target, RISCV_opcode_JAL(0, 0));
+						/// Exec NOP instruction and get previous instruction SCR result.
+						value = sc_rv32_EXEC__step(p_target, RISCV_opcode_ADDI(0, 0, 0));
 					} else {
 						sc_riscv32__update_status(p_target);
 					}
@@ -2465,7 +2444,8 @@ reg_FPU_S__get(reg* const p_reg)
 				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_1->number));
 
 				if (sc_error_code__get(p_target) == ERROR_OK) {
-					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_JAL(0, 0));
+					/// Exec NOP instruction and get previous instruction SCR result.
+					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_ADDI(0, 0, 0));
 
 					if (sc_error_code__get(p_target) == ERROR_OK) {
 						buf_set_u32(p_reg->value, 0, p_reg->size, value);
@@ -2645,8 +2625,8 @@ reg_FPU_D__get(reg* const p_reg)
 					uint32_t const value_lo = sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_2->number));
 
 					if (ERROR_OK == sc_error_code__get(p_target)) {
-						/// Correct pc by jump 2 instructions back and get previous command result.
-						uint32_t const value_hi = sc_rv32_EXEC__step(p_target, RISCV_opcode_JAL(0, 0));
+						/// Exec NOP instruction and get previous instruction SCR result.
+						uint32_t const value_hi = sc_rv32_EXEC__step(p_target, RISCV_opcode_ADDI(0, 0, 0));
 
 						if (ERROR_OK == sc_error_code__get(p_target)) {
 							buf_set_u64(p_reg->value, 0, p_reg->size, (FPU_D ? (uint64_t)value_hi << 32 : 0u) | (uint64_t)value_lo);
@@ -3698,8 +3678,8 @@ sc_riscv32__read_phys_memory(target* const p_target, uint32_t address, uint32_t 
 					/// Exec store work register to csr
 					(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg->number));
 
-					/// get data from csr and jump back to correct pc
-					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_JAL(0, 0));
+					/// Exec NOP instruction and get previous instruction SCR result.
+					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_ADDI(0, 0, 0));
 
 					if (ERROR_OK != sc_error_code__get(p_target)) {
 						break;
