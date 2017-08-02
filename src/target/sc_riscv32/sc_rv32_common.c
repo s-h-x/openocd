@@ -1637,6 +1637,7 @@ get_ISA(target* const p_target)
 static inline void
 HART_REGTRANS_write(target const* const p_target, HART_REGTRANS_indexes const index, uint32_t const set_value)
 {
+	assert(p_target);
 	type_dbgc_unit_id_e const unit = p_target->coreid == 0 ? DBGC_unit_id_HART_0 : DBGC_unit_id_HART_1;
 	REGTRANS_write(p_target, unit, DBGC_functional_group_HART_REGTRANS, index, set_value);
 }
@@ -1650,7 +1651,6 @@ HART_REGTRANS_write(target const* const p_target, HART_REGTRANS_indexes const in
 static void
 sc_rv32_HART_REGTRANS_write_and_check(target const* const p_target, HART_REGTRANS_indexes const index, uint32_t const set_value)
 {
-	assert(p_target);
 	HART_REGTRANS_write(p_target, index, set_value);
 
 	if (sc_error_code__get(p_target) == ERROR_OK) {
