@@ -1493,10 +1493,13 @@ sc_rv32_DAP_CTRL_REG_set(target const* const p_target, type_dbgc_unit_id_e const
 	bool const match_HART_0 = DBGC_unit_id_HART_0 == dap_unit && 0 == p_target->coreid;
 	bool const match_HART_1 = DBGC_unit_id_HART_1 == dap_unit && 1 == p_target->coreid;
 	bool const HART_unit = match_HART_0 || match_HART_1;
-	bool const HART_group = DBGC_functional_group_HART_REGTRANS == dap_group || DBGC_functional_group_HART_DBGCMD == dap_group;
+	bool const HART_group =
+		DBGC_functional_group_HART_REGTRANS == dap_group ||
+		DBGC_functional_group_HART_DBGCMD == dap_group ||
+		DBGC_functional_group_HART_CSR_CAP == dap_group;
 	bool const CORE_unit = DBGC_unit_id_CORE == dap_unit;
 	bool const CORE_group = DBGC_functional_group_CORE_REGTRANS == dap_group;
-	assert((HART_unit && HART_group) || (CORE_unit && CORE_group));
+	assert((HART_unit && HART_group) ^ (CORE_unit && CORE_group));
 
 	uint8_t const set_dap_unit_group =
 		MAKE_TYPE_FIELD(uint8_t,
@@ -1604,6 +1607,25 @@ sc_rv32_HART_REGTRANS_read(target const* const p_target, HART_REGTRANS_indexes c
 	/// @todo remove unused DBGC_unit_id_HART_1
 	type_dbgc_unit_id_e const unit = p_target->coreid == 0 ? DBGC_unit_id_HART_0 : DBGC_unit_id_HART_1;
 	return REGTRANS_read(p_target, unit, DBGC_functional_group_HART_REGTRANS, index);
+}
+
+/**	@brief HART HART_CSR_CAP read operation
+
+@par[inout] p_target pointer to this target
+@par[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
+*/
+static inline uint32_t
+sc_rv32_HART_CSR_CAP_read(target const* const p_target, HART_CSR_CAP_indexes const index)
+{
+	/// @todo remove unused DBGC_unit_id_HART_1
+	type_dbgc_unit_id_e const unit = p_target->coreid == 0 ? DBGC_unit_id_HART_0 : DBGC_unit_id_HART_1;
+	return REGTRANS_read(p_target, unit, DBGC_functional_group_HART_CSR_CAP, index);
+}
+
+static uint32_t
+get_ISA(target* const p_target)
+{
+	return sc_rv32_HART_CSR_CAP_read(p_target, HART_MISA_index);
 }
 
 /**	@brief HART REGTRANS write operation
@@ -2419,15 +2441,6 @@ reg_pc__get(reg* const p_reg)
 	}
 
 	return sc_error_code__get_and_clear(p_target);
-}
-
-static uint32_t
-get_ISA(target* const p_target)
-{
-	assert(p_target);
-	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
-	assert(p_arch);
-	return sc_riscv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
 }
 
 static bool
