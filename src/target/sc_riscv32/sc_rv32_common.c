@@ -14,7 +14,6 @@
 #include <limits.h>
 #include <memory.h>
 
-#define FPU_ENABLE (!!1)
 /// Queuing operations before force jtag operations
 #define WRITE_BUFFER_THRESHOLD (1u << 18)
 
@@ -2031,8 +2030,9 @@ reg__set_new_cache_value(reg* const p_reg, uint8_t* const buf)
 static inline bool
 reg__check(reg const* const p_reg)
 {
+	assert(p_reg);
 	if (!p_reg->exist) {
-		LOG_ERROR("Register %s not available", p_reg->name);
+		LOG_ERROR("Register %s not exists", p_reg->name);
 		return false;
 	} else if (p_reg->dirty && !p_reg->valid) {
 		LOG_ERROR("Register %s dirty but not valid", p_reg->name);
@@ -2066,21 +2066,17 @@ reg_cache__chain_invalidate(reg_cache* p_reg_cache)
 	}
 }
 
-static void
+static error_code
 reg_x__operation_conditions_check(reg const* const p_reg)
 {
-	assert(p_reg);
-	assert(reg__check(p_reg));
-	target* p_target = p_reg->arch_info;
-	assert(p_target);
-
-	if (p_reg->number >= number_of_regs_X) {
+	if (!reg__check(p_reg)) {
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	} else if (p_reg->number >= number_of_regs_X) {
 		LOG_WARNING("Bad GP register %s id=%d", p_reg->name, p_reg->number);
-		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
-		return;
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	} else {
+		return ERROR_OK;
 	}
-
-	sc_rv32_check_that_target_halted(p_target);
 }
 
 static void
@@ -2103,71 +2099,77 @@ sc_rv32_check_PC_value(target const* const p_target, uint32_t const previous_pc)
 static error_code
 reg_x__get(reg* const p_reg)
 {
-	reg_x__operation_conditions_check(p_reg);
-	target* p_target = p_reg->arch_info;
-
-	if (ERROR_OK == sc_error_code__get(p_target)) {
-		if (p_reg->valid) {
-			// register cache already valid
-			if (p_reg->dirty) {
-				LOG_WARNING("Try re-read dirty cache register %s", p_reg->name);
-			} else {
-				LOG_DEBUG("Try re-read cache register %s", p_reg->name);
-			}
-		}
-
-		uint32_t const previous_pc = sc_rv32_get_PC(p_target);
+	error_code const check_result = reg_x__operation_conditions_check(p_reg);
+	if (ERROR_OK != check_result) {
+		return check_result;
+	} else {
+		target* p_target = p_reg->arch_info;
+		assert(p_target);
+		sc_rv32_check_that_target_halted(p_target);
 
 		if (ERROR_OK == sc_error_code__get(p_target)) {
-			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
-			assert(p_arch);
-			size_t const instr_step = p_arch->constants->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
-
-			if (p_arch->constants->use_pc_advmt_dsbl_bit) {
-				sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl);
+			if (p_reg->valid) {
+				// register cache already valid
+				if (p_reg->dirty) {
+					LOG_WARNING("Try re-read dirty cache register %s", p_reg->name);
+				} else {
+					LOG_DEBUG("Try re-read cache register %s", p_reg->name);
+				}
 			}
 
+			uint32_t const previous_pc = sc_rv32_get_PC(p_target);
+
 			if (ERROR_OK == sc_error_code__get(p_target)) {
-				sc_rv32_EXEC__setup(p_target);
-				int advance_pc_counter = 0;
-
-				if (ERROR_OK != sc_error_code__get(p_target)) {
-					return sc_error_code__get_and_clear(p_target);
-				}
-
-				// Save p_reg->number register to Debug scratch CSR
-				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_reg->number));
-				advance_pc_counter += instr_step;
-
-				if (ERROR_OK != sc_error_code__get(p_target)) {
-					return sc_error_code__get_and_clear(p_target);
-				}
-
-				// Exec jump back to previous instruction and get saved into Debug scratch CSR value
-				assert(advance_pc_counter % NUM_BYTES_FOR_BITS(ILEN) == 0);
-				uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_JAL(0, -advance_pc_counter));
-				advance_pc_counter = 0;
-
-				if (ERROR_OK != sc_error_code__get(p_target)) {
-					return sc_error_code__get_and_clear(p_target);
-				}
-
-				reg__set_valid_value_to_cache(p_reg, value);
+				sc_riscv32__Arch const* const p_arch = p_target->arch_info;
+				assert(p_arch);
+				size_t const instr_step = p_arch->constants->use_pc_advmt_dsbl_bit ? 0u : NUM_BYTES_FOR_BITS(ILEN);
 
 				if (p_arch->constants->use_pc_advmt_dsbl_bit) {
-					sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
+					sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl);
 				}
+
+				if (ERROR_OK == sc_error_code__get(p_target)) {
+					sc_rv32_EXEC__setup(p_target);
+					int advance_pc_counter = 0;
+
+					if (ERROR_OK != sc_error_code__get(p_target)) {
+						return sc_error_code__get_and_clear(p_target);
+					}
+
+					// Save p_reg->number register to Debug scratch CSR
+					(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_reg->number));
+					advance_pc_counter += instr_step;
+
+					if (ERROR_OK != sc_error_code__get(p_target)) {
+						return sc_error_code__get_and_clear(p_target);
+					}
+
+					// Exec jump back to previous instruction and get saved into Debug scratch CSR value
+					assert(advance_pc_counter % NUM_BYTES_FOR_BITS(ILEN) == 0);
+					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_JAL(0, -advance_pc_counter));
+					advance_pc_counter = 0;
+
+					if (ERROR_OK != sc_error_code__get(p_target)) {
+						return sc_error_code__get_and_clear(p_target);
+					}
+
+					reg__set_valid_value_to_cache(p_reg, value);
+
+					if (p_arch->constants->use_pc_advmt_dsbl_bit) {
+						sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
+					}
+				} else {
+					sc_riscv32__update_status(p_target);
+				}
+
+				sc_rv32_check_PC_value(p_target, previous_pc);
 			} else {
 				sc_riscv32__update_status(p_target);
 			}
-
-			sc_rv32_check_PC_value(p_target, previous_pc);
-		} else {
-			sc_riscv32__update_status(p_target);
 		}
-	}
 
-	return sc_error_code__get_and_clear(p_target);
+		return sc_error_code__get_and_clear(p_target);
+	}
 }
 
 static error_code
@@ -2232,20 +2234,23 @@ reg_x__store(reg* const p_reg)
 static error_code
 reg_x__set(reg* const p_reg, uint8_t* const buf)
 {
-	assert(p_reg);
-	assert(buf);
-	reg_x__operation_conditions_check(p_reg);
-	target* p_target = p_reg->arch_info;
-	assert(p_target);
+	error_code const check_result = reg_x__operation_conditions_check(p_reg);
+	if (ERROR_OK != check_result) {
+		return check_result;
+	} else {
+		target* p_target = p_reg->arch_info;
+		assert(p_target);
+		sc_rv32_check_that_target_halted(p_target);
 
-	if (ERROR_OK != sc_error_code__get(p_target)) {
-		return sc_error_code__get_and_clear(p_target);
+		if (ERROR_OK != sc_error_code__get(p_target)) {
+			return sc_error_code__get_and_clear(p_target);
+		}
+
+		reg__set_new_cache_value(p_reg, buf);
+
+		/// store dirty register data to HW
+		return reg_x__store(p_reg);
 	}
-
-	reg__set_new_cache_value(p_reg, buf);
-
-	/// store dirty register data to HW
-	return reg_x__store(p_reg);
 }
 
 static reg_arch_type const reg_x_accessors = {
@@ -2416,13 +2421,22 @@ reg_pc__get(reg* const p_reg)
 	return sc_error_code__get_and_clear(p_target);
 }
 
+static uint32_t
+get_ISA(target* const p_target)
+{
+	assert(p_target);
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
+	assert(p_arch);
+	return sc_riscv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
+}
+
 static bool
 is_RVC_enable(target* const p_target)
 {
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	uint32_t const mcpuid = sc_riscv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
-	return 0 != (mcpuid & (UINT32_C(1) << ('C' - 'A')));
+	uint32_t const isa = get_ISA(p_target);
+	return 0 != (isa & (UINT32_C(1) << ('C' - 'A')));
 }
 
 static error_code
@@ -2534,10 +2548,8 @@ static reg_data_type PC_reg_data_type = {
 	.type = REG_TYPE_CODE_PTR,
 };
 
-#if (FLEN) == 32
-
 static error_code
-reg_fs__get(reg* const p_reg)
+reg_FPU_S__get(reg* const p_reg)
 {
 	assert(p_reg);
 	assert(p_reg->size == 32);
@@ -2585,7 +2597,6 @@ reg_fs__get(reg* const p_reg)
 
 			if (sc_error_code__get(p_target) == ERROR_OK) {
 				/// and store temporary register to Debug scratch CSR.
-				sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_1->number));
 				advance_pc_counter += instr_step;
 
@@ -2623,7 +2634,7 @@ reg_fs__get(reg* const p_reg)
 }
 
 static error_code
-reg_fs__set(reg* const p_reg, uint8_t* const buf)
+reg_FPU_S__set(reg* const p_reg, uint8_t* const buf)
 {
 	assert(p_reg);
 	assert(p_reg->size == 32);
@@ -2671,7 +2682,6 @@ reg_fs__set(reg* const p_reg, uint8_t* const buf)
 
 			if (sc_error_code__get(p_target) == ERROR_OK) {
 				// set temporary register value to restoring pc value
-				sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 				(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR));
 				advance_pc_counter += instr_step;
 
@@ -2713,13 +2723,11 @@ reg_fs__set(reg* const p_reg, uint8_t* const buf)
 	return sc_error_code__get_and_clear(p_target);
 }
 
-static reg_arch_type const reg_f_accessors = {.get = reg_fs__get,.set = reg_fs__set,};
-static reg_data_type FP_reg_data_type = {.type = REG_TYPE_IEEE_SINGLE,};
-
-#elif (FLEN) == 64
+static reg_arch_type const reg_FPU_S_accessors = {.get = reg_FPU_S__get,.set = reg_FPU_S__set,};
+static reg_data_type FPU_S_reg_data_type = {.type = REG_TYPE_IEEE_SINGLE,};
 
 static error_code
-reg_fd__get(reg* const p_reg)
+reg_FPU_D__get(reg* const p_reg)
 {
 	assert(p_reg);
 	assert(p_reg->size == 64);
@@ -2741,7 +2749,7 @@ reg_fd__get(reg* const p_reg)
 
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	uint32_t const mcpuid = sc_riscv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
+	uint32_t const mcpuid = get_ISA(p_target);
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		return sc_error_code__get_and_clear(p_target);
@@ -2853,7 +2861,7 @@ reg_fd__get(reg* const p_reg)
 }
 
 static error_code
-reg_fd__set(reg* const p_reg, uint8_t* const buf)
+reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 {
 	assert(p_reg);
 	assert(p_reg->size == 64);
@@ -2877,7 +2885,7 @@ reg_fd__set(reg* const p_reg, uint8_t* const buf)
 
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	uint32_t const mcpuid = sc_riscv32__csr_get_value(p_target, p_arch->constants->isa_CSR);
+	uint32_t const mcpuid = get_ISA(p_target);
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		return sc_error_code__get_and_clear(p_target);
@@ -2995,19 +3003,13 @@ reg_fd__set(reg* const p_reg, uint8_t* const buf)
 	return sc_error_code__get_and_clear(p_target);
 }
 
-static reg_arch_type const reg_f_accessors = {.get = reg_fd__get,.set = reg_fd__set,};
-static reg_data_type FP_s_type = {.type = REG_TYPE_IEEE_SINGLE,.id = "ieee_single",};
-static reg_data_type FP_d_type = {.type = REG_TYPE_IEEE_DOUBLE,.id = "ieee_double",};
-static reg_data_type_union_field FP_s = {.name = "S",.type = &FP_s_type};
-static reg_data_type_union_field FP_d = {.name = "D",.type = &FP_d_type,.next = &FP_s};
-static reg_data_type_union FP_s_or_d = {.fields = &FP_d};
-static reg_data_type FP_reg_data_type = {.type = REG_TYPE_ARCH_DEFINED,.id = "Float_D_or_S",.type_class = REG_TYPE_CLASS_UNION,.reg_type_union = &FP_s_or_d};
-
-#else
-
-#error Invalid FLEN
-
-#endif
+static reg_arch_type const reg_FPU_D_accessors = {.get = reg_FPU_D__get,.set = reg_FPU_D__set,};
+static reg_data_type IEEE_single_precision_type = {.type = REG_TYPE_IEEE_SINGLE,.id = "ieee_single",};
+static reg_data_type IEEE_double_precision_type = {.type = REG_TYPE_IEEE_DOUBLE,.id = "ieee_double",};
+static reg_data_type_union_field FPU_S = {.name = "S",.type = &IEEE_single_precision_type};
+static reg_data_type_union_field FPU_D = {.name = "D",.type = &IEEE_double_precision_type,.next = &FPU_S};
+static reg_data_type_union FPU_D_or_S = {.fields = &FPU_D};
+static reg_data_type FPU_D_reg_data_type = {.type = REG_TYPE_ARCH_DEFINED,.id = "Float_D_or_S",.type_class = REG_TYPE_CLASS_UNION,.reg_type_union = &FPU_D_or_S};
 
 static error_code
 reg_csr__get(reg* const p_reg)
@@ -3380,75 +3382,76 @@ static reg const def_GP_regs_array[] = {
 	{.name = "x14",.number = 14,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
 	{.name = "x15",.number = 15,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
 	{.name = "x16",.number = 16,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x17",.number = 17,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x17",.number = 17,.caller_save = true,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
 
 	// Saved registers
-	{.name = "x18",.number = 18,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x19",.number = 19,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x20",.number = 20,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x21",.number = 21,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x22",.number = 22,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x23",.number = 23,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x24",.number = 24,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x25",.number = 25,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x26",.number = 26,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x27",.number = 27,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x18",.number = 18,.caller_save = false,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x19",.number = 19,.caller_save = false,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x20",.number = 20,.caller_save = false,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x21",.number = 21,.caller_save = false,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x22",.number = 22,.caller_save = false,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x23",.number = 23,.caller_save = false,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x24",.number = 24,.caller_save = false,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x25",.number = 25,.caller_save = false,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x26",.number = 26,.caller_save = false,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x27",.number = 27,.caller_save = false,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
 
 	// Temporaries
-	{.name = "x28",.number = 28,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x29",.number = 29,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x30",.number = 30,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
-	{.name = "x31",.number = 31,.caller_save = true,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x28",.number = 28,.caller_save = true,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x29",.number = 29,.caller_save = true,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x30",.number = 30,.caller_save = true,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
+	{.name = "x31",.number = 31,.caller_save = true,.dirty = false,.valid = false,.exist = false,.size = XLEN,.type = &reg_x_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
 
 	// Program counter
 	{.name = "pc",.number = RISCV_regnum_PC,.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_pc_accessors,.feature = &feature_riscv_org,.reg_data_type = &PC_reg_data_type,.group = def_GP_regs_name},
 };
-static char const def_FP_regs_name[] = "float";
+static char const def_FPU_regs_name[] = "float";
 static reg const def_FP_regs_array[] = {
 	// FP temporaries
-	{.name = "f0",.number = 0 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f1",.number = 1 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f2",.number = 2 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f3",.number = 3 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f4",.number = 4 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f5",.number = 5 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f6",.number = 6 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f7",.number = 7 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
+	{.name = "f0",.number = 0 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f1",.number = 1 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f2",.number = 2 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f3",.number = 3 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f4",.number = 4 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f5",.number = 5 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f6",.number = 6 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f7",.number = 7 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
 
 	// FP saved registers
-	{.name = "f8",.number = 8 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f9",.number = 9 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
+	{.name = "f8",.number = 8 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f9",.number = 9 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
 
 	// FP arguments/return values
-	{.name = "f10",.number = 10 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f11",.number = 11 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
+	{.name = "f10",.number = 10 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f11",.number = 11 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
 
 	// FP arguments
-	{.name = "f12",.number = 12 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f13",.number = 13 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f14",.number = 14 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f15",.number = 15 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f16",.number = 16 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f17",.number = 17 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
+	{.name = "f12",.number = 12 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f13",.number = 13 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f14",.number = 14 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f15",.number = 15 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f16",.number = 16 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f17",.number = 17 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
 
 	// FP saved registers
-	{.name = "f18",.number = 18 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f19",.number = 19 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f20",.number = 20 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f21",.number = 21 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f22",.number = 22 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f23",.number = 23 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f24",.number = 24 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f25",.number = 25 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f26",.number = 26 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f27",.number = 27 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
+	{.name = "f18",.number = 18 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f19",.number = 19 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f20",.number = 20 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f21",.number = 21 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f22",.number = 22 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f23",.number = 23 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f24",.number = 24 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f25",.number = 25 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f26",.number = 26 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f27",.number = 27 + RISCV_regnum_FP_first,.caller_save = false,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
 
 	// FP temporaries
-	{.name = "f28",.number = 28 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f29",.number = 29 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f30",.number = 30 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
-	{.name = "f31",.number = 31 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = (FPU_ENABLE),.size = FLEN,.type = &reg_f_accessors,.feature = &feature_riscv_org,.reg_data_type = &FP_reg_data_type,.group = def_FP_regs_name},
+	{.name = "f28",.number = 28 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f29",.number = 29 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f30",.number = 30 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
+	{.name = "f31",.number = 31 + RISCV_regnum_FP_first,.caller_save = true,.dirty = false,.valid = false,.exist = false,.feature = &feature_riscv_org,.group = def_FPU_regs_name},
 };
+
 static char const def_CSR_regs_name[] = "system";
 static reg const CSR_not_exists = {.name = "",.caller_save = false,.dirty = false,.valid = false,.exist = true,.size = XLEN,.type = &reg_csr_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_CSR_regs_name};
 static char csr_names[4096][50] = {[0 ... 4095] = {'\0'}};
@@ -3500,13 +3503,10 @@ void
 sc_riscv32__init_regs_cache(target* const p_target)
 {
 	assert(p_target);
-	reg_cache* p_reg_cache_last = p_target->reg_cache = reg_cache__section_create(def_GP_regs_name, def_GP_regs_array, ARRAY_LEN(def_GP_regs_array), p_target);
-	p_reg_cache_last = p_reg_cache_last->next = reg_cache__section_create(def_FP_regs_name, def_FP_regs_array, ARRAY_LEN(def_FP_regs_array), p_target);
-#if 0
-	p_reg_cache_last->next = reg_cache__CSR_section_create(def_CSR_regs_name, def_CSR_regs_array, ARRAY_LEN(def_CSR_regs_array), p_target);
-#else
+	p_target->reg_cache = reg_cache__section_create(def_GP_regs_name, def_GP_regs_array, ARRAY_LEN(def_GP_regs_array), p_target);
+	reg_cache* p_reg_cache_last = p_target->reg_cache;
+	p_reg_cache_last = p_reg_cache_last->next = reg_cache__section_create(def_FPU_regs_name, def_FP_regs_array, ARRAY_LEN(def_FP_regs_array), p_target);
 	p_reg_cache_last->next = reg_cache__CSR_section_create_gdb(def_CSR_regs_name, p_target);
-#endif
 }
 
 void
@@ -3542,6 +3542,47 @@ sc_riscv32__target_create(target* const p_target, Jim_Interp* interp)
 	return ERROR_OK;
 }
 
+static void
+ajust_target_registers_cache(target* const p_target)
+{
+	uint32_t const isa = get_ISA(p_target);
+	bool const RV_I = 0 == (isa & (UINT32_C(1) << ('I' - 'A')));
+	bool const RV_E = 0 == (isa & (UINT32_C(1) << ('E' - 'A')));
+	bool const RV_D = 0 != (isa & (UINT32_C(1) << ('D' - 'A')));
+	bool const RV_F = 0 != (isa & (UINT32_C(1) << ('F' - 'A')));
+	assert(RV_I ^ RV_E);
+	if (RV_I) {
+		assert(0 == (isa & (UINT32_C(1) << ('E' - 'A'))));
+		assert(p_target->reg_cache && p_target->reg_cache->reg_list && 33 == p_target->reg_cache->num_regs);
+		reg* const p_regs = p_target->reg_cache->reg_list;
+		for (int i = 16; i < 32; ++i) {
+			p_regs[i].exist = true;
+		}
+	}
+	if (RV_D) {
+		assert(RV_F);
+		assert(p_target->reg_cache && p_target->reg_cache->next && p_target->reg_cache->next->reg_list && 32 == p_target->reg_cache->next->num_regs);
+		reg* const p_regs = p_target->reg_cache->next->reg_list;
+		for (int i = 0; i < 32; ++i) {
+			reg* const p_reg = &p_regs[i];
+			p_reg->exist = true;
+			p_reg->size = 64;
+			p_reg->type = &reg_FPU_D_accessors;
+			p_reg->reg_data_type = &FPU_D_reg_data_type;
+		}
+	} else if (RV_F) {
+		assert(p_target->reg_cache && p_target->reg_cache->next && p_target->reg_cache->next->reg_list && 32 == p_target->reg_cache->next->num_regs);
+		reg* const p_regs = p_target->reg_cache->next->reg_list;
+		for (int i = 0; i < 32; ++i) {
+			reg* const p_reg = &p_regs[i];
+			p_reg->exist = true;
+			p_reg->size = 32;
+			p_reg->type = &reg_FPU_S_accessors;
+			p_reg->reg_data_type = &FPU_S_reg_data_type;
+		}
+	}
+}
+
 error_code
 sc_riscv32__examine(target* const p_target)
 {
@@ -3574,7 +3615,7 @@ sc_riscv32__examine(target* const p_target)
 			} else {
 				LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE, DBG_ID, sc_rv32_BLD_ID_get(p_target));
 				set_DEMODE_ENBL(p_target, HART_DMODE_ENBL_bits_Normal);
-
+				ajust_target_registers_cache(p_target);
 				if (ERROR_OK == sc_error_code__get(p_target)) {
 					LOG_DEBUG("Examined OK");
 					target_set_examined(p_target);
