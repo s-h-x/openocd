@@ -1,4 +1,4 @@
-/**	@file
+﻿/**	@file
 
 	Syntacore RISC-V targets common methods
 
@@ -286,7 +286,7 @@ enum HART_REGTRANS_indexes
 
 	/**	@brief Hart Debug Data HART_DBG_DATA (HDDR) register.
 
-		Corresponds to the DBG_SCRATCH core�s CSR.
+		Corresponds to the DBG_SCRATCH core's CSR.
 
 		@see Debug scratch CSR
 	*/
@@ -313,8 +313,8 @@ enum HART_DBGCMD_indexes
 	/**	@brief CORE_EXEC (Debug Core Instruction Execution)
 
 	Command carries out execution of a RISC-V instruction
-	resided in the DBGC�s HART_CORE_INSTR register,
-	on a corresponding core�s HART.
+	resided in the DBGC's HART_CORE_INSTR register,
+	on a corresponding core's HART.
 
 	@see HART_CORE_INSTR_index
 	*/
