@@ -63,7 +63,6 @@ struct sc_riscv32__Arch_constants
 	bool use_verify_hart_regtrans_write;  ///< Verify values of HART REGTRANS after write
 	bool use_verify_core_regtrans_write;  ///< Verify values of CORE REGTRANS after write
 	bool use_check_pc_unchanged;          ///< Use assertion to control consistence of CPU debug operations
-	bool use_pc_advmt_dsbl_bit;           ///< Use Debug Controller disable PC advance bit
 	
 	uint32_t expected_idcode;             ///< expected TAP controller IDCODE
 	uint32_t expected_idcode_mask;        ///< expected TAP controller IDCODE mask

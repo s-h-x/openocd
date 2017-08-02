@@ -181,7 +181,6 @@ static sc_riscv32__Arch_constants const scrx_constants = {
 	.use_check_pc_unchanged = true,
 	.use_verify_hart_regtrans_write = true,
 	.use_verify_core_regtrans_write = true,
-	.use_pc_advmt_dsbl_bit = true,
 	.use_queuing_for_dr_scans = true,
 	.expected_idcode = 0xC0DEDEB1u,
 	.expected_idcode_mask = 0xFFF0FFFFu,
