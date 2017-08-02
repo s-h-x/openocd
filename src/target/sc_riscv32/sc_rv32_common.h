@@ -70,7 +70,6 @@ struct sc_riscv32__Arch_constants
 	uint32_t expected_dbg_id;             ///< Lowest required DBG_ID.
 	
 	csr_num_type debug_scratch_CSR;       ///< Syntacore Debug controller CSR (design-dependent)
-	csr_num_type isa_CSR;                 ///< Current target ISA CSR (depends on RISC-V Privileged ISA version)
 
 	unsigned mstatus_FS_offset;           ///< FS bits offsets in `mstatus` CSR (Privileged ISA version-specific)
 

@@ -17,7 +17,6 @@
 enum
 {
 	CSR_sptbr_Pr_ISA_1_7 = 0x180,
-	CSR_mcpuid_Pr_ISA_1_7 = 0xf00,
 
 	/// Machine Protection and Translation
 	/// privilege: MRW
@@ -188,7 +187,6 @@ static sc_riscv32__Arch_constants const scrx_constants = {
 	.expected_idcode_mask = 0xFFF0FFFFu,
 	.expected_dbg_id = 0x00800001u,
 	.debug_scratch_CSR = 0x788u,
-	.isa_CSR = CSR_mcpuid_Pr_ISA_1_7,
 	.mstatus_FS_offset = 12u,
 	.opcode_FMV_D_2X = &sc_RISCV_opcode_S_FMV_D_2X,
 	.opcode_FMV_2X_D = &sc_RISCV_opcode_S_FMV_2X_D,

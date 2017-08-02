@@ -12,12 +12,6 @@
 #include "target/target_type.h"
 #include "helper/log.h"
 
-/// RISC-V Privileged ISA 1.9 CSR
-enum
-{
-	CSR_misa = 0x301u,
-};
-
 static void
 scr1__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
 {
@@ -42,7 +36,6 @@ static sc_riscv32__Arch_constants const scr1_constants = {
 	.expected_idcode_mask = 0xFFFFFFFFu,
 	.expected_dbg_id = 0x00810000u,
 	.debug_scratch_CSR = 0x7C8u,
-	.isa_CSR = CSR_misa,
 	.mstatus_FS_offset = 13u,
 	.opcode_FMV_D_2X = &sc_RISCV_opcode_D_FMV_D_2X,
 	.opcode_FMV_2X_D = &sc_RISCV_opcode_D_FMV_2X_D,
