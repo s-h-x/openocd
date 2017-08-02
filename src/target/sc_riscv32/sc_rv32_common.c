@@ -3546,11 +3546,11 @@ static void
 ajust_target_registers_cache(target* const p_target)
 {
 	uint32_t const isa = get_ISA(p_target);
-	bool const RV_I = 0 == (isa & (UINT32_C(1) << ('I' - 'A')));
-	bool const RV_E = 0 == (isa & (UINT32_C(1) << ('E' - 'A')));
+	bool const RV_I = 0 != (isa & (UINT32_C(1) << ('I' - 'A')));
+	bool const RV_E = 0 != (isa & (UINT32_C(1) << ('E' - 'A')));
 	bool const RV_D = 0 != (isa & (UINT32_C(1) << ('D' - 'A')));
 	bool const RV_F = 0 != (isa & (UINT32_C(1) << ('F' - 'A')));
-	assert(RV_I ^ RV_E);
+	assert(!!(RV_I) ^ !!(RV_E));
 	if (RV_I) {
 		assert(!RV_E);
 		assert(p_target->reg_cache && p_target->reg_cache->reg_list && 33 == p_target->reg_cache->num_regs);
@@ -3558,6 +3558,7 @@ ajust_target_registers_cache(target* const p_target)
 		for (int i = 16; i < 32; ++i) {
 			p_regs[i].exist = true;
 		}
+		LOG_INFO("Re-enable RVI upper X registers");
 	} else if (RV_E) {
 		assert(!RV_I);
 		assert(p_target->reg_cache && p_target->reg_cache->reg_list && 33 == p_target->reg_cache->num_regs);
@@ -3565,6 +3566,7 @@ ajust_target_registers_cache(target* const p_target)
 		for (int i = 16; i < 32; ++i) {
 			p_regs[i].exist = false;
 		}
+		LOG_INFO("Disable RVE upper X registers");
 	}
 
 	if (RV_D) {
@@ -3578,6 +3580,7 @@ ajust_target_registers_cache(target* const p_target)
 			p_reg->type = &reg_FPU_D_accessors;
 			p_reg->reg_data_type = &FPU_D_reg_data_type;
 		}
+		LOG_INFO("Re-enable RVFD FPU registers");
 	} else if (RV_F) {
 		assert(p_target->reg_cache && p_target->reg_cache->next && p_target->reg_cache->next->reg_list && 32 == p_target->reg_cache->next->num_regs);
 		reg* const p_regs = p_target->reg_cache->next->reg_list;
@@ -3588,16 +3591,15 @@ ajust_target_registers_cache(target* const p_target)
 			p_reg->type = &reg_FPU_S_accessors;
 			p_reg->reg_data_type = &FPU_S_reg_data_type;
 		}
+		LOG_INFO("Configure RVF FPU registers");
 	} else {
 		assert(p_target->reg_cache && p_target->reg_cache->next && p_target->reg_cache->next->reg_list && 32 == p_target->reg_cache->next->num_regs);
 		reg* const p_regs = p_target->reg_cache->next->reg_list;
 		for (int i = 0; i < 32; ++i) {
 			reg* const p_reg = &p_regs[i];
 			p_reg->exist = false;
-			p_reg->size = 64;
-			p_reg->type = &reg_FPU_D_accessors;
-			p_reg->reg_data_type = &FPU_D_reg_data_type;
 		}
+		LOG_INFO("Disable RV FPU registers");
 	}
 }
 
