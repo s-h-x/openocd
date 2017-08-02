@@ -1,11 +1,11 @@
-﻿/** @file
+﻿/**	@file
 
-	Syntacore scr1 RISC-V target
+	SCR1 target.
 
-	@copyright Syntacore
+	SCR1 is an open-source (https://github.com/syntacore/scr1) RISC-V compatible MCU core, designed by Syntacore.
+
+	@copyright Syntacore 2016, 2017
 	@author sps (https://github.com/aka-sps)
-
-	@defgroup SC_RV32 Syntacore RISC-V target
 */
 #include "sc_rv32_common.h"
 

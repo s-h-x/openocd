@@ -1,3 +1,12 @@
+/**	@file
+
+	Syntacore RISC-V targets common methods
+
+	@copyright Syntacore 2016, 2017
+	@author sps (https://github.com/aka-sps)
+
+	@defgroup SC_RV32 Syntacore RISC-V target
+*/
 #ifndef TARGET_SC_RV32_COMMON_H_
 #define TARGET_SC_RV32_COMMON_H_
 
@@ -46,62 +55,74 @@ enum
 
 struct sc_riscv32__Arch_constants
 {
-	/// Don't make irscan if IR is the same
-	bool use_ir_select_cache;
+	/// Debug controller related parameters
+	bool use_ir_select_cache;             ///< Don't make irscan if IR is the same
+	bool use_queuing_for_dr_scans;        ///< DR scan queuing instead separate
+	bool use_dap_control_cache;           ///< Don't write to DAP_CONTROL if it has same value
+	bool use_verify_dap_control;          ///< Verify value of DAP_CONTROL after write
+	bool use_verify_hart_regtrans_write;  ///< Verify values of HART REGTRANS after write
+	bool use_verify_core_regtrans_write;  ///< Verify values of CORE REGTRANS after write
+	bool use_check_pc_unchanged;          ///< Use assertion to control consistence of CPU debug operations
+	bool use_pc_advmt_dsbl_bit;           ///< Use Debug Controller disable PC advance bit
+	
+	uint32_t expected_idcode;             ///< expected TAP controller IDCODE
+	uint32_t expected_idcode_mask;        ///< expected TAP controller IDCODE mask
+	uint32_t expected_dbg_id;             ///< Lowest required DBG_ID.
+	
+	csr_num_type debug_scratch_CSR;       ///< Syntacore Debug controller CSR (design-dependent)
+	csr_num_type isa_CSR;                 ///< Current target ISA CSR (depends on RISC-V Privileged ISA version)
 
-	/// Don't write DAP_CONTROL if it is the same
-	bool use_dap_control_cache;
+	unsigned mstatus_FS_offset;           ///< FS bits offsets in `mstatus` CSR (Privileged ISA version-specific)
 
-	/// Verify value of DAP_CONTROL after write
-	bool use_verify_dap_control;
-	bool use_check_pc_unchanged;
+	/// Privileged ISA version-specific virtual to physical address translation virtual method
+	void
+	(*virt_to_phis)(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
 
-	/// Verify values of HART REGTRANS after write
-	bool use_verify_hart_regtrans_write;
+	/// Syntacore architecture extensions
+	/// @{
 
-	/// Verify values of CORE REGTRANS after write
-	bool use_verify_core_regtrans_write;
-	bool use_pc_advmt_dsbl_bit;
-	bool use_queuing_for_dr_scans;
-	/// expected TAP controller IDCODE
-	uint32_t expected_idcode;
-	/// expected TAP controller IDCODE mask
-	uint32_t expected_idcode_mask;
+	/// Generate custom instruction opcode to combine values from two integer 32-bit registers into single 64-bit FPU register
+	rv_instruction32_type
+	(*opcode_FMV_D_2X)(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo);
 
-	/** Lowest required DBG_ID
-	Required and provided masked values should be equal.
-	*/
-	uint32_t expected_dbg_id;
-	/// Syntacore Debug controller CSR
-	csr_num_type debug_scratch_CSR;
-	csr_num_type isa_CSR;
-	unsigned mstatus_FS_offset;
-	rv_instruction32_type(*opcode_FMV_D_2X)(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo);
-	rv_instruction32_type(*opcode_FMV_2X_D)(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp);
-	void(*virt_to_phis)(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
+	/// Generate custom instruction opcode to split single 64-bit FPU register value to two different integer 32-bit registers
+	rv_instruction32_type
+	(*opcode_FMV_2X_D)(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp);
+
+	/// @}
 };
 typedef struct sc_riscv32__Arch_constants sc_riscv32__Arch_constants;
 
 struct sc_riscv32__Arch {
-	/// stored sub-operations error_code
-	error_code error_code;
-	/// Cache DAP_CTRL
-	uint8_t last_DAP_ctrl;
+	error_code error_code;                       ///< stored sub-operations error_code
+	uint8_t last_DAP_ctrl;                       ///< DAP_CTRL cache
 	sc_riscv32__Arch_constants const* constants;
 };
 typedef struct sc_riscv32__Arch sc_riscv32__Arch;
 
+/// Sub-operation error code handling methods
+///@{
+
+/// @brief Get operation code stored in the target context.
 error_code
 sc_error_code__get(target const* const p_target);
 
+/// @brief get stored target context operation code and reset stored code to ERROR_OK.
 error_code
 sc_error_code__get_and_clear(target const* const p_target);
 
+/**	@brief Update error context.
+
+	Store first occurred code that is no equal to ERROR_OK into target context.
+
+	@return first not equal ERROR_OK code or else ERROR_OK
+*/
 error_code
 sc_error_code__update(target const* const p_target, error_code const a_error_code);
+/// @}
 
 void
-sc_rv32_update_status(target* const p_target);
+sc_riscv32__update_status(target* const p_target);
 
 error_code
 sc_riscv32__poll(target* const p_target);
@@ -166,16 +187,22 @@ sc_riscv32__init_regs_cache(target* const p_target);
 error_code
 sc_riscv32__virt2phys(target* p_target, uint32_t address, uint32_t* p_physical);
 
+/// Old Syntacore opcode extensions
+/// @{
 rv_instruction32_type
 sc_RISCV_opcode_S_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp);
 
 rv_instruction32_type
 sc_RISCV_opcode_S_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo);
+/// @}
 
+/// New Syntacore opcode extensions
+/// @{
 rv_instruction32_type
 sc_RISCV_opcode_D_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp);
 
 rv_instruction32_type
 sc_RISCV_opcode_D_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo);
+/// @}
 
 #endif  // TARGET_SC_RV32_COMMON_H_

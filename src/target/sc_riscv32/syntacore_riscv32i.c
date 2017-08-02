@@ -1,11 +1,9 @@
-﻿/** @file
+﻿/**	@file
 
 	Syntacore RISC-V target
 
-	@copyright Syntacore
+	@copyright Syntacore 2016, 2017
 	@author sps (https://github.com/aka-sps)
-
-	@defgroup SC_RV32 Syntacore RISC-V target
 */
 #include "sc_rv32_common.h"
 
@@ -105,11 +103,11 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 								*p_bound = bound - address;
 							}
 						} else {
-							sc_rv32_update_status(p_target);
+							sc_riscv32__update_status(p_target);
 						}
 					}
 				} else {
-					sc_rv32_update_status(p_target);
+					sc_riscv32__update_status(p_target);
 				}
 			}
 			break;
@@ -154,14 +152,14 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 									}
 								}
 							} else {
-								sc_rv32_update_status(p_target);
+								sc_riscv32__update_status(p_target);
 							}
 						}
 					} else {
-						sc_rv32_update_status(p_target);
+						sc_riscv32__update_status(p_target);
 					}
 				} else {
-					sc_rv32_update_status(p_target);
+					sc_riscv32__update_status(p_target);
 				}
 			}
 			break;
@@ -173,7 +171,7 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 			break;
 		}
 	} else {
-		sc_rv32_update_status(p_target);
+		sc_riscv32__update_status(p_target);
 	}
 }
 
@@ -249,7 +247,7 @@ scrx_1_7__mmu(target* p_target, int* p_mmu_enabled)
 			}
 		}
 	} else {
-		sc_rv32_update_status(p_target);
+		sc_riscv32__update_status(p_target);
 	}
 
 	return sc_error_code__get_and_clear(p_target);
