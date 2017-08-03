@@ -3583,7 +3583,8 @@ sc_riscv32__write_phys_memory(target* const p_target, uint32_t address, uint32_t
 		return sc_error_code__get_and_clear(p_target);
 	}
 
-	if (count == 0) {
+	if (0 == count) {
+		LOG_WARNING("Zero items count");
 		return sc_error_code__get_and_clear(p_target);
 	}
 
