@@ -1602,7 +1602,7 @@ sc_rv32_EXEC__setup(target const* const p_target)
 static inline error_code
 sc_rv32_EXEC__push_data_to_CSR(target const* const p_target, uint32_t const csr_data)
 {
-	if (sc_error_code__get(p_target) == ERROR_OK) {
+	if (ERROR_OK == sc_error_code__get(p_target)) {
 		/// @note Skipped if error detected
 		sc_rv32_DAP_CMD_scan(p_target, DBGDATA_WR_index, csr_data, NULL);
 	}
@@ -2583,7 +2583,7 @@ reg_FPU_D__get(reg* const p_reg)
 					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_2->number), &value_lo)) {
 						/// Exec NOP instruction and get previous instruction CSR result.
 						uint32_t value_hi;
-						if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_NOP(0, 0, 0), &value_hi)) {
+						if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_NOP(), &value_hi)) {
 							buf_set_u64(p_reg->value, 0, p_reg->size, (FPU_D ? (uint64_t)value_hi << 32 : 0u) | (uint64_t)value_lo);
 							p_reg->valid = true;
 							p_reg->dirty = false;
