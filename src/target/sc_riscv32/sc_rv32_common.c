@@ -36,17 +36,21 @@
 #define IS_VALID_SIGNED_IMMEDIATE_FIELD(FLD, SIGN_BIT, LOW_ZEROS) ( (FLD) == NORMALIZE_INT_FIELD((FLD), (SIGN_BIT), (LOW_ZEROS)) )
 
 /// Specialized assert check that register number is 5 bits only
+/// @todo static_assert
 #define CHECK_REG(REG) assert(IS_VALID_UNSIGNED_FIELD(REG,5))
-#define CHECK_OPCODE(OPCODE) assert(IS_VALID_UNSIGNED_FIELD(OPCODE,7) && (OPCODE & LOW_BITS_MASK(2)) == LOW_BITS_MASK(2) && (OPCODE & LOW_BITS_MASK(5)) != LOW_BITS_MASK(5))
+/// @todo static_assert
+#define CHECK_OPCODE(OPCODE) (assert(IS_VALID_UNSIGNED_FIELD(OPCODE,7) && (OPCODE & LOW_BITS_MASK(2)) == LOW_BITS_MASK(2) && (OPCODE & LOW_BITS_MASK(5)) != LOW_BITS_MASK(5)))
 
 /// Specialized asserts to check format of RISC-V immediate
 /// @{
-#define CHECK_IMM_11_00(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 11, 0));
-#define CHECK_IMM_12_01(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 12, 1));
-#define CHECK_IMM_20_01(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 20, 1));
+#define CHECK_IMM_11_00(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 11, 0))
+#define CHECK_IMM_12_01(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 12, 1))
+#define CHECK_IMM_20_01(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 20, 1))
 /// @}
 
+/// @todo static_assert
 #define CHECK_FUNC7(F) assert(IS_VALID_UNSIGNED_FIELD(F,7))
+/// @todo static_assert
 #define CHECK_FUNC3(F) assert(IS_VALID_UNSIGNED_FIELD(F,3))
 
 /** Number of octets required for 'num_bits' bits
@@ -648,185 +652,121 @@ sc_error_code__prepend(target const* const p_target, error_code const older_err_
 /** RISC-V instruction encoding.
 */
 /// @{
-static rv_instruction32_type
-RISCV_opcode_INSTR_R_TYPE(uint8_t func7, reg_num_type rs2, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
-{
-	CHECK_OPCODE(opcode);
-	CHECK_FUNC3(func3);
-	CHECK_FUNC7(func7);
-	CHECK_REG(rs2);
-	CHECK_REG(rs1);
-	CHECK_REG(rd);
-	return
-		MAKE_TYPE_FIELD(rv_instruction32_type, func7, 25, 31) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, rs2, 20, 24) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, rd, 7, 11) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
-}
 
-static rv_instruction32_type
-RISCV_opcode_INSTR_I_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs1, uint8_t func3, reg_num_type rd, uint8_t opcode)
-{
-	CHECK_OPCODE(opcode);
-	CHECK_REG(rd);
-	CHECK_REG(rs1);
-	CHECK_FUNC3(func3);
-	CHECK_IMM_11_00(imm_11_00);
-	return
-		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 0, 11), 20, 31) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, rd, 7, 11) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
-}
+#define RISCV_OPCODE_INSTR_R_TYPE(func7, rs2, rs1, func3, rd, opcode) (\
+	CHECK_OPCODE(opcode), \
+	CHECK_FUNC3(func3), \
+	CHECK_FUNC7(func7), \
+	CHECK_REG(rs2), \
+	CHECK_REG(rs1), \
+	CHECK_REG(rd), \
+	MAKE_TYPE_FIELD(rv_instruction32_type, (func7), 25, 31) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, (rs2), 20, 24) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, (rs1), 15, 19) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, (func3), 12, 14) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, (rd), 7, 11) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, (opcode), 0, 6) )
 
-static rv_instruction32_type
-RISCV_opcode_INSTR_S_TYPE(riscv_short_signed_type imm_11_00, reg_num_type rs2, reg_num_type rs1, unsigned func3, uint8_t opcode)
-{
-	CHECK_OPCODE(opcode);
-	CHECK_REG(rs2);
-	CHECK_REG(rs1);
-	CHECK_FUNC3(func3);
-	CHECK_IMM_11_00(imm_11_00);
-	return
-		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 5, 11), 25, 31) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, rs2, 20, 24) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 0, 4), 7, 11) |
-		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6);
-}
+#define RISCV_OPCODE_INSTR_I_TYPE(imm_11_00, rs1, func3, rd, opcode) ( \
+	CHECK_OPCODE(opcode), \
+	CHECK_FUNC3(func3), \
+	CHECK_REG(rd), \
+	CHECK_REG(rs1), \
+	CHECK_IMM_11_00(imm_11_00), \
+	MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD((imm_11_00), 0, 11), 20, 31) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, (rs1), 15, 19) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, (func3), 12, 14) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, (rd), 7, 11) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, (opcode), 0, 6) )
 
-static inline rv_instruction32_type
-RISCV_opcode_FMV_X_S(reg_num_type rd, reg_num_type rs1_fp)
-{
-	return RISCV_opcode_INSTR_R_TYPE(0x70u, 0u, rs1_fp, 0u, rd, 0x53u);
-}
+#define RISCV_OPCODE_INSTR_S_TYPE(imm_11_00, rs2, rs1, func3, opcode) ( \
+	CHECK_OPCODE(opcode), \
+	CHECK_FUNC3(func3), \
+	CHECK_IMM_11_00(imm_11_00), \
+	CHECK_REG(rs2), \
+	CHECK_REG(rs1), \
+	MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 5, 11), 25, 31) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, rs2, 20, 24) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 0, 4), 7, 11) | \
+	MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6) )
 
-static inline rv_instruction32_type
-RISCV_opcode_FMV_S_X(reg_num_type rd_fp, reg_num_type rs1)
-{
-	return RISCV_opcode_INSTR_R_TYPE(0x78u, 0u, rs1, 0u, rd_fp, 0x53u);
-}
+#define RISCV_OPCODE_FMV_X_S(rd, rs1_fp) RISCV_OPCODE_INSTR_R_TYPE(0x70u, 0u, (rs1_fp), 0u, (rd), 0x53u)
+#define RISCV_OPCODE_FMV_S_X(rd_fp, rs1) RISCV_OPCODE_INSTR_R_TYPE(0x78u, 0u, (rs1), 0u, (rd_fp), 0x53u)
+#define RISCV_OPCODE_ADDI(rd, rs1, imm) RISCV_OPCODE_INSTR_I_TYPE((imm), (rs1), 0u, (rd), 0x13u)
+#define RISCV_OPCODE_NOP() RISCV_OPCODE_ADDI(0, 0, 0)
+#define RISCV_OPCODE_JALR(rd, rs1, imm) RISCV_OPCODE_INSTR_I_TYPE((imm), (rs1), 0u, (rd), 0x67u)
+#define RISCV_OPCODE_CSRRW(rd, csr, rs1) RISCV_OPCODE_INSTR_I_TYPE(NORMALIZE_INT_FIELD((csr), 11, 0), (rs1), 1u, (rd), 0x73u)
+#define RISCV_OPCODE_CSRRS(rd, csr, rs1) RISCV_OPCODE_INSTR_I_TYPE(NORMALIZE_INT_FIELD((csr), 11, 0), (rs1), 2u, (rd), 0x73u)
+#define RISCV_OPCODE_EBREAK() RISCV_OPCODE_INSTR_I_TYPE(1, 0u, 0u, 0u, 0x73u)
+
+#define RISCV_OPCODE_CSRW(csr, rs1) RISCV_OPCODE_CSRRW(0, (csr), (rs1))
+#define RISCV_OPCODE_CSRR(rd, csr) RISCV_OPCODE_CSRRS((rd), csr, 0)
+#define RISCV_OPCODE_C_EBREAK(void) (0x9002u)
 
 static rv_instruction32_type
 RISCV_opcode_LB(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x03u);
+	return RISCV_OPCODE_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x03u);
 }
 
 static rv_instruction32_type
 RISCV_opcode_LH(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 1u, rd, 0x03u);
+	return RISCV_OPCODE_INSTR_I_TYPE(imm, rs1, 1u, rd, 0x03u);
 }
 
 static rv_instruction32_type
 RISCV_opcode_LW(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 2u, rd, 0x03u);
-}
-
-static inline rv_instruction32_type
-RISCV_opcode_ADDI(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x13u);
-}
-
-static rv_instruction32_type
-RISCV_opcode_NOP(void)
-{
-	return RISCV_opcode_ADDI(0, 0, 0);
-}
-
-static inline rv_instruction32_type
-RISCV_opcode_JALR(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
-{
-	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x67u);
-}
-
-static inline rv_instruction32_type
-RISCV_opcode_CSRRW(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
-{
-	return RISCV_opcode_INSTR_I_TYPE(NORMALIZE_INT_FIELD(csr, 11, 0), rs1, 1u, rd, 0x73u);
-}
-
-static inline rv_instruction32_type
-RISCV_opcode_CSRRS(reg_num_type rd, csr_num_type csr, reg_num_type rs1)
-{
-	return RISCV_opcode_INSTR_I_TYPE(NORMALIZE_INT_FIELD(csr, 11, 0), rs1, 2u, rd, 0x73u);
-}
-
-static inline rv_instruction32_type
-RISCV_opcode_EBREAK(void)
-{
-	return RISCV_opcode_INSTR_I_TYPE(1, 0u, 0u, 0u, 0x73u);
+	return RISCV_OPCODE_INSTR_I_TYPE(imm, rs1, 2u, rd, 0x03u);
 }
 
 static inline rv_instruction32_type
 RISCV_opcode_SB(reg_num_type rs_data, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RISCV_opcode_INSTR_S_TYPE(imm, rs_data, rs1, 0u, 0x23);
+	return RISCV_OPCODE_INSTR_S_TYPE(imm, rs_data, rs1, 0u, 0x23);
 }
 
 static inline rv_instruction32_type
 RISCV_opcode_SH(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RISCV_opcode_INSTR_S_TYPE(imm, rs, rs1, 1u, 0x23);
+	return RISCV_OPCODE_INSTR_S_TYPE(imm, rs, rs1, 1u, 0x23);
 }
 
 static inline rv_instruction32_type
 RISCV_opcode_SW(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
 {
-	return RISCV_opcode_INSTR_S_TYPE(imm, rs, rs1, 2u, 0x23);
-}
-
-static inline rv_instruction32_type
-RISCV_opcode_CSRW(unsigned csr, reg_num_type rs1)
-{
-	return RISCV_opcode_CSRRW(0, csr, rs1);
-}
-
-static inline rv_instruction32_type
-RISCV_opcode_CSRR(reg_num_type rd, csr_num_type csr)
-{
-	return RISCV_opcode_CSRRS(rd, csr, 0);
-}
-
-static inline rv_instruction16_type
-RISCV_opcode_C_EBREAK(void)
-{
-	return 0x9002u;
+	return RISCV_OPCODE_INSTR_S_TYPE(imm, rs, rs1, 2u, 0x23);
 }
 
 /// SC custom instruction copy FPU double precision register value to two 32-bits GP registers (based on S-extension opcode)
 rv_instruction32_type
 sc_RISCV_opcode_S_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp)
 {
-	return RISCV_opcode_INSTR_R_TYPE(0x70u, rd_hi, rs1_fp, 0u, rd_lo, 0x53u);
+	return RISCV_OPCODE_INSTR_R_TYPE(0x70u, rd_hi, rs1_fp, 0u, rd_lo, 0x53u);
 }
 
 /// SC custom instruction to combine from two GP registers values to FPU double precision register value (based on S-extension opcode)
 rv_instruction32_type
 sc_RISCV_opcode_S_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo)
 {
-	return RISCV_opcode_INSTR_R_TYPE(0x78u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
+	return RISCV_OPCODE_INSTR_R_TYPE(0x78u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
 }
 
 /// SC custom instruction copy FPU double precision register value to two 32-bits GP registers (based on D-extension opcode)
 rv_instruction32_type
 sc_RISCV_opcode_D_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type rs1_fp)
 {
-	return RISCV_opcode_INSTR_R_TYPE(0x71u, rd_hi, rs1_fp, 0u, rd_lo, 0x53u);
+	return RISCV_OPCODE_INSTR_R_TYPE(0x71u, rd_hi, rs1_fp, 0u, rd_lo, 0x53u);
 }
 
 /// SC custom instruction to combine from two GP registers values to FPU double precision register value (based on D-extension opcode)
 rv_instruction32_type
 sc_RISCV_opcode_D_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo)
 {
-	return RISCV_opcode_INSTR_R_TYPE(0x79u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
+	return RISCV_OPCODE_INSTR_R_TYPE(0x79u, rs_hi, rs_lo, 0u, rd_fp, 0x53u);
 }
 
 /// @}
@@ -1055,34 +995,37 @@ DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_gro
 	/// Select read function of DAP_CTRL.
 	IR_select(p_target, TAP_instruction_DAP_CTRL_RD);
 
+	if (ERROR_OK != sc_error_code__get(p_target)) {
+		/// Restore previous error (if it was)
+		return sc_error_code__prepend(p_target, old_err_code);
+	}
+
+	/// Prepare DR scan to read actual value of DAP_CTR.
+	uint8_t get_dap_unit_group = 0;
+	uint8_t set_dap_unit_group_mask = 0x0Fu;
+	static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof get_dap_unit_group, "Bad size");
+	scan_field const field = {
+		.num_bits = TAP_length_of_DAP_CTRL,
+		.in_value = &get_dap_unit_group,
+		/// with checking for expected value.
+		.check_value = &set_dap_unit_group,
+		.check_mask = &set_dap_unit_group_mask,
+	};
+	jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
+
+	/// Enforce jtag_execute_queue() to get get_dap_unit_group.
+	sc_error_code__update(p_target, jtag_execute_queue());
+	LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
+
 	if (ERROR_OK == sc_error_code__get(p_target)) {
-		/// Prepare DR scan to read actual value of DAP_CTR.
-		uint8_t get_dap_unit_group = 0;
-		uint8_t set_dap_unit_group_mask = 0x0Fu;
-		static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof get_dap_unit_group, "Bad size");
-		scan_field const field = {
-			.num_bits = TAP_length_of_DAP_CTRL,
-			.in_value = &get_dap_unit_group,
-			/// with checking for expected value.
-			.check_value = &set_dap_unit_group,
-			.check_mask = &set_dap_unit_group_mask,
-		};
-		jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
-
-		/// Enforce jtag_execute_queue() to get get_dap_unit_group.
-		sc_error_code__update(p_target, jtag_execute_queue());
-		LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
-
-		if (ERROR_OK == sc_error_code__get(p_target)) {
-			/// If no errors
-			if (get_dap_unit_group == set_dap_unit_group) {
-				/// and read value is equal to expected then update DAP_CTRL cache,
-				update_DAP_CTRL_cache(p_target, get_dap_unit_group);
-			} else {
-				/// else report error.
-				LOG_ERROR("Unit/Group verification error: set 0x%1X, but get 0x%1X!", set_dap_unit_group, get_dap_unit_group);
-				sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
-			}
+		/// If no errors
+		if (get_dap_unit_group == set_dap_unit_group) {
+			/// and read value is equal to expected then update DAP_CTRL cache,
+			update_DAP_CTRL_cache(p_target, get_dap_unit_group);
+		} else {
+			/// else report error.
+			LOG_ERROR("Unit/Group verification error: set 0x%1X, but get 0x%1X!", set_dap_unit_group, get_dap_unit_group);
+			sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 		}
 	}
 
@@ -1105,46 +1048,48 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 	/// Select DAP_CMD IR.
 	IR_select(p_target, TAP_instruction_DAP_CMD);
 
+	if (ERROR_OK != sc_error_code__get(p_target)) {
+		/// Restore previous error (if it was)
+		return sc_error_code__prepend(p_target, old_err_code);
+	}
+	/// Prepare DR scan for two fields.
+
+	/// Copy output payload to buffer.
+	uint8_t dap_opcode_ext[NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE_EXT)] = {};
+	buf_set_u32(dap_opcode_ext, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, DAP_OPCODE_EXT);
+
+	/// Reserve and init buffer for payload input.
+	uint8_t dbg_data[NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE_EXT)] = {};
+
+	/// Prepare operation status buffer.
+	uint8_t DAP_OPSTATUS = 0;
+	static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE) == sizeof DAP_OPSTATUS, "Bad size");
+	scan_field const fields[2] = {
+		{.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext,.in_value = dbg_data},
+		/// Pass DAP_OPCODE bits. Check receiving DAP_OPSTATUS good/error bits.
+		{.num_bits = TAP_length_of_DAP_CMD_OPCODE,.out_value = &DAP_OPCODE,.in_value = &DAP_OPSTATUS,.check_value = &obj_DAP_opstatus_GOOD,.check_mask = &obj_DAP_status_MASK,},
+	};
+
+	/// Add DR scan to queue.
+	assert(p_target->tap);
+	jtag_add_dr_scan_check(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
+
+	/// Enforse jtag_execute_queue() to get values
+	sc_error_code__update(p_target, jtag_execute_queue());
+	/// Log DR scan debug information.
+	LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X ; # %08X %1X", p_target->cmd_name,
+				fields[0].num_bits, DAP_OPCODE_EXT,
+				fields[1].num_bits, DAP_OPCODE,
+				buf_get_u32(dbg_data, 0, TAP_length_of_DAP_CMD_OPCODE_EXT), DAP_OPSTATUS);
+
 	if (ERROR_OK == sc_error_code__get(p_target)) {
-		/// Prepare DR scan for two fields.
-
-		/// Copy output payload to buffer.
-		uint8_t dap_opcode_ext[NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE_EXT)] = {};
-		buf_set_u32(dap_opcode_ext, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, DAP_OPCODE_EXT);
-
-		/// Reserve and init buffer for payload input.
-		uint8_t dbg_data[NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE_EXT)] = {};
-
-		/// Prepare operation status buffer.
-		uint8_t DAP_OPSTATUS = 0;
-		static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE) == sizeof DAP_OPSTATUS, "Bad size");
-		scan_field const fields[2] = {
-			{.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext,.in_value = dbg_data},
-			/// Pass DAP_OPCODE bits. Check receiving DAP_OPSTATUS good/error bits.
-			{.num_bits = TAP_length_of_DAP_CMD_OPCODE,.out_value = &DAP_OPCODE,.in_value = &DAP_OPSTATUS,.check_value = &obj_DAP_opstatus_GOOD,.check_mask = &obj_DAP_status_MASK,},
-		};
-
-		/// Add DR scan to queue.
-		assert(p_target->tap);
-		jtag_add_dr_scan_check(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
-
-		/// Enforse jtag_execute_queue() to get values
-		sc_error_code__update(p_target, jtag_execute_queue());
-		/// Log DR scan debug information.
-		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X ; # %08X %1X", p_target->cmd_name,
-				  fields[0].num_bits, DAP_OPCODE_EXT,
-				  fields[1].num_bits, DAP_OPCODE,
-				  buf_get_u32(dbg_data, 0, TAP_length_of_DAP_CMD_OPCODE_EXT), DAP_OPSTATUS);
-
-		if (ERROR_OK == sc_error_code__get(p_target)) {
-			if ((DAP_OPSTATUS & DAP_status_MASK) != DAP_status_good) {
-				/// Check and report if error was detected.
-				LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
-				sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
-			} else if (p_result) {
-				/// or copy result bits to output if 'p_result' pointer is not NULL.
-				*p_result = buf_get_u32(dbg_data, 0, TAP_length_of_DAP_CMD_OPCODE_EXT);
-			}
+		if ((DAP_OPSTATUS & DAP_status_MASK) != DAP_status_good) {
+			/// Check and report if error was detected.
+			LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
+			sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
+		} else if (p_result) {
+			/// or copy result bits to output if 'p_result' pointer is not NULL.
+			*p_result = buf_get_u32(dbg_data, 0, TAP_length_of_DAP_CMD_OPCODE_EXT);
 		}
 	}
 
@@ -1321,7 +1266,7 @@ REGTRANS_scan_type(bool const write, uint8_t const index)
 /**	@brief Try to clear errors bit of core
 @todo Describe details
 */
-static void
+static inline void
 sc_rv32_CORE_clear_errors(target* const p_target)
 {
 	LOG_DEBUG("========= Try to clear core errors ============");
@@ -1417,7 +1362,9 @@ sc_rv32_DAP_CTRL_REG_set(target const* const p_target, type_dbgc_unit_id_e const
 
 	invalidate_DAP_CTR_cache(p_target);
 	error_code const old_err_code = sc_error_code__get_and_clear(p_target);
-	DAP_CTRL_REG_set_force(p_target, set_dap_unit_group);
+	if (ERROR_OK != DAP_CTRL_REG_set_force(p_target, set_dap_unit_group)) {
+		return sc_error_code__prepend(p_target, old_err_code);
+	}
 
 	if (p_arch->constants->use_verify_dap_control) {
 		sc_error_code__get_and_clear(p_target);
@@ -1440,15 +1387,14 @@ static error_code
 REGTRANS_write(target const* const p_target, type_dbgc_unit_id_e func_unit, uint8_t const func_group, uint8_t const index, uint32_t const data)
 {
 	/// Set upper level multiplexer to access unit/group.
-	if (ERROR_OK == sc_rv32_DAP_CTRL_REG_set(p_target, func_unit, func_group)) {
-		/// And (if no errors) perform single DR scan with 4-bits field write bit/index bits and 32-bits data.
-		return sc_rv32_DAP_CMD_scan(p_target, REGTRANS_scan_type(true, index), data, NULL);
-	} else {
-		/// Or else, report error and do not scan.
+	if (ERROR_OK != sc_rv32_DAP_CTRL_REG_set(p_target, func_unit, func_group)) {
+		/// On error report and do not scan.
 		/// @todo LOG_ERROR?
 		LOG_WARNING("DAP_CTRL_REG_set error");
 		return sc_error_code__get(p_target);
 	}
+	/// If no errors perform single DR scan with 4-bits field write bit/index bits and 32-bits data.
+	return sc_rv32_DAP_CMD_scan(p_target, REGTRANS_scan_type(true, index), data, NULL);
 }
 
 /**	@brief Common REGTRANS read operation
@@ -1650,30 +1596,33 @@ HART_status_bits_to_target_state(uint32_t const status)
 	}
 }
 
-static uint32_t
-try_to_get_ready(target* const p_target)
+static error_code
+try_to_get_ready(target* const p_target, uint32_t* p_core_status)
 {
-	uint32_t core_status;
-	sc_rv32_DBG_STATUS_get(p_target, &core_status);
+	if (ERROR_OK == sc_rv32_DBG_STATUS_get(p_target, p_core_status)) {
+		return sc_error_code__get(p_target);
+	}
 
-	if ((core_status & DBG_STATUS_bit_Ready) != 0) {
-		return core_status;
+	if (0 != (*p_core_status & DBG_STATUS_bit_Ready)) {
+		return sc_error_code__get(p_target);
 	}
 
 	static unsigned const max_retries = 10u;
 
 	for (unsigned i = 2; i <= max_retries; ++i) {
 		sc_error_code__get_and_clear(p_target);
-		sc_rv32_DBG_STATUS_get(p_target, &core_status);
+		if (ERROR_OK != sc_rv32_DBG_STATUS_get(p_target, p_core_status)) {
+			continue;
+		}
 
-		if ((core_status & DBG_STATUS_bit_Ready) != 0) {
-			LOG_DEBUG("Ready: 0x%08X after %d requests", core_status, i);
-			return core_status;
+		if (0 != (*p_core_status & DBG_STATUS_bit_Ready)) {
+			LOG_DEBUG("Ready: 0x%08X after %d requests", *p_core_status, i);
+			return sc_error_code__get(p_target);
 		}
 	}
 
-	LOG_ERROR("Not ready: 0x%08X after %d requests", core_status, max_retries);
-	return core_status;
+	LOG_ERROR("Not ready: 0x%08X after %d requests", *p_core_status, max_retries);
+	return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 }
 
 /**	@brief Read DMODE_CAUSE and try to encode to enum target_debug_reason
@@ -1702,7 +1651,7 @@ read_debug_cause(target* const p_target, target_debug_reason* p_reason)
 		*p_reason = DBG_REASON_DBGRQ;
 		return sc_error_code__get(p_target);
 	}
-	*p_reason = DBG_REASON_DBGRQ;
+	*p_reason = DBG_REASON_UNDEFINED;
 	return sc_error_code__get(p_target);
 }
 
@@ -1793,7 +1742,8 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		LOG_ERROR("Debug controller/JTAG error! Try to re-examine!");
 		return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 	} else {
-		uint32_t core_status = try_to_get_ready(p_target);
+		uint32_t core_status;
+		try_to_get_ready(p_target, &core_status);
 
 		if (0 != (core_status & DBG_STATUS_bit_Lock)) {
 			LOG_ERROR("Lock detected: 0x%08X", core_status);
@@ -1896,14 +1846,13 @@ reg__invalidate(reg* const p_reg)
 static inline void
 reg__set_valid_value_to_cache(reg* const p_reg, uint32_t const value)
 {
-	assert(p_reg);
-	assert(p_reg->exist);
-
 	static_assert(CHAR_BIT == 8, "Unsupported char size");
+	assert(p_reg);
 	assert(p_reg->size <= CHAR_BIT * sizeof value);
 
 	LOG_DEBUG("Updating cache from register %s to 0x%08X", p_reg->name, value);
 
+	assert(p_reg->exist);
 	assert(p_reg->value);
 	buf_set_u32(p_reg->value, 0, p_reg->size, value);
 
@@ -1917,7 +1866,6 @@ reg__set_new_cache_value(reg* const p_reg, uint8_t* const buf)
 	assert(p_reg);
 	assert(p_reg->exist);
 	assert(buf);
-
 	switch (p_reg->size) {
 	case 32:
 		LOG_DEBUG("Set register %s cache to 0x%08X", p_reg->name, buf_get_u32(buf, 0, p_reg->size));
@@ -2036,14 +1984,14 @@ reg_x__get(reg* const p_reg)
 					}
 
 					// Save p_reg->number register to Debug scratch CSR
-					if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_reg->number), NULL)) {
+					if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_reg->number), NULL)) {
 						return sc_error_code__get_and_clear(p_target);
 					}
 
 					/// Exec NOP instruction and get previous instruction CSR result.
 					uint32_t value;
 
-					if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_opcode_NOP(), &value)) {
+					if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value)) {
 						return sc_error_code__get_and_clear(p_target);
 					}
 
@@ -2090,7 +2038,7 @@ reg_x__store(reg* const p_reg)
 
 	assert(p_reg->valid);
 	assert(p_reg->dirty);
-	sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_reg->number, p_arch->constants->debug_scratch_CSR), NULL);
+	sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_reg->number, p_arch->constants->debug_scratch_CSR), NULL);
 	p_reg->dirty = false;
 
 	LOG_DEBUG("Store register value 0x%08X from cache to register %s", buf_get_u32(p_reg->value, 0, p_reg->size), p_reg->name);
@@ -2220,11 +2168,11 @@ sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 
 			if (ERROR_OK == sc_rv32_EXEC__setup(p_target)) {
 				/// Copy values to temporary register
-				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, csr_number), NULL)) {
+				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg->number, csr_number), NULL)) {
 					/// and store temporary register to Debug scratch CSR.
-					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg->number), NULL)) {
+					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg->number), NULL)) {
 						/// Exec NOP instruction and get previous instruction CSR result.
-						sc_rv32_EXEC__step(p_target, RISCV_opcode_NOP(), &value);
+						sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value);
 					} else {
 						sc_riscv32__update_status(p_target);
 					}
@@ -2334,7 +2282,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 
 		if (ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size))) {
 			// set temporary register value to restoring pc value
-			sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR), NULL);
+			sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR), NULL);
 
 			if (ERROR_OK == sc_error_code__get(p_target)) {
 				assert(p_wrk_reg->dirty);
@@ -2343,7 +2291,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 				sc_rv32_EXEC__setup(p_target);
 
 				/// and exec JARL to set pc
-				sc_rv32_EXEC__step(p_target, RISCV_opcode_JALR(0, p_wrk_reg->number, 0), NULL);
+				sc_rv32_EXEC__step(p_target, RISCV_OPCODE_JALR(0, p_wrk_reg->number, 0), NULL);
 				assert(p_reg->valid);
 				assert(p_reg->dirty);
 				p_reg->dirty = false;
@@ -2404,16 +2352,16 @@ reg_FPU_S__get(reg* const p_reg)
 
 		if (ERROR_OK == sc_rv32_EXEC__setup(p_target)) {
 			/// Copy values to temporary register
-			sc_rv32_EXEC__step(p_target, RISCV_opcode_FMV_X_S(p_wrk_reg_1->number, p_reg->number - RISCV_regnum_FP_first), NULL);
+			sc_rv32_EXEC__step(p_target, RISCV_OPCODE_FMV_X_S(p_wrk_reg_1->number, p_reg->number - RISCV_regnum_FP_first), NULL);
 
 			if (ERROR_OK == sc_error_code__get(p_target)) {
 				/// and store temporary register to Debug scratch CSR.
-				sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_1->number), NULL);
+				sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_1->number), NULL);
 
 				if (ERROR_OK == sc_error_code__get(p_target)) {
 					/// Exec NOP instruction and get previous instruction CSR result.
 					uint32_t value;
-					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_NOP(), &value)) {
+					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value)) {
 						buf_set_u32(p_reg->value, 0, p_reg->size, value);
 						p_reg->valid = true;
 						p_reg->dirty = false;
@@ -2475,11 +2423,11 @@ reg_FPU_S__set(reg* const p_reg, uint8_t* const buf)
 
 			if (ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size))) {
 				// set temporary register value to restoring pc value
-				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR), NULL)) {
+				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR), NULL)) {
 					assert(p_wrk_reg->dirty);
 					assert(0 < p_wrk_reg->number && p_wrk_reg->number < RISCV_regnum_PC);
 
-					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_FMV_S_X(p_reg->number - RISCV_regnum_FP_first, p_wrk_reg->number), NULL)) {
+					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_FMV_S_X(p_reg->number - RISCV_regnum_FP_first, p_wrk_reg->number), NULL)) {
 						assert(p_reg->valid);
 						assert(p_reg->dirty);
 						p_reg->dirty = false;
@@ -2565,16 +2513,16 @@ reg_FPU_D__get(reg* const p_reg)
 			uint32_t const opcode_1 =
 				FPU_D ?
 				p_arch->constants->opcode_FMV_2X_D(p_wrk_reg_2->number, p_wrk_reg_1->number, p_reg->number - RISCV_regnum_FP_first) :
-				RISCV_opcode_FMV_X_S(p_wrk_reg_1->number, p_reg->number - RISCV_regnum_FP_first);
+				RISCV_OPCODE_FMV_X_S(p_wrk_reg_1->number, p_reg->number - RISCV_regnum_FP_first);
 
 			if (ERROR_OK == sc_rv32_EXEC__step(p_target, opcode_1, NULL)) {
 				/// and store temporary register to Debug scratch CSR.
-				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_1->number), NULL)) {
+				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_1->number), NULL)) {
 					uint32_t value_lo;
-					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_2->number), &value_lo)) {
+					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_2->number), &value_lo)) {
 						/// Exec NOP instruction and get previous instruction CSR result.
 						uint32_t value_hi;
-						if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_NOP(), &value_hi)) {
+						if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value_hi)) {
 							buf_set_u64(p_reg->value, 0, p_reg->size, (FPU_D ? (uint64_t)value_hi << 32 : 0u) | (uint64_t)value_lo);
 							p_reg->valid = true;
 							p_reg->dirty = false;
@@ -2683,13 +2631,13 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 
 			if (ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size))) {
 				// set temporary register value to restoring pc value
-				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg_1->number, p_arch->constants->debug_scratch_CSR), NULL)) {
+				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg_1->number, p_arch->constants->debug_scratch_CSR), NULL)) {
 					if (ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(&((uint8_t const*)p_reg->value)[4], 0, p_reg->size))) {
-						if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg_2->number, p_arch->constants->debug_scratch_CSR), NULL)) {
+						if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg_2->number, p_arch->constants->debug_scratch_CSR), NULL)) {
 							uint32_t const opcode_1 =
 								FPU_D ?
 								p_arch->constants->opcode_FMV_D_2X(p_reg->number - RISCV_regnum_FP_first, p_wrk_reg_2->number, p_wrk_reg_1->number) :
-								RISCV_opcode_FMV_S_X(p_reg->number - RISCV_regnum_FP_first, p_wrk_reg_1->number);
+								RISCV_OPCODE_FMV_S_X(p_reg->number - RISCV_regnum_FP_first, p_wrk_reg_1->number);
 
 							if (ERROR_OK == sc_rv32_EXEC__step(p_target, opcode_1, NULL)) {
 								/// Correct pc by jump 2 instructions back and get previous command result.
@@ -2795,10 +2743,10 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 
 			if (ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size))) {
 				// set temporary register value
-				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR), NULL)) {
+				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR), NULL)) {
 					assert(p_wrk_reg->dirty);
 					assert(p_wrk_reg->number < number_of_regs_X);
-					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_reg->number - RISCV_regnum_CSR_first, p_wrk_reg->number), NULL)) {
+					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_reg->number - RISCV_regnum_CSR_first, p_wrk_reg->number), NULL)) {
 						assert(p_reg->valid);
 						assert(p_reg->dirty);
 						p_reg->dirty = false;
@@ -3565,7 +3513,7 @@ sc_riscv32__read_phys_memory(target* const p_target, uint32_t address, uint32_t 
 					}
 
 					/// Load address to work register
-					if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR), NULL)) {
+					if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR), NULL)) {
 						break;
 					}
 
@@ -3575,11 +3523,11 @@ sc_riscv32__read_phys_memory(target* const p_target, uint32_t address, uint32_t 
 					}
 
 					/// Exec store work register to csr
-					sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg->number), NULL);
+					sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg->number), NULL);
 
 					/// Exec NOP instruction and get previous instruction CSR result.
 					uint32_t value;
-					if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_opcode_NOP(), &value)) {
+					if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value)) {
 						break;
 					}
 
@@ -3662,14 +3610,14 @@ sc_riscv32__write_phys_memory(target* const p_target, uint32_t address, uint32_t
 			// Set address to CSR
 			if (ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, address)) {
 				/// Load address to work register
-				sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRR(p_addr_reg->number, p_arch->constants->debug_scratch_CSR), NULL);
+				sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_addr_reg->number, p_arch->constants->debug_scratch_CSR), NULL);
 				// Opcodes
 				uint32_t const instructions[3] = {
-					RISCV_opcode_CSRR(p_data_reg->number, p_arch->constants->debug_scratch_CSR),
+					RISCV_OPCODE_CSRR(p_data_reg->number, p_arch->constants->debug_scratch_CSR),
 					(size == 4 ? RISCV_opcode_SW(p_data_reg->number, p_addr_reg->number, 0) :
 					 size == 2 ? RISCV_opcode_SH(p_data_reg->number, p_addr_reg->number, 0) :
 					 /*size == 1*/ RISCV_opcode_SB(p_data_reg->number, p_addr_reg->number, 0)),
-					RISCV_opcode_ADDI(p_addr_reg->number, p_addr_reg->number, size)
+					RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, size)
 				};
 
 				if (p_arch->constants->use_queuing_for_dr_scans) {
@@ -3815,9 +3763,9 @@ sc_riscv32__add_breakpoint(target* const p_target, breakpoint* const p_breakpoin
 				uint8_t buffer[4];
 
 				if (p_breakpoint->length == 4) {
-					target_buffer_set_u32(p_target, buffer, RISCV_opcode_EBREAK());
+					target_buffer_set_u32(p_target, buffer, RISCV_OPCODE_EBREAK());
 				} else if (p_breakpoint->length == 2) {
-					target_buffer_set_u16(p_target, buffer, RISCV_opcode_C_EBREAK());
+					target_buffer_set_u16(p_target, buffer, RISCV_OPCODE_C_EBREAK());
 				} else {
 					assert(/*logic_error:Bad breakpoint size*/ 0);
 				}
