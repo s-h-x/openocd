@@ -3481,22 +3481,25 @@ sc_riscv32__read_phys_memory(target* const p_target, uint32_t address, uint32_t 
 		LOG_ERROR("Unaligned access at 0x%08X, for item size %d", address, size);
 		sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return sc_error_code__get_and_clear(p_target);
-	} else {
-		if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
+	} else if (0 == count) {
+		LOG_WARNING("Zero items count");
+		return sc_error_code__get_and_clear(p_target);
+	} else if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
-		}
-
+	} else {
 		/// Reserve work register
 		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 		assert(p_wrk_reg);
 
 		uint32_t pc_sample_1;
 		if (ERROR_OK == sc_rv32_get_PC(p_target, &pc_sample_1)) {
-			/// Define opcode for load item to register
-			uint32_t const load_OP =
-				size == 4 ? RISCV_opcode_LW(p_wrk_reg->number, p_wrk_reg->number, 0) :
-				size == 2 ? RISCV_opcode_LH(p_wrk_reg->number, p_wrk_reg->number, 0) :
-				/*size == 1*/RISCV_opcode_LB(p_wrk_reg->number, p_wrk_reg->number, 0);
+			/// Define opcode function for load item to register
+			typedef rv_instruction32_type
+			(*load_func_type)(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
+			load_func_type const load_OP =
+				size == 4 ?  &RISCV_opcode_LW :
+				size == 2 ?  &RISCV_opcode_LH :
+				/*size == 1*/&RISCV_opcode_LB;
 
 			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
@@ -3518,7 +3521,7 @@ sc_riscv32__read_phys_memory(target* const p_target, uint32_t address, uint32_t 
 					}
 
 					/// Exec load item to register
-					if (ERROR_OK != sc_rv32_EXEC__step(p_target, load_OP, NULL)) {
+					if (ERROR_OK != sc_rv32_EXEC__step(p_target, load_OP(p_wrk_reg->number, p_wrk_reg->number, 0), NULL)) {
 						break;
 					}
 
