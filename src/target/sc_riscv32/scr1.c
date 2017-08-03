@@ -28,7 +28,6 @@ static sc_riscv32__Arch_constants const scr1_constants = {
 	.use_ir_select_cache = false,
 	.use_dap_control_cache = false,
 	.use_verify_dap_control = true,
-	.use_check_pc_unchanged = true,
 	.use_verify_hart_regtrans_write = true,
 	.use_verify_core_regtrans_write = true,
 	.use_queuing_for_dr_scans = true,
