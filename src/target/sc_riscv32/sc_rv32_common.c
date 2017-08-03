@@ -601,7 +601,7 @@ sc_error_code__set(target const* const p_target, error_code const a_error_code)
 {
 	assert(p_target);
 	{
-		sc_riscv32__Arch* restrict const p_arch = p_target->arch_info;
+		sc_riscv32__Arch* const p_arch = p_target->arch_info;
 		assert(p_arch);
 		p_arch->error_code = a_error_code;
 	}
@@ -733,6 +733,12 @@ static inline rv_instruction32_type
 RISCV_opcode_ADDI(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_opcode_INSTR_I_TYPE(imm, rs1, 0u, rd, 0x13u);
+}
+
+static rv_instruction32_type
+RISCV_opcode_NOP(void)
+{
+	return RISCV_opcode_ADDI(0, 0, 0);
 }
 
 static inline rv_instruction32_type
@@ -964,7 +970,7 @@ static inline void
 update_DAP_CTRL_cache(target const* const p_target, uint8_t const set_dap_unit_group)
 {
 	assert(p_target);
-	sc_riscv32__Arch* restrict const p_arch = p_target->arch_info;
+	sc_riscv32__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	p_arch->last_DAP_ctrl = set_dap_unit_group;
 }
@@ -2050,7 +2056,7 @@ reg_x__get(reg* const p_reg)
 					}
 
 					/// Exec NOP instruction and get previous instruction SCR result.
-					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_ADDI(0, 0, 0));
+					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_NOP());
 
 					if (ERROR_OK != sc_error_code__get(p_target)) {
 						return sc_error_code__get_and_clear(p_target);
@@ -2244,7 +2250,7 @@ sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 
 					if (sc_error_code__get(p_target) == ERROR_OK) {
 						/// Exec NOP instruction and get previous instruction SCR result.
-						value = sc_rv32_EXEC__step(p_target, RISCV_opcode_ADDI(0, 0, 0));
+						value = sc_rv32_EXEC__step(p_target, RISCV_opcode_NOP());
 					} else {
 						sc_riscv32__update_status(p_target);
 					}
@@ -2445,7 +2451,7 @@ reg_FPU_S__get(reg* const p_reg)
 
 				if (sc_error_code__get(p_target) == ERROR_OK) {
 					/// Exec NOP instruction and get previous instruction SCR result.
-					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_ADDI(0, 0, 0));
+					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_NOP());
 
 					if (sc_error_code__get(p_target) == ERROR_OK) {
 						buf_set_u32(p_reg->value, 0, p_reg->size, value);
@@ -2626,7 +2632,7 @@ reg_FPU_D__get(reg* const p_reg)
 
 					if (ERROR_OK == sc_error_code__get(p_target)) {
 						/// Exec NOP instruction and get previous instruction SCR result.
-						uint32_t const value_hi = sc_rv32_EXEC__step(p_target, RISCV_opcode_ADDI(0, 0, 0));
+						uint32_t const value_hi = sc_rv32_EXEC__step(p_target, RISCV_opcode_NOP());
 
 						if (ERROR_OK == sc_error_code__get(p_target)) {
 							buf_set_u64(p_reg->value, 0, p_reg->size, (FPU_D ? (uint64_t)value_hi << 32 : 0u) | (uint64_t)value_lo);
@@ -3679,7 +3685,7 @@ sc_riscv32__read_phys_memory(target* const p_target, uint32_t address, uint32_t 
 					(void)sc_rv32_EXEC__step(p_target, RISCV_opcode_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg->number));
 
 					/// Exec NOP instruction and get previous instruction SCR result.
-					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_ADDI(0, 0, 0));
+					uint32_t const value = sc_rv32_EXEC__step(p_target, RISCV_opcode_NOP());
 
 					if (ERROR_OK != sc_error_code__get(p_target)) {
 						break;
@@ -4003,4 +4009,3 @@ sc_riscv32__virt2phys(target* p_target, uint32_t address, uint32_t* p_physical)
 	p_arch->constants->virt_to_phis(p_target, address, p_physical, NULL, false);
 	return sc_error_code__get_and_clear(p_target);
 }
-
