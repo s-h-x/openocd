@@ -12,7 +12,7 @@
 #include "target/target_type.h"
 #include "helper/log.h"
 
-static void
+static error_code
 scr1__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
 {
 	assert(p_physical);
@@ -21,6 +21,7 @@ scr1__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical, uin
 	if (p_bound) {
 		*p_bound = UINT32_MAX;
 	}
+	return sc_error_code__get(p_target);
 }
 
 static sc_riscv32__Arch_constants const scr1_constants = {

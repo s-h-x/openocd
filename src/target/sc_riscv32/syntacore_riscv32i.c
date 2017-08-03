@@ -62,12 +62,14 @@ enum
 	VM_Sv48 = 10,
 };
 
-static void
+static error_code
 scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
 {
 	uint32_t const mstatus = sc_riscv32__csr_get_value(p_target, CSR_mstatus);
 
-	if (ERROR_OK == sc_error_code__get(p_target)) {
+	if (ERROR_OK != sc_error_code__get(p_target)) {
+		return sc_riscv32__update_status(p_target);
+	} else {
 		/// @todo Privileged Instruction 1.7 version
 		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
 		/// @todo Privileged Instruction 1.7 version
@@ -166,12 +168,11 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 		case VM_Sv39:
 		case VM_Sv48:
 		default:
-			sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+			return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 			break;
 		}
-	} else {
-		sc_riscv32__update_status(p_target);
 	}
+	return sc_error_code__get(p_target);
 }
 
 static sc_riscv32__Arch_constants const scrx_constants = {

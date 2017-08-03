@@ -73,7 +73,7 @@ struct sc_riscv32__Arch_constants
 	unsigned mstatus_FS_offset;           ///< FS bits offsets in `mstatus` CSR (Privileged ISA version-specific)
 
 	/// Privileged ISA version-specific virtual to physical address translation virtual method
-	void
+	error_code
 	(*virt_to_phis)(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
 
 	/// Syntacore architecture extensions
@@ -119,7 +119,7 @@ error_code
 sc_error_code__update(target const* const p_target, error_code const a_error_code);
 /// @}
 
-void
+error_code
 sc_riscv32__update_status(target* const p_target);
 
 error_code
