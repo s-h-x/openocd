@@ -3,4 +3,5 @@ noinst_LTLIBRARIES += %D%/libsc_riscv32.la
 	%D%/sc_rv32_common.c \
 	%D%/sc_rv32_common.h \
 	%D%/syntacore_riscv32i.c \
-	%D%/scr1.c
+	%D%/scr1.c \
+	%D%/scr5.c
