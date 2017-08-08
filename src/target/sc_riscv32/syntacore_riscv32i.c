@@ -1,4 +1,4 @@
-﻿/**	@file
+﻿/** @file
 
 	Syntacore RISC-V target
 

@@ -1,4 +1,4 @@
-﻿/**	@file
+﻿/** @file
 
 	SCR5 target.
 

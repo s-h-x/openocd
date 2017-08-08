@@ -1,4 +1,4 @@
-/**	@file
+/** @file
 
 	Syntacore RISC-V targets common methods
 
@@ -108,7 +108,7 @@ sc_error_code__get(target const* const p_target);
 error_code
 sc_error_code__get_and_clear(target const* const p_target);
 
-/**	@brief Update error context.
+/** @brief Update error context.
 
 	Store first occurred code that is no equal to ERROR_OK into target context.
 

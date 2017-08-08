@@ -1,4 +1,4 @@
-﻿/**	@file
+﻿/** @file
 
 	Syntacore RISC-V targets common methods
 
@@ -81,50 +81,51 @@ typedef struct reg_data_type_union_field reg_data_type_union_field;
 typedef struct reg_arch_type reg_arch_type;
 typedef struct reg_cache reg_cache;
 
-/**	@defgroup SC_RV32_TAPC_IR Syntacore TAP Controller Instructions
+/** @defgroup SC_RV32_TAPC_IR Syntacore TAP Controller Instructions
 @ingroup SC_RV32
 */
 /// @{
 
-/**	@brief TAP Controller Instructions ID
-ir_scan selects one of instruction registers IO to TDI/TDO
+/** @brief TAP Controller Instructions ID
+
+ir_scan selects one of instruction registers IO to TDI/TDO.
 */
 enum TAP_IR_e
 {
-	/**	@brief DBG_ID Register Read
+	/** @brief DBG_ID Register Read
 
 	It connects DBG_ID_DR register between TDI and TDO pins.
 	Contains debug facilities version implemented in the given processor DBGC subsystem.
 	*/
 	TAP_instruction_DBG_ID = 0b0011u,
 
-	/**	@brief BLD_ID Register Read
+	/** @brief BLD_ID Register Read
 
 	Connects BLD_ID_DR between TDI and TDO pins.
 	It identifies an entire processor system RTL build revision.
 	*/
 	TAP_instruction_BLD_ID = 0b0100u,
 
-	/**	@brief DBG_STATUS Register Read
+	/** @brief DBG_STATUS Register Read
 	Connects DBG_STATUS_DR register providing general status information about debug operations and core state.
 	*/
 	TAP_instruction_DBG_STATUS = 0b0101u,
 
-	/**	@brief DAP_CTRL Register Write
+	/** @brief DAP_CTRL Register Write
 
 	Connects DAP_CTRL_DR register is the control port of the upper level multiplexer
 	for DAP_CMD register.
 	*/
 	TAP_instruction_DAP_CTRL = 0b0110u,
 
-	/**	@brief DAP_CTRL Register Read
+	/** @brief DAP_CTRL Register Read
 
 	Connects DAP_CTRL_RD_DR register allowing to read
 	current DAP Control Context (DAPCC) from the DAP_CONTEXT register.
 	*/
 	TAP_instruction_DAP_CTRL_RD = 0b0111u,
 
-	/**	@brief Debug Access Port Command (DAP Command)
+	/** @brief Debug Access Port Command (DAP Command)
 
 	Provide multiplexed IO to inner DC registers.
 
@@ -133,15 +134,17 @@ enum TAP_IR_e
 	*/
 	TAP_instruction_DAP_CMD = 0b1000u,
 
-	/**	@brief SYS_CTRL Register Access
+	/** @brief SYS_CTRL Register Access
 
 	Connects SYS_CTRL_DR register,
 	used to control state of the Processor Subsystem Reset net,
 	and to get its current status.
+
+	@see TAP_length_of_SYS_CTRL
 	*/
 	TAP_instruction_SYS_CTRL = 0b1001u,
 
-	/**	@brief MTAP_SWITCH Register Access
+	/** @brief MTAP_SWITCH Register Access
 
 	Connects MTAP_SWITCH_DR register, used to control state
 	of the Master TAP Switch Control output, and to
@@ -149,13 +152,13 @@ enum TAP_IR_e
 	*/
 	TAP_instruction_MTAP_SWITCH = 0b1101u,
 
-	/**	@brief IDCODE Register Read
+	/** @brief IDCODE Register Read
 	Conventional recommended Device Identification instruction compliant with IEEE 1149.1 Standard.
 	It connects IDCODE_DR register between TDI and TDO pins.()
 	*/
 	TAP_instruction_IDCODE = 0b1110u,
 
-	/**	@brief BYPASS instruction
+	/** @brief BYPASS instruction
 	IEEE 1149.1 Standard compliant mandatory instruction.
 	It connects BYPASS_DR single bit shiht register between TDI and TDO pins.
 	*/
@@ -189,12 +192,15 @@ enum
 	TAP_length_of_DAP_CMD_OPCODE_EXT = 32u,
 	TAP_length_of_DAP_CMD = TAP_length_of_DAP_CMD_OPCODE + TAP_length_of_DAP_CMD_OPCODE_EXT,
 
+
+	TAP_length_of_SYS_CTRL = 1,
+
 	/// mandatory 1 bit shift register
 	TAP_length_of_BYPASS = 1,
 };
 /// @}
 
-/**	@brief DBG_STATUS bits
+/** @brief DBG_STATUS bits
 	
 	Upper-level status register bits
 
@@ -219,7 +225,7 @@ enum
 };
 
 
-/**	@brief Status bits of previous operation
+/** @brief Status bits of previous operation
 */
 enum
 {
@@ -231,11 +237,11 @@ enum
 	/// @brief Ready for next operation
 	DAP_opstatus_bit_READY = BIT_MASK(3),
 
-	DAP_status_MASK = DAP_opstatus_bit_ERROR | DAP_opstatus_bit_LOCK | DAP_opstatus_bit_READY,
+	DAP_status_mask = DAP_opstatus_bit_ERROR | DAP_opstatus_bit_LOCK | DAP_opstatus_bit_READY,
 	DAP_status_good = DAP_opstatus_bit_READY,
 };
 
-/**	@brief DAP_CTRL fields enumerations
+/** @brief DAP_CTRL fields enumerations
 
 	DAP_CTRL transaction select unit and functional group and return previous operation status
 */
@@ -244,12 +250,15 @@ enum
 enum type_dbgc_unit_id_e
 {
 	DBGC_unit_id_HART_0 = 0,
-	DBGC_unit_id_HART_1 = 1,
+	DBGC_unit_id_HART_1 = 1,  ///< now unused
 	DBGC_unit_id_CORE = 3,
 };
 typedef enum type_dbgc_unit_id_e type_dbgc_unit_id_e;
 
-/// Functional groups for HART units
+/** Functional groups for HART units
+	@see DBGC_unit_id_HART_0
+	@see DBGC_unit_id_HART_1
+	*/
 enum
 {
 	/// @see HART_REGTRANS_indexes
@@ -258,7 +267,9 @@ enum
 	DBGC_functional_group_HART_CSR_CAP = 0b10,
 };
 
-/// Functional groups for CORE units
+/** Functional groups for CORE units
+	@see DBGC_unit_id_CORE
+*/
 enum
 {
 	/// @see CORE_REGTRANS_indexes
@@ -267,7 +278,7 @@ enum
 
 /// @}
 
-/**	@brief HART[0] Debug Registers indexes
+/** @brief HART[0] Debug Registers indexes
 	@pre HART unit, REGTRANS functional group registers 
 	@see DBGC_functional_group_HART_REGTRANS
 */
@@ -288,7 +299,7 @@ enum HART_REGTRANS_indexes
 	/// @brief Hart Debug Core Instruction Register HART_CORE_INSTR (HDCIR)
 	HART_CORE_INSTR_index = 4,
 
-	/**	@brief Hart Debug Data HART_DBG_DATA (HDDR) register.
+	/** @brief Hart Debug Data HART_DBG_DATA (HDDR) register.
 
 		Corresponds to the DBG_SCRATCH core's CSR.
 
@@ -296,7 +307,7 @@ enum HART_REGTRANS_indexes
 	*/
 	HART_DBG_DATA_index = 5,
 
-	/**	@brief Hart Program Counter (PC) HART_PC_SAMPLE (HPCSR) register.
+	/** @brief Hart Program Counter (PC) HART_PC_SAMPLE (HPCSR) register.
 
 		Reflects current hart PC value.
 	*/
@@ -307,14 +318,14 @@ typedef enum HART_REGTRANS_indexes HART_REGTRANS_indexes;
 /// @see DBGC_functional_group_HART_DBGCMD
 enum HART_DBGCMD_indexes
 {
-	/**	@brief DBG_CTRL (Debug Control Operation)
+	/** @brief DBG_CTRL (Debug Control Operation)
 	
 	Command for Debug Subsystem state change
 	(includes an important option for transition between Run-Mode and Debug-Mode)
 	*/
 	DBG_CTRL_index = 0x0,
 
-	/**	@brief CORE_EXEC (Debug Core Instruction Execution)
+	/** @brief CORE_EXEC (Debug Core Instruction Execution)
 
 	Command carries out execution of a RISC-V instruction
 	resided in the DBGC's HART_CORE_INSTR register,
@@ -324,7 +335,7 @@ enum HART_DBGCMD_indexes
 	*/
 	CORE_EXEC_index = 0x1,
 
-	/**	@brief DBGDATA_WR (Debug Data Register Write)
+	/** @brief DBGDATA_WR (Debug Data Register Write)
 
 		Command writes 32-bit data into the HART_DBG_DATA register.
 
@@ -332,7 +343,7 @@ enum HART_DBGCMD_indexes
 	*/
 	DBGDATA_WR_index = 0x2,
 
-	/**	@brief UNLOCK
+	/** @brief UNLOCK
 		
 		Command unlocks DAP which has been previously locked due to error(s) during preceding operations.
 
@@ -366,21 +377,21 @@ typedef enum HART_CSR_CAP_indexes HART_CSR_CAP_indexes;
 /// @see DBGC_functional_group_CORE_REGTRANS
 enum CORE_REGTRANS_indexes
 {
-	/**	@brief Core Debug ID (CDID) Register
+	/** @brief Core Debug ID (CDID) Register
 	*/
 	CORE_DEBUG_ID_index = 0,
 
-	/**	@brief Core Debug Control (CDCR) Register
+	/** @brief Core Debug Control (CDCR) Register
 	*/
 	CORE_DBG_CTRL_index = 1,
 
-	/**	@brief Core Debug Status (CDSR) Register
+	/** @brief Core Debug Status (CDSR) Register
 	*/
 	CORE_DBG_STS_index = 2,
 };
 typedef enum CORE_REGTRANS_indexes CORE_REGTRANS_indexes;
 
-/**	@brief HART_DBG_CTRL bits
+/** @brief HART_DBG_CTRL bits
 	@see HART_DBG_CTRL_index
 */
 enum HART_DBG_CTRL_bits
@@ -393,7 +404,7 @@ enum HART_DBG_CTRL_bits
 	HART_DBG_CTRL_bit_PC_Advmt_Dsbl = BIT_MASK(6),
 };
 
-/**	@brief HART_DBG_STS bits
+/** @brief HART_DBG_STS bits
 	@see HART_DBG_STS_index
 */
 enum HART_DBG_STS_bits
@@ -435,7 +446,7 @@ enum HART_DBG_STS_bits
 	HART_DBG_STS_bit_Lock_Stky = BIT_MASK(31)
 };
 
-/**	@brief HART_DMODE_ENBL (HDMER) bits
+/** @brief HART_DMODE_ENBL (HDMER) bits
 	@see HART_DMODE_ENBL_index
 */
 enum HART_DMODE_ENBL_bits
@@ -479,7 +490,7 @@ enum HART_DMODE_CAUSE_bits
 /// @see DBG_CTRL_index
 enum DBG_CTRL_bits
 {
-	/**	@brief Halt
+	/** @brief Halt
 	
 	Transits a corresponding hart from Run-Mode to Debug-Mode (halts the hart)
 
@@ -487,13 +498,13 @@ enum DBG_CTRL_bits
 	*/
 	DBG_CTRL_bit_Halt = BIT_MASK(0),
 
-	/**	@brief Resume
+	/** @brief Resume
 	
 	Transits a corresponding hart from DebugMode to Run-Mode (restarts the hart).
 	*/
 	DBG_CTRL_bit_Resume = BIT_MASK(1),
 
-	/**	@brief Sticky Clear.
+	/** @brief Sticky Clear.
 	
 	Clears sticky status bits for corresponding HART.
 	*/
@@ -504,17 +515,17 @@ enum DBG_CTRL_bits
 /// @see CORE_DBG_CTRL_index
 enum CORE_DBG_CTRL_bits
 {
-	/**	@brief Hart[0] Reset.
+	/** @brief Hart[0] Reset.
 	
 		Reserved for future use
 	*/
 	CORE_DBG_CTRL_bit_HART0_Rst = BIT_MASK(0),
 
-	/**	@brief Core Reset
+	/** @brief Core Reset
 	*/
 	CORE_DBG_CTRL_bit_Rst = BIT_MASK(24),
 
-	/**	@brief Core IRQ Disable
+	/** @brief Core IRQ Disable
 	*/
 	CORE_DBG_CTRL_bit_Irq_Dsbl = BIT_MASK(25),
 };
@@ -547,14 +558,14 @@ enum
 };
 
 static uint8_t const obj_DAP_opstatus_GOOD = DAP_status_good;
-static uint8_t const obj_DAP_status_MASK = DAP_status_MASK;
+static uint8_t const obj_DAP_status_MASK = DAP_status_mask;
 static reg_data_type GP_reg_data_type = {.type = REG_TYPE_INT32,};
 static reg_feature feature_riscv_org = {
 	.name = "org.gnu.gdb.riscv.cpu",
 };
 static char const def_GP_regs_name[] = "general";
 
-/**	@brief Check IDCODE for selected target
+/** @brief Check IDCODE for selected target
 */
 static bool
 sc_rv32__is_IDCODE_valid(target* const p_target, uint32_t const IDCODE)
@@ -566,7 +577,7 @@ sc_rv32__is_IDCODE_valid(target* const p_target, uint32_t const IDCODE)
 	return (p_const->expected_idcode & p_const->expected_idcode_mask) == (IDCODE & p_const->expected_idcode_mask);
 }
 
-/**	@brief Check Debug controller version for compatibility
+/** @brief Check Debug controller version for compatibility
 */
 static bool
 sc_rv32__is_DBG_ID_valid(target* const p_target, uint32_t const DBG_ID)
@@ -633,7 +644,7 @@ sc_error_code__update(target const* const p_target, error_code const a_error_cod
 	}
 }
 
-/**	@brief Update error context
+/** @brief Update error context
 
 	If passed code is not equal to ERROR_OK - replace it in the target context.
 */
@@ -771,7 +782,7 @@ sc_RISCV_opcode_D_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type 
 
 /// @}
 
-/**	@brief Always perform scan to write instruction register
+/** @brief Always perform scan to write instruction register
 */
 static inline void
 IR_select_force(target const* const p_target, TAP_IR_e const new_instr)
@@ -786,7 +797,7 @@ IR_select_force(target const* const p_target, TAP_IR_e const new_instr)
 	LOG_DEBUG("irscan %s %d", p_target->cmd_name, new_instr);
 }
 
-/**	@brief Cached version of instruction register selection
+/** @brief Cached version of instruction register selection
 */
 static void
 IR_select(target const* const p_target, TAP_IR_e const new_instr)
@@ -809,7 +820,7 @@ IR_select(target const* const p_target, TAP_IR_e const new_instr)
 	IR_select_force(p_target, new_instr);
 }
 
-/**	@brief Common method to retrieve data of read-only 32-bits TAP IR
+/** @brief Common method to retrieve data of read-only 32-bits TAP IR
 
 Method store and update error_code, but ignore previous errors and
 allows to repair error state of debug controller.
@@ -902,7 +913,7 @@ sc_rv32_DBG_STATUS_get(target const* const p_target, uint32_t* p_value)
 	return sc_error_code__get(p_target);
 }
 
-/**	@brief Upper level DAP_CTRL multiplexer control port cache update method.
+/** @brief Upper level DAP_CTRL multiplexer control port cache update method.
 */
 static inline void
 update_DAP_CTRL_cache(target const* const p_target, uint8_t const set_dap_unit_group)
@@ -913,7 +924,7 @@ update_DAP_CTRL_cache(target const* const p_target, uint8_t const set_dap_unit_g
 	p_arch->last_DAP_ctrl = set_dap_unit_group;
 }
 
-/**	@brief Upper level DAP_CTRL multiplexer control port cache invalidation.
+/** @brief Upper level DAP_CTRL multiplexer control port cache invalidation.
 */
 static inline void
 invalidate_DAP_CTR_cache(target const* const p_target)
@@ -921,7 +932,7 @@ invalidate_DAP_CTR_cache(target const* const p_target)
 	update_DAP_CTRL_cache(p_target, DAP_CTRL_value_INVALID_CODE);
 }
 
-/**	@brief Forced variant of upper level multiplexer control port DAP_CTRL set method (don't use cache state)
+/** @brief Forced variant of upper level multiplexer control port DAP_CTRL set method (don't use cache state)
 */
 static inline error_code
 DAP_CTRL_REG_set_force(target const* const p_target, uint8_t const set_dap_unit_group)
@@ -1033,7 +1044,7 @@ DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_gro
 	return sc_error_code__prepend(p_target, old_err_code);
 }
 
-/**	@brief Common DR scan of DAP_CMD multiplexed port.
+/** @brief Common DR scan of DAP_CMD multiplexed port.
 
 @par[in]  p_target current target pointer
 @par[in]  DAP_OPCODE 4-bits: R/W bit and 3-bits next level multiplexer selector
@@ -1083,7 +1094,7 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 				buf_get_u32(dbg_data, 0, TAP_length_of_DAP_CMD_OPCODE_EXT), DAP_OPSTATUS);
 
 	if (ERROR_OK == sc_error_code__get(p_target)) {
-		if ((DAP_OPSTATUS & DAP_status_MASK) != DAP_status_good) {
+		if ((DAP_OPSTATUS & DAP_status_mask) != DAP_status_good) {
 			/// Check and report if error was detected.
 			LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
 			sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
@@ -1097,7 +1108,7 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 	return sc_error_code__prepend(p_target, old_err_code);
 }
 
-/**	@brief Try to unlock debug controller.
+/** @brief Try to unlock debug controller.
 
 @warning Clear previous error_code and set ERROR_TARGET_FAILURE if unlock was unsuccessful
 */
@@ -1190,7 +1201,7 @@ sc_rv32_DC__unlock(target const* const p_target, uint32_t *p_lock_context)
 	}
 }
 
-/**	@brief Try to clear HART0 errors.
+/** @brief Try to clear HART0 errors.
 */
 static inline void
 sc_rv32_HART0_clear_sticky(target* const p_target)
@@ -1247,7 +1258,7 @@ sc_rv32_HART0_clear_sticky(target* const p_target)
 	}
 }
 
-/**	@brief Make code for REGTRANS transaction
+/** @brief Make code for REGTRANS transaction
 
 To prepare type of access to 2-nd level multiplexed REGTRANS register
 
@@ -1263,7 +1274,7 @@ REGTRANS_scan_type(bool const write, uint8_t const index)
 		MAKE_TYPE_FIELD(uint8_t, index, 0, 2);
 }
 
-/**	@brief Try to clear errors bit of core
+/** @brief Try to clear errors bit of core
 @todo Describe details
 */
 static inline void
@@ -1318,7 +1329,7 @@ sc_rv32_CORE_clear_errors(target* const p_target)
 	}
 }
 
-/**	@brief Common method to set DAP_CTRL upper level multiplexer control register
+/** @brief Common method to set DAP_CTRL upper level multiplexer control register
 
 @par[in] p_target pointer to this target
 @par[in] dap_unit multiplexed unit of multiplexed group
@@ -1376,7 +1387,7 @@ sc_rv32_DAP_CTRL_REG_set(target const* const p_target, type_dbgc_unit_id_e const
 	return sc_error_code__prepend(p_target, old_err_code);
 }
 
-/**	@brief Common REGTRANS write operation
+/** @brief Common REGTRANS write operation
 
 @par[inout] p_target pointer to this target
 @par[in] func_unit functional unit
@@ -1397,7 +1408,7 @@ REGTRANS_write(target const* const p_target, type_dbgc_unit_id_e func_unit, uint
 	return sc_rv32_DAP_CMD_scan(p_target, REGTRANS_scan_type(true, index), data, NULL);
 }
 
-/**	@brief Common REGTRANS read operation
+/** @brief Common REGTRANS read operation
 
 @par[inout] p_target pointer to this target
 @par[in] func_unit functional unit
@@ -1425,7 +1436,7 @@ REGTRANS_read(target const* const p_target, type_dbgc_unit_id_e const func_unit,
 	return sc_rv32_DAP_CMD_scan(p_target, REGTRANS_scan_type(false, index), 0, p_value);
 }
 
-/**	@brief HART REGTRANS read operation
+/** @brief HART REGTRANS read operation
 
 @par[inout] p_target pointer to this target
 @par[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
@@ -1438,7 +1449,7 @@ sc_rv32_HART_REGTRANS_read(target const* const p_target, HART_REGTRANS_indexes c
 	return REGTRANS_read(p_target, unit, DBGC_functional_group_HART_REGTRANS, index, p_value);
 }
 
-/**	@brief HART HART_CSR_CAP read operation
+/** @brief HART HART_CSR_CAP read operation
 
 @par[inout] p_target pointer to this target
 @par[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
@@ -1457,7 +1468,7 @@ get_ISA(target* const p_target, uint32_t* p_value)
 	return sc_rv32_HART_CSR_CAP_read(p_target, HART_MISA_index, p_value);
 }
 
-/**	@brief HART REGTRANS write operation
+/** @brief HART REGTRANS write operation
 
 @par[inout] p_target pointer to this target
 @par[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
@@ -1471,7 +1482,7 @@ HART_REGTRANS_write(target const* const p_target, HART_REGTRANS_indexes const in
 	return REGTRANS_write(p_target, unit, DBGC_functional_group_HART_REGTRANS, index, set_value);
 }
 
-/**	@brief HART REGTRANS write operation with re-read writing value.
+/** @brief HART REGTRANS write operation with re-read writing value.
 
 @par[inout] p_target pointer to this target
 @par[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
@@ -1497,7 +1508,7 @@ sc_rv32_HART_REGTRANS_write_and_check(target const* const p_target, HART_REGTRAN
 	return sc_error_code__get(p_target);
 }
 
-/**	@brief CORE REGTRANS read operation
+/** @brief CORE REGTRANS read operation
 
 @par[inout] p_target pointer to this target
 @par[in] index REGTRANS register index in CORE/CORE_REGTRANS
@@ -1508,7 +1519,7 @@ sc_rv32_core_REGTRANS_read(target const* const p_target, CORE_REGTRANS_indexes c
 	return REGTRANS_read(p_target, DBGC_unit_id_CORE, DBGC_functional_group_CORE_REGTRANS, index, p_value);
 }
 
-/**	@brief Core REGTRANS write operation
+/** @brief Core REGTRANS write operation
 
 @par[inout] p_target pointer to this target
 @par[in] index REGTRANS register index in CORE/CORE_REGTRANS
@@ -1521,7 +1532,7 @@ sc_rv32_CORE_REGTRANS_write(target const* const p_target, CORE_REGTRANS_indexes 
 	return sc_error_code__get(p_target);
 }
 
-/**	@brief Setup HART before group HART_DBGCMD transactions.
+/** @brief Setup HART before group HART_DBGCMD transactions.
 
 @par[inout] p_target pointer to this target
 */
@@ -1536,7 +1547,7 @@ sc_rv32_EXEC__setup(target const* const p_target)
 	return sc_error_code__get(p_target);
 }
 
-/**	@brief Push 32-bits data through keyhole from debug controller to core special SC Debug CSR.
+/** @brief Push 32-bits data through keyhole from debug controller to core special SC Debug CSR.
 */
 static inline error_code
 sc_rv32_EXEC__push_data_to_CSR(target const* const p_target, uint32_t const csr_data)
@@ -1548,7 +1559,7 @@ sc_rv32_EXEC__push_data_to_CSR(target const* const p_target, uint32_t const csr_
 	return sc_error_code__get(p_target);
 }
 
-/**	@brief Push instruction (up to 32-bits) through keyhole from debug controller immediately to core.
+/** @brief Push instruction (up to 32-bits) through keyhole from debug controller immediately to core.
 @return SC Debug CSR data
 */
 static inline error_code
@@ -1561,7 +1572,7 @@ sc_rv32_EXEC__step(target const* const p_target, uint32_t instruction, uint32_t*
 	return sc_error_code__get(p_target);
 }
 
-/**	@brief Return last sampled PC value
+/** @brief Return last sampled PC value
 */
 static error_code
 sc_rv32_get_PC(target const* const p_target, uint32_t* p_pc)
@@ -1573,7 +1584,7 @@ sc_rv32_get_PC(target const* const p_target, uint32_t* p_pc)
 	return sc_rv32_HART_REGTRANS_read(p_target, HART_PC_SAMPLE_index, p_pc);
 }
 
-/**	@brief Convert HART status bits to target state enum values
+/** @brief Convert HART status bits to target state enum values
 */
 static target_state
 HART_status_bits_to_target_state(uint32_t const status)
@@ -1625,7 +1636,7 @@ try_to_get_ready(target* const p_target, uint32_t* p_core_status)
 	return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 }
 
-/**	@brief Read DMODE_CAUSE and try to encode to enum target_debug_reason
+/** @brief Read DMODE_CAUSE and try to encode to enum target_debug_reason
 */
 static inline error_code
 read_debug_cause(target* const p_target, target_debug_reason* p_reason)
@@ -3628,7 +3639,7 @@ sc_riscv32__write_phys_memory(target* const p_target, uint32_t address, uint32_t
 					uint8_t DAP_OPSTATUS = 0;
 					uint8_t const data_wr_opcode[1] = {DBGDATA_WR_index};
 					static uint8_t const DAP_OPSTATUS_GOOD = DAP_status_good;
-					static uint8_t const DAP_STATUS_MASK = DAP_status_MASK;
+					static uint8_t const DAP_STATUS_MASK = DAP_status_mask;
 					scan_field const data_scan_opcode_field = {
 						.num_bits = TAP_length_of_DAP_CMD_OPCODE,
 						.out_value = data_wr_opcode,
@@ -3692,7 +3703,7 @@ sc_riscv32__write_phys_memory(target* const p_target, uint32_t address, uint32_t
 
 					sc_error_code__update(p_target, jtag_execute_queue());
 
-					if ((DAP_OPSTATUS & DAP_status_MASK) != DAP_status_good) {
+					if ((DAP_OPSTATUS & DAP_status_mask) != DAP_status_good) {
 						LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
 						sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 					}
