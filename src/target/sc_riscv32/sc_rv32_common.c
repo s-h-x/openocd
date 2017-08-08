@@ -1159,12 +1159,10 @@ sc_rv32_DC__unlock(target const* const p_target, uint32_t *p_lock_context)
 			{.num_bits = TAP_length_of_DAP_CMD_OPCODE,.out_value = &dap_opcode_UNLOCK}
 		};
 
-		for (int i = 0; i < 2; ++i) {
-			LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
-					  dr_fields_UNLOCK[0].num_bits, buf_get_u32(dap_opcode_ext_UNLOCK, 0, TAP_length_of_DAP_CMD_OPCODE_EXT),
-					  dr_fields_UNLOCK[1].num_bits, dap_opcode_UNLOCK);
-			jtag_add_dr_scan(p_target->tap, ARRAY_LEN(dr_fields_UNLOCK), dr_fields_UNLOCK, TAP_IDLE);
-		}
+		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
+					dr_fields_UNLOCK[0].num_bits, buf_get_u32(dap_opcode_ext_UNLOCK, 0, TAP_length_of_DAP_CMD_OPCODE_EXT),
+					dr_fields_UNLOCK[1].num_bits, dap_opcode_UNLOCK);
+		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(dr_fields_UNLOCK), dr_fields_UNLOCK, TAP_IDLE);
 	}
 
 	{
@@ -1299,7 +1297,7 @@ sc_rv32_CORE_clear_errors(target* const p_target)
 		/// set invalid cache value
 		invalidate_DAP_CTR_cache(p_target);
 
-		uint8_t const set_dap_unit_group = (DBGC_unit_id_CORE << TAP_length_of_DAP_CTRL_fgroup_field) | DBGC_functional_group_CORE_REGTRANS;
+		uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_unit_id_CORE, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_functional_group_CORE_REGTRANS, 0, 1);
 		scan_field const field = {.num_bits = TAP_length_of_DAP_CTRL,.out_value = &set_dap_unit_group};
 		LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, set_dap_unit_group);
 		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
@@ -1314,7 +1312,7 @@ sc_rv32_CORE_clear_errors(target* const p_target)
 	}
 
 	{
-		uint8_t dap_opcode_ext[(TAP_length_of_DAP_CMD_OPCODE_EXT + CHAR_BIT - 1) / CHAR_BIT];
+		uint8_t dap_opcode_ext[NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE_EXT)];
 		buf_set_u32(dap_opcode_ext, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, 0xFFFFFFFF);
 		uint8_t const dap_opcode = REGTRANS_scan_type(true, CORE_DBG_STS_index);
 		scan_field const fields[2] = {
@@ -1607,7 +1605,9 @@ HART_status_bits_to_target_state(uint32_t const status)
 	}
 }
 
-static error_code
+/** Try for wait the READY state
+*/
+static inline error_code
 try_to_get_ready(target* const p_target, uint32_t* p_core_status)
 {
 	if (ERROR_OK == sc_rv32_DBG_STATUS_get(p_target, p_core_status)) {
@@ -1748,6 +1748,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 	sc_rv32_IDCODE_get(p_target, &IDCODE);
 
 	if (!sc_rv32__is_IDCODE_valid(p_target, IDCODE)) {
+		/// If IDCODE is invalid, then its is serious error: reset target examined flag
 		/// @todo replace by target_reset_examined;
 		p_target->examined = false;
 		LOG_ERROR("Debug controller/JTAG error! Try to re-examine!");
@@ -1756,12 +1757,20 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		uint32_t core_status;
 		try_to_get_ready(p_target, &core_status);
 
+		if (0 == (core_status & DBG_STATUS_bit_Ready)) {
+			/// If no DBG_STATUS_bit_Ready then any actions are disabled.
+			/// @todo replace by target_reset_examined;
+			p_target->examined = false;
+			return sc_error_code__get(p_target);
+		}
+
+		/// First of all, try to unlock before any following actions
 		if (0 != (core_status & DBG_STATUS_bit_Lock)) {
 			LOG_ERROR("Lock detected: 0x%08X", core_status);
 			uint32_t lock_context;
-			sc_rv32_DC__unlock(p_target, &lock_context);
-
-			if (ERROR_OK != sc_error_code__get(p_target)) {
+			if (ERROR_OK != sc_rv32_DC__unlock(p_target, &lock_context)) {
+				/// @todo replace by target_reset_examined;
+				p_target->examined = false;
 				/// return with error_code != ERROR_OK if unlock was unsuccsesful
 				LOG_ERROR("Unlock unsucsessful with lock_context=0x%8X", lock_context);
 				return sc_error_code__get(p_target);
@@ -1772,7 +1781,9 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		}
 
 		if (DBG_STATUS_bit_Ready != (core_status & (DBG_STATUS_bit_Lock | DBG_STATUS_bit_Ready))) {
-			LOG_ERROR("Core_status with LOCK!: 0x%08X", core_status);
+			LOG_ERROR("Core_status should be ready and unlocked!: 0x%08X", core_status);
+			/// @todo replace by target_reset_examined;
+			p_target->examined = false;
 			return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 		}
 
