@@ -1629,7 +1629,7 @@ update_debug_status(target* const p_target)
 /** @brief Try to clear HART0 errors.
 */
 static inline void
-sc_rv32_HART0_clear_sticky(target* const p_target)
+sc_rv32_HART0_clear_error(target* const p_target)
 {
 	LOG_DEBUG("========= Try to clear HART0 errors ============");
 	assert(p_target);
@@ -1786,15 +1786,15 @@ check_and_repair_debug_controller_errors(target* const p_target)
 			return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 		}
 
-		static uint32_t const hart0_err_bits = DBG_STATUS_bit_HART0_Err | DBG_STATUS_bit_HART0_Err_Stky;
+		static uint32_t const hart0_err_bits = DBG_STATUS_bit_HART0_Err /* | DBG_STATUS_bit_HART0_Err_Stky*/;
 
 		if (0 != (core_status & hart0_err_bits)) {
 			LOG_WARNING("Hart errors detected: 0x%08X", core_status);
-			sc_rv32_HART0_clear_sticky(p_target);
-			sc_error_code__get_and_clear(p_target);
-			sc_rv32_DBG_STATUS_get(p_target, &core_status);
-			LOG_WARNING("Hart errors %s: 0x%08X", core_status & hart0_err_bits ? "not fixed!" : "fixed", core_status);
 		}
+		sc_rv32_HART0_clear_error(p_target);
+		sc_error_code__get_and_clear(p_target);
+		sc_rv32_DBG_STATUS_get(p_target, &core_status);
+		LOG_WARNING("Hart errors %s: 0x%08X", core_status & hart0_err_bits ? "not fixed!" : "fixed", core_status);
 
 		static uint32_t const cdsr_err_bits =
 			DBG_STATUS_bit_Err |
@@ -1804,17 +1804,18 @@ check_and_repair_debug_controller_errors(target* const p_target)
 
 		if (0 != (core_status & cdsr_err_bits)) {
 			LOG_WARNING("Core errors detected: 0x%08X", core_status);
-			sc_error_code__get_and_clear(p_target);
-			sc_rv32_CORE_clear_errors(p_target);
-			sc_error_code__get_and_clear(p_target);
-			sc_rv32_DBG_STATUS_get(p_target, &core_status);
+		}
 
-			if (0 != (core_status & cdsr_err_bits)) {
-				LOG_ERROR("Core errors not fixed!: 0x%08X", core_status);
-				sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
-			} else {
-				LOG_INFO("Core errors fixed: 0x%08X", core_status);
-			}
+		sc_error_code__get_and_clear(p_target);
+		sc_rv32_CORE_clear_errors(p_target);
+		sc_error_code__get_and_clear(p_target);
+		sc_rv32_DBG_STATUS_get(p_target, &core_status);
+
+		if (0 != (core_status & cdsr_err_bits)) {
+			LOG_ERROR("Core errors not fixed!: 0x%08X", core_status);
+			sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
+		} else {
+			LOG_INFO("Core errors fixed: 0x%08X", core_status);
 		}
 	}
 	return sc_error_code__get(p_target);
