@@ -1199,63 +1199,6 @@ sc_rv32_DC__unlock(target const* const p_target, uint32_t *p_lock_context)
 	}
 }
 
-/** @brief Try to clear HART0 errors.
-*/
-static inline void
-sc_rv32_HART0_clear_sticky(target* const p_target)
-{
-	LOG_DEBUG("========= Try to clear HART0 errors ============");
-	assert(p_target);
-	sc_riscv32__Arch* const p_arch = p_target->arch_info;
-	assert(p_arch);
-	assert(p_target->tap);
-	assert(p_target->tap->ir_length == TAP_length_of_IR);
-
-	{
-		/// Enqueue irscan to select DAP_CTRL IR.
-		uint8_t ir_dap_ctrl_out_buffer[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {};
-		buf_set_u32(ir_dap_ctrl_out_buffer, 0, TAP_length_of_IR, TAP_instruction_DAP_CTRL);
-		scan_field ir_dap_ctrl_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_ctrl_out_buffer};
-		jtag_add_ir_scan(p_target->tap, &ir_dap_ctrl_field, TAP_IDLE);
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CTRL);
-	}
-
-	{
-		/// Invalidate DAP_CTRL cache value.
-		invalidate_DAP_CTR_cache(p_target);
-		/// Enqueue DR scan to set DAP_CTRL HART_DBGCMD group and HART_0 unit (0x1u)
-		uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_unit_id_HART_0, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_functional_group_HART_DBGCMD, 0, 1);
-		scan_field const dr_dap_ctrl_field = {.num_bits = TAP_length_of_DAP_CTRL,.out_value = &set_dap_unit_group};
-		LOG_DEBUG("drscan %s 0x%1X 0x%1X ; ", p_target->cmd_name, dr_dap_ctrl_field.num_bits, set_dap_unit_group);
-		jtag_add_dr_scan(p_target->tap, 1, &dr_dap_ctrl_field, TAP_IDLE);
-	}
-
-	{
-		/// Enqueue irscan to select DAP_CMD IR.
-		uint8_t ir_dap_cmd_out_buffer[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {};
-		buf_set_u32(ir_dap_cmd_out_buffer, 0, TAP_length_of_IR, TAP_instruction_DAP_CMD);
-		scan_field ir_dap_cmd_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_cmd_out_buffer};
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CMD);
-		jtag_add_ir_scan(p_target->tap, &ir_dap_cmd_field, TAP_IDLE);
-	}
-
-	{
-		/// @todo describe
-		uint8_t dap_opcode_ext[NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE_EXT)];
-		uint32_t const opcode_ext = DBG_CTRL_bit_Sticky_Clr;
-		buf_set_u32(dap_opcode_ext, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, opcode_ext);
-		uint8_t const dap_opcode = DBG_CTRL_index;
-		scan_field const fields[2] = {
-			{.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext},
-			{.num_bits = TAP_length_of_DAP_CMD_OPCODE,.out_value = &dap_opcode}
-		};
-		LOG_DEBUG("drscan %s 0x%1X 0x%08X 0x%1X 0x%08X ; ", p_target->cmd_name,
-				  fields[0].num_bits, opcode_ext,
-				  fields[1].num_bits, DBG_CTRL_index);
-		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
-	}
-}
-
 /** @brief Make code for REGTRANS transaction
 
 To prepare type of access to 2-nd level multiplexed REGTRANS register
@@ -1270,61 +1213,6 @@ REGTRANS_scan_type(bool const write, uint8_t const index)
 	return
 		MAKE_TYPE_FIELD(uint8_t, !!write, 3, 3) |
 		MAKE_TYPE_FIELD(uint8_t, index, 0, 2);
-}
-
-/** @brief Try to clear errors bit of core
-@todo Describe details
-*/
-static inline void
-sc_rv32_CORE_clear_errors(target* const p_target)
-{
-	LOG_DEBUG("========= Try to clear core errors ============");
-	assert(p_target);
-	sc_riscv32__Arch* const p_arch = p_target->arch_info;
-	assert(p_arch);
-	assert(p_target->tap);
-	assert(p_target->tap->ir_length == TAP_length_of_IR);
-
-	{
-		uint8_t ir_dap_ctrl_out_buffer[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {};
-		buf_set_u32(ir_dap_ctrl_out_buffer, 0, TAP_length_of_IR, TAP_instruction_DAP_CTRL);
-		scan_field ir_dap_ctrl_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_ctrl_out_buffer};
-		jtag_add_ir_scan(p_target->tap, &ir_dap_ctrl_field, TAP_IDLE);
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CTRL);
-	}
-
-	{
-		/// set invalid cache value
-		invalidate_DAP_CTR_cache(p_target);
-
-		uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_unit_id_CORE, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_functional_group_CORE_REGTRANS, 0, 1);
-		scan_field const field = {.num_bits = TAP_length_of_DAP_CTRL,.out_value = &set_dap_unit_group};
-		LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, set_dap_unit_group);
-		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-	}
-
-	{
-		uint8_t ir_dap_cmd_out_buffer[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {};
-		buf_set_u32(ir_dap_cmd_out_buffer, 0, TAP_length_of_IR, TAP_instruction_DAP_CMD);
-		scan_field ir_dap_cmd_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_cmd_out_buffer};
-		jtag_add_ir_scan(p_target->tap, &ir_dap_cmd_field, TAP_IDLE);
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CMD);
-	}
-
-	{
-		uint8_t dap_opcode_ext[NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE_EXT)];
-		buf_set_u32(dap_opcode_ext, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, 0xFFFFFFFF);
-		uint8_t const dap_opcode = REGTRANS_scan_type(true, CORE_DBG_STS_index);
-		scan_field const fields[2] = {
-			{.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext},
-			{.num_bits = TAP_length_of_DAP_CMD_OPCODE,.out_value = &dap_opcode},
-		};
-		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
-				  fields[0].num_bits,
-				  buf_get_u32(dap_opcode_ext, 0, 32),
-				  fields[1].num_bits, dap_opcode);
-		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
-	}
 }
 
 /** @brief Common method to set DAP_CTRL upper level multiplexer control register
@@ -1735,6 +1623,117 @@ update_debug_status(target* const p_target)
 	default:
 		LOG_WARNING("TARGET_UNKNOWN %d", new_state);
 		break;
+	}
+}
+
+/** @brief Try to clear HART0 errors.
+*/
+static inline void
+sc_rv32_HART0_clear_sticky(target* const p_target)
+{
+	LOG_DEBUG("========= Try to clear HART0 errors ============");
+	assert(p_target);
+	sc_riscv32__Arch* const p_arch = p_target->arch_info;
+	assert(p_arch);
+	assert(p_target->tap);
+	assert(p_target->tap->ir_length == TAP_length_of_IR);
+
+	{
+		/// Enqueue irscan to select DAP_CTRL IR.
+		uint8_t ir_dap_ctrl_out_buffer[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {};
+		buf_set_u32(ir_dap_ctrl_out_buffer, 0, TAP_length_of_IR, TAP_instruction_DAP_CTRL);
+		scan_field ir_dap_ctrl_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_ctrl_out_buffer};
+		jtag_add_ir_scan(p_target->tap, &ir_dap_ctrl_field, TAP_IDLE);
+		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CTRL);
+	}
+
+	{
+		/// Invalidate DAP_CTRL cache value.
+		invalidate_DAP_CTR_cache(p_target);
+		/// Enqueue DR scan to set DAP_CTRL HART_DBGCMD group and HART_0 unit (0x1u)
+		uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_unit_id_HART_0, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_functional_group_HART_DBGCMD, 0, 1);
+		scan_field const dr_dap_ctrl_field = {.num_bits = TAP_length_of_DAP_CTRL,.out_value = &set_dap_unit_group};
+		LOG_DEBUG("drscan %s 0x%1X 0x%1X ; ", p_target->cmd_name, dr_dap_ctrl_field.num_bits, set_dap_unit_group);
+		jtag_add_dr_scan(p_target->tap, 1, &dr_dap_ctrl_field, TAP_IDLE);
+	}
+
+	{
+		/// Enqueue irscan to select DAP_CMD IR.
+		uint8_t ir_dap_cmd_out_buffer[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {};
+		buf_set_u32(ir_dap_cmd_out_buffer, 0, TAP_length_of_IR, TAP_instruction_DAP_CMD);
+		scan_field ir_dap_cmd_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_cmd_out_buffer};
+		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CMD);
+		jtag_add_ir_scan(p_target->tap, &ir_dap_cmd_field, TAP_IDLE);
+	}
+
+	{
+		/// @todo describe
+		uint8_t dap_opcode_ext[NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE_EXT)];
+		uint32_t const opcode_ext = DBG_CTRL_bit_Sticky_Clr;
+		buf_set_u32(dap_opcode_ext, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, opcode_ext);
+		uint8_t const dap_opcode = DBG_CTRL_index;
+		scan_field const fields[2] = {
+			{.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext},
+			{.num_bits = TAP_length_of_DAP_CMD_OPCODE,.out_value = &dap_opcode}
+		};
+		LOG_DEBUG("drscan %s 0x%1X 0x%08X 0x%1X 0x%08X ; ", p_target->cmd_name,
+				  fields[0].num_bits, opcode_ext,
+				  fields[1].num_bits, DBG_CTRL_index);
+		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
+	}
+}
+
+/** @brief Try to clear errors bit of core
+*/
+static inline void
+sc_rv32_CORE_clear_errors(target* const p_target)
+{
+	LOG_DEBUG("========= Try to clear core errors ============");
+	assert(p_target);
+	sc_riscv32__Arch* const p_arch = p_target->arch_info;
+	assert(p_arch);
+	assert(p_target->tap);
+	assert(p_target->tap->ir_length == TAP_length_of_IR);
+
+	{
+		uint8_t ir_dap_ctrl_out_buffer[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {};
+		buf_set_u32(ir_dap_ctrl_out_buffer, 0, TAP_length_of_IR, TAP_instruction_DAP_CTRL);
+		scan_field ir_dap_ctrl_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_ctrl_out_buffer};
+		jtag_add_ir_scan(p_target->tap, &ir_dap_ctrl_field, TAP_IDLE);
+		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CTRL);
+	}
+
+	{
+		/// set invalid cache value
+		invalidate_DAP_CTR_cache(p_target);
+
+		uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_unit_id_CORE, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_functional_group_CORE_REGTRANS, 0, 1);
+		scan_field const field = {.num_bits = TAP_length_of_DAP_CTRL,.out_value = &set_dap_unit_group};
+		LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, set_dap_unit_group);
+		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
+	}
+
+	{
+		uint8_t ir_dap_cmd_out_buffer[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {};
+		buf_set_u32(ir_dap_cmd_out_buffer, 0, TAP_length_of_IR, TAP_instruction_DAP_CMD);
+		scan_field ir_dap_cmd_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_cmd_out_buffer};
+		jtag_add_ir_scan(p_target->tap, &ir_dap_cmd_field, TAP_IDLE);
+		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CMD);
+	}
+
+	{
+		uint8_t dap_opcode_ext[NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE_EXT)];
+		buf_set_u32(dap_opcode_ext, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, 0xFFFFFFFF);
+		uint8_t const dap_opcode = REGTRANS_scan_type(true, CORE_DBG_STS_index);
+		scan_field const fields[2] = {
+			{.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext},
+			{.num_bits = TAP_length_of_DAP_CMD_OPCODE,.out_value = &dap_opcode},
+		};
+		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
+				  fields[0].num_bits,
+				  buf_get_u32(dap_opcode_ext, 0, 32),
+				  fields[1].num_bits, dap_opcode);
+		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
 	}
 }
 
