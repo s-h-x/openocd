@@ -1493,37 +1493,6 @@ HART_status_bits_to_target_state(uint32_t const status)
 	}
 }
 
-/** Try for wait the READY state
-*/
-static inline error_code
-try_to_get_ready(target* const p_target, uint32_t* p_core_status)
-{
-	if (ERROR_OK == sc_rv32_DBG_STATUS_get(p_target, p_core_status)) {
-		return sc_error_code__get(p_target);
-	}
-
-	if (0 != (*p_core_status & DBG_STATUS_bit_Ready)) {
-		return sc_error_code__get(p_target);
-	}
-
-	static unsigned const max_retries = 10u;
-
-	for (unsigned i = 2; i <= max_retries; ++i) {
-		sc_error_code__get_and_clear(p_target);
-		if (ERROR_OK != sc_rv32_DBG_STATUS_get(p_target, p_core_status)) {
-			continue;
-		}
-
-		if (0 != (*p_core_status & DBG_STATUS_bit_Ready)) {
-			LOG_DEBUG("Ready: 0x%08X after %d requests", *p_core_status, i);
-			return sc_error_code__get(p_target);
-		}
-	}
-
-	LOG_ERROR("Not ready: 0x%08X after %d requests", *p_core_status, max_retries);
-	return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
-}
-
 /** @brief Read DMODE_CAUSE and try to encode to enum target_debug_reason
 */
 static inline error_code
@@ -1624,6 +1593,39 @@ update_debug_status(target* const p_target)
 		LOG_WARNING("TARGET_UNKNOWN %d", new_state);
 		break;
 	}
+}
+
+/** Try for wait the READY state
+*/
+static inline error_code
+try_to_get_ready(target* const p_target, uint32_t* p_core_status)
+{
+	if (ERROR_OK != sc_rv32_DBG_STATUS_get(p_target, p_core_status)) {
+		/// @todo replace by target_reset_examined;
+		p_target->examined = false;
+		return sc_error_code__get(p_target);
+	}
+
+	if (DBG_STATUS_bit_Ready == (*p_core_status & DBG_STATUS_bit_Ready)) {
+		return sc_error_code__get(p_target);
+	}
+
+	static unsigned const max_retries = 10u;
+
+	for (unsigned i = 2; i <= max_retries; ++i) {
+		sc_error_code__get_and_clear(p_target);
+		if (ERROR_OK != sc_rv32_DBG_STATUS_get(p_target, p_core_status)) {
+			continue;
+		}
+
+		if (0 != (*p_core_status & DBG_STATUS_bit_Ready)) {
+			LOG_DEBUG("Ready: 0x%08X after %d requests", *p_core_status, i);
+			return sc_error_code__get(p_target);
+		}
+	}
+
+	LOG_ERROR("Not ready: 0x%08X after %d requests", *p_core_status, max_retries);
+	return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 }
 
 /** @brief Try to clear HART0 errors.
