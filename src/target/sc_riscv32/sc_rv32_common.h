@@ -184,6 +184,9 @@ sc_riscv32__init_regs_cache(target* const p_target);
 error_code
 sc_riscv32__virt2phys(target* p_target, uint32_t address, uint32_t* p_physical);
 
+error_code
+sc__mmu_disabled(target* p_target, int* p_mmu_enabled);
+
 /// Old Syntacore opcode extensions
 /// @{
 rv_instruction32_type

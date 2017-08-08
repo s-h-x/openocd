@@ -60,14 +60,6 @@ scr5__init_target(command_context* cmd_ctx, target* const p_target)
 	return ERROR_OK;
 }
 
-static error_code
-scr5__mmu(target* p_target, int* p_mmu_enabled)
-{
-	*p_mmu_enabled = 0;
-
-	return ERROR_OK;
-}
-
 /// @todo make const
 target_type scr5_target = {
 	.name = "scr5",
@@ -125,7 +117,7 @@ target_type scr5_target = {
 	.read_phys_memory = sc_riscv32__read_phys_memory,
 	.write_phys_memory = sc_riscv32__write_phys_memory,
 
-	.mmu = scr5__mmu,
+	.mmu = sc__mmu_disabled,
 	.check_reset = NULL,
 	.get_gdb_fileio_info = NULL,
 	.gdb_fileio_end = NULL,

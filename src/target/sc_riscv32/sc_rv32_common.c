@@ -1217,7 +1217,7 @@ sc_rv32_HART0_clear_sticky(target* const p_target)
 		/// Enqueue DR scan to set DAP_CTRL HART_DBGCMD group and HART_0 unit (0x1u)
 		uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_unit_id_HART_0, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_functional_group_HART_DBGCMD, 0, 1);
 		scan_field const dr_dap_ctrl_field = {.num_bits = TAP_length_of_DAP_CTRL,.out_value = &set_dap_unit_group};
-		LOG_DEBUG("drscan %s 0x%1X 0x%08X ; ", p_target->cmd_name, dr_dap_ctrl_field.num_bits, set_dap_unit_group);
+		LOG_DEBUG("drscan %s 0x%1X 0x%1X ; ", p_target->cmd_name, dr_dap_ctrl_field.num_bits, set_dap_unit_group);
 		jtag_add_dr_scan(p_target->tap, 1, &dr_dap_ctrl_field, TAP_IDLE);
 	}
 
@@ -3839,4 +3839,12 @@ sc_riscv32__virt2phys(target* p_target, uint32_t address, uint32_t* p_physical)
 	assert(p_arch);
 	p_arch->constants->virt_to_phis(p_target, address, p_physical, NULL, false);
 	return sc_error_code__get_and_clear(p_target);
+}
+
+error_code
+sc__mmu_disabled(target* p_target, int* p_mmu_enabled)
+{
+	*p_mmu_enabled = 0;
+
+	return ERROR_OK;
 }
