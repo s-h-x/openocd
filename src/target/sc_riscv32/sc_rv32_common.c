@@ -1755,7 +1755,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 	}
 	uint32_t core_status;
 	try_to_get_ready(p_target, &core_status);
-	if (0 == (core_status & DBG_STATUS_bit_Ready)) {
+	if (DBG_STATUS_bit_Ready != (core_status & DBG_STATUS_bit_Ready)) {
 		/// If no DBG_STATUS_bit_Ready then any actions are disabled.
 		/// @todo replace by target_reset_examined;
 		p_target->examined = false;
@@ -1763,8 +1763,20 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		return sc_error_code__get(p_target);
 	}
 
+	uint32_t const good_mask =
+		DBG_STATUS_bit_Ready |
+		DBG_STATUS_bit_Lock |
+		DBG_STATUS_bit_Err_DAP_Opcode |
+		DBG_STATUS_bit_Err_FsmBusy |
+		DBG_STATUS_bit_Err_HwCore |
+		DBG_STATUS_bit_Err |
+		DBG_STATUS_bit_HART0_Err;
+	if (DBG_STATUS_bit_Ready == (core_status & good_mask)) {
+		return sc_error_code__get(p_target);
+	}
+
 	/// First of all, try to unlock before any following actions
-	if (0 != (core_status & DBG_STATUS_bit_Lock)) {
+	if (DBG_STATUS_bit_Lock == (core_status & DBG_STATUS_bit_Lock)) {
 		LOG_ERROR("Lock detected: 0x%08X", core_status);
 		uint32_t lock_context;
 		if (ERROR_OK != sc_rv32_DC__unlock(p_target, &lock_context)) {
@@ -1776,7 +1788,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		}
 
 		sc_rv32_DBG_STATUS_get(p_target, &core_status);
-		LOG_INFO("Lock with lock_context=0x%8X repaired: 0x%08X", lock_context, core_status);
+		LOG_INFO("Lock with lock_context=0x%08X repaired: 0x%08X", lock_context, core_status);
 	}
 
 	if (DBG_STATUS_bit_Ready != (core_status & (DBG_STATUS_bit_Lock | DBG_STATUS_bit_Ready))) {
@@ -1790,13 +1802,12 @@ check_and_repair_debug_controller_errors(target* const p_target)
 
 	if (0 != (core_status & hart0_err_bits)) {
 		LOG_WARNING("Hart errors detected: 0x%08X", core_status);
-		sc_rv32_HART0_clear_error(p_target);
-		sc_error_code__get_and_clear(p_target);
-		sc_rv32_DBG_STATUS_get(p_target, &core_status);
-		if (0 != (core_status & hart0_err_bits)) {
-			LOG_ERROR("Hart errors not fixed!: 0x%08X", core_status);
-		}
-		LOG_INFO("Hart errors fixed: 0x%08X", core_status);
+	}
+	sc_rv32_HART0_clear_error(p_target);
+	sc_error_code__get_and_clear(p_target);
+	sc_rv32_DBG_STATUS_get(p_target, &core_status);
+	if (0 != (core_status & hart0_err_bits)) {
+		LOG_ERROR("Hart errors not fixed!: 0x%08X", core_status);
 	}
 
 	static uint32_t const cdsr_err_bits =
@@ -1807,18 +1818,18 @@ check_and_repair_debug_controller_errors(target* const p_target)
 
 	if (0 != (core_status & cdsr_err_bits)) {
 		LOG_WARNING("Core errors detected: 0x%08X", core_status);
-
-		sc_error_code__get_and_clear(p_target);
-		sc_rv32_CORE_clear_errors(p_target);
-		sc_error_code__get_and_clear(p_target);
-		sc_rv32_DBG_STATUS_get(p_target, &core_status);
-
-		if (0 != (core_status & cdsr_err_bits)) {
-			LOG_ERROR("Core errors not fixed!: 0x%08X", core_status);
-			return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
-		}
-		LOG_INFO("Core errors fixed: 0x%08X", core_status);
 	}
+
+	sc_error_code__get_and_clear(p_target);
+	sc_rv32_CORE_clear_errors(p_target);
+	sc_error_code__get_and_clear(p_target);
+	sc_rv32_DBG_STATUS_get(p_target, &core_status);
+
+	if (0 != (core_status & cdsr_err_bits)) {
+		LOG_ERROR("Core errors not fixed!: 0x%08X", core_status);
+		sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
+	}
+	LOG_INFO("Core status: 0x%08X", core_status);
 	return sc_error_code__get(p_target);
 }
 
