@@ -1601,8 +1601,6 @@ static inline error_code
 try_to_get_ready(target* const p_target, uint32_t* p_core_status)
 {
 	if (ERROR_OK != sc_rv32_DBG_STATUS_get(p_target, p_core_status)) {
-		/// @todo replace by target_reset_examined;
-		p_target->examined = false;
 		return sc_error_code__get(p_target);
 	}
 
@@ -1752,7 +1750,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		/// If IDCODE is invalid, then its is serious error: reset target examined flag
 		/// @todo replace by target_reset_examined;
 		p_target->examined = false;
-		LOG_ERROR("Debug controller/JTAG error! Try to re-examine!");
+		LOG_ERROR("TAP controller/JTAG error! Try to re-examine!");
 		return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 	}
 	uint32_t core_status;
@@ -1761,6 +1759,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		/// If no DBG_STATUS_bit_Ready then any actions are disabled.
 		/// @todo replace by target_reset_examined;
 		p_target->examined = false;
+		LOG_ERROR("Debug controller unrecoverable error!");
 		return sc_error_code__get(p_target);
 	}
 
@@ -1772,7 +1771,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 			/// @todo replace by target_reset_examined;
 			p_target->examined = false;
 			/// return with error_code != ERROR_OK if unlock was unsuccsesful
-			LOG_ERROR("Unlock unsucsessful with lock_context=0x%8X", lock_context);
+			LOG_ERROR("Unlock unsucsessful with lock_context=0x%8X, unrecoverable error", lock_context);
 			return sc_error_code__get(p_target);
 		}
 
