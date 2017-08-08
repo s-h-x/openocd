@@ -1763,7 +1763,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		return sc_error_code__get(p_target);
 	}
 
-	uint32_t const good_mask =
+	static uint32_t const controlled_mask =
 		DBG_STATUS_bit_Ready |
 		DBG_STATUS_bit_Lock |
 		DBG_STATUS_bit_Err_DAP_Opcode |
@@ -1771,7 +1771,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		DBG_STATUS_bit_Err_HwCore |
 		DBG_STATUS_bit_Err |
 		DBG_STATUS_bit_HART0_Err;
-	if (DBG_STATUS_bit_Ready == (core_status & good_mask)) {
+	if (DBG_STATUS_bit_Ready == (core_status & controlled_mask)) {
 		return sc_error_code__get(p_target);
 	}
 
