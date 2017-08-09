@@ -3013,22 +3013,9 @@ reset__set(target* const p_target, bool const active)
 	};
 	assert(p_target->tap);
 	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
+	sc_error_code__update(p_target, jtag_execute_queue());
 	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, *field.out_value);
-	if (ERROR_OK == sc_riscv32__update_status(p_target)) {
-		if (active) {
-			if (p_target->state != TARGET_RESET) {
-				/// issue error if we are still running
-				LOG_ERROR("Target is not resetting after reset assert");
-				sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
-			}
-		} else {
-			if (p_target->state == TARGET_RESET) {
-				LOG_ERROR("Target is still in reset after reset deassert");
-				sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
-			}
-		}
-	}
-
+	sc_riscv32__update_status(p_target);
 	return sc_error_code__get_and_clear(p_target);
 }
 
