@@ -224,7 +224,6 @@ enum
 	DBG_STATUS_bit_Ready = BIT_MASK(31),
 };
 
-
 /** @brief Status bits of previous operation
 */
 enum
@@ -1560,11 +1559,11 @@ update_debug_status(target* const p_target)
 		ERROR_OK != sc_rv32_HART_REGTRANS_read(p_target, HART_DBG_STS_index, &HART_status) ?
 		TARGET_UNKNOWN :
 		HART_status_bits_to_target_state(HART_status);
-	LOG_DEBUG("debug_status: old=%d, new=%d", old_state, new_state);
 
 	if (new_state == old_state) {
 		return;
 	}
+	LOG_INFO("debug_status changed: old=%d, new=%d", old_state, new_state);
 
 	p_target->state = new_state;
 
@@ -2956,6 +2955,7 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 	return sc_error_code__get_and_clear(p_target);
 }
 
+#if 0
 static error_code
 reset__set(target* const p_target, bool const active)
 {
@@ -3000,6 +3000,39 @@ reset__set(target* const p_target, bool const active)
 
 	return sc_error_code__get_and_clear(p_target);
 }
+
+#else
+static error_code
+reset__set(target* const p_target, bool const active)
+{
+	IR_select(p_target, TAP_instruction_SYS_CTRL);
+	uint8_t out = active ? 1 : 0;
+	scan_field const field = {
+		.num_bits = TAP_length_of_SYS_CTRL,
+		.out_value = &out,
+	};
+	assert(p_target->tap);
+	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
+
+	if (ERROR_OK == sc_riscv32__update_status(p_target)) {
+		if (active) {
+			if (p_target->state != TARGET_RESET) {
+				/// issue error if we are still running
+				LOG_ERROR("Target is not resetting after reset assert");
+				sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
+			}
+		} else {
+			if (p_target->state == TARGET_RESET) {
+				LOG_ERROR("Target is still in reset after reset deassert");
+				sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
+			}
+		}
+	}
+
+	return sc_error_code__get_and_clear(p_target);
+}
+
+#endif // 0
 
 static reg const def_GP_regs_array[] = {
 	// Hard-wired zero
