@@ -3013,7 +3013,7 @@ reset__set(target* const p_target, bool const active)
 	};
 	assert(p_target->tap);
 	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, field.out_value);
+	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, *field.out_value);
 	if (ERROR_OK == sc_riscv32__update_status(p_target)) {
 		if (active) {
 			if (p_target->state != TARGET_RESET) {
