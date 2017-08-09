@@ -2955,9 +2955,8 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 	return sc_error_code__get_and_clear(p_target);
 }
 
-#if 0
 static error_code
-reset__set(target* const p_target, bool const active)
+sc_rv32_core_reset__set(target* const p_target, bool const active)
 {
 	uint32_t get_old_value1;
 	if (ERROR_OK == sc_rv32_core_REGTRANS_read(p_target, CORE_DBG_CTRL_index, &get_old_value1)) {
@@ -3001,9 +3000,8 @@ reset__set(target* const p_target, bool const active)
 	return sc_error_code__get_and_clear(p_target);
 }
 
-#else
 static error_code
-reset__set(target* const p_target, bool const active)
+scrv32_sys_reset__set(target* const p_target, bool const active)
 {
 	IR_select(p_target, TAP_instruction_SYS_CTRL);
 	uint8_t out = active ? 1 : 0;
@@ -3018,8 +3016,6 @@ reset__set(target* const p_target, bool const active)
 	sc_riscv32__update_status(p_target);
 	return sc_error_code__get_and_clear(p_target);
 }
-
-#endif // 0
 
 static reg const def_GP_regs_array[] = {
 	// Hard-wired zero
@@ -3405,14 +3401,14 @@ error_code
 sc_riscv32__assert_reset(target* const p_target)
 {
 	LOG_DEBUG("Assert reset");
-	return reset__set(p_target, true);
+	return scrv32_sys_reset__set(p_target, true);
 }
 
 error_code
 sc_riscv32__deassert_reset(target* const p_target)
 {
 	LOG_DEBUG("Deassert reset");
-	return reset__set(p_target, false);
+	return scrv32_sys_reset__set(p_target, false);
 }
 
 error_code
@@ -3422,8 +3418,8 @@ sc_riscv32__soft_reset_halt(target* const p_target)
 
 	sc_riscv32__update_status(p_target);
 	set_DEMODE_ENBL(p_target, HART_DMODE_ENBL_bits_Normal | HART_DMODE_ENBL_bit_Rst_Exit);
-	reset__set(p_target, true);
-	reset__set(p_target, false);
+	sc_rv32_core_reset__set(p_target, true);
+	sc_rv32_core_reset__set(p_target, false);
 	return sc_error_code__get_and_clear(p_target);
 }
 
