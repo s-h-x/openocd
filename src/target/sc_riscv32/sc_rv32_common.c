@@ -3418,18 +3418,12 @@ sc_riscv32__deassert_reset(target* const p_target)
 error_code
 sc_riscv32__soft_reset_halt(target* const p_target)
 {
-	LOG_DEBUG("Soft reset called");
+	LOG_DEBUG("Soft reset halt called");
 
-	if (ERROR_OK == reset__set(p_target, true)) {
-		if (ERROR_OK == set_DEMODE_ENBL(p_target, HART_DMODE_ENBL_bits_Normal | HART_DMODE_ENBL_bit_Rst_Exit)) {
-			reset__set(p_target, false);
-		} else {
-			sc_riscv32__update_status(p_target);
-		}
-	} else {
-		sc_riscv32__update_status(p_target);
-	}
-
+	sc_riscv32__update_status(p_target);
+	set_DEMODE_ENBL(p_target, HART_DMODE_ENBL_bits_Normal | HART_DMODE_ENBL_bit_Rst_Exit);
+	reset__set(p_target, true);
+	reset__set(p_target, false);
 	return sc_error_code__get_and_clear(p_target);
 }
 
