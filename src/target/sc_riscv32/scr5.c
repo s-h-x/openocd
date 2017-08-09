@@ -27,9 +27,9 @@ scr5__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical, uin
 static sc_riscv32__Arch_constants const scr5_constants = {
 	.use_ir_select_cache = true,
 	.use_dap_control_cache = true,
-	.use_verify_dap_control = false,
-	.use_verify_hart_regtrans_write = false,
-	.use_verify_core_regtrans_write = false,
+	.use_verify_dap_control = true,
+	.use_verify_hart_regtrans_write = true,
+	.use_verify_core_regtrans_write = true,
 	.use_queuing_for_dr_scans = true,
 	.expected_idcode = 0xC0D5DEB1u,
 	.expected_idcode_mask = 0xFFFFFFFFu,
