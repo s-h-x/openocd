@@ -1563,7 +1563,7 @@ update_debug_status(target* const p_target)
 	if (new_state == old_state) {
 		return;
 	}
-	LOG_INFO("debug_status changed: old=%d, new=%d", old_state, new_state);
+	LOG_DEBUG("debug_status changed: old=%d, new=%d", old_state, new_state);
 
 	p_target->state = new_state;
 
