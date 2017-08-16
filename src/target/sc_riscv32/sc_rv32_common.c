@@ -569,11 +569,9 @@ static char const def_GP_regs_name[] = "general";
 static bool
 sc_rv32__is_IDCODE_valid(target* const p_target, uint32_t const IDCODE)
 {
-	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
-	assert(p_arch);
-	sc_riscv32__Arch_constants const* const p_const = p_arch->constants;
-	assert(p_const);
-	return (p_const->expected_idcode & p_const->expected_idcode_mask) == (IDCODE & p_const->expected_idcode_mask);
+	assert(p_target);
+	assert(p_target->tap);
+	return p_target->tap->hasidcode && IDCODE == p_target->tap->idcode;
 }
 
 /** @brief Check Debug controller version for compatibility
@@ -3891,4 +3889,16 @@ sc__mmu_disabled(target* p_target, int* p_mmu_enabled)
 	*p_mmu_enabled = 0;
 
 	return ERROR_OK;
+}
+
+error_code
+sc_rv32__virt_to_phis_disabled(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
+{
+	assert(p_physical);
+	*p_physical = address;
+
+	if (p_bound) {
+		*p_bound = UINT32_MAX;
+	}
+	return sc_error_code__get(p_target);
 }

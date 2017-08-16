@@ -106,6 +106,7 @@ extern struct target_type quark_x10xx_target;
 extern struct target_type quark_d20xx_target;
 extern struct target_type syntacore_riscv32i_target;
 extern struct target_type scr1_target;
+extern struct target_type scr4_target;
 extern struct target_type scr5_target;
 
 static struct target_type *target_types[] = {
@@ -140,6 +141,7 @@ static struct target_type *target_types[] = {
 	&quark_d20xx_target,
 	&syntacore_riscv32i_target,
 	&scr1_target,
+	&scr4_target,
 	&scr5_target,
 	NULL,
 };

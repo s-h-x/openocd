@@ -12,18 +12,6 @@
 #include "target/target_type.h"
 #include "helper/log.h"
 
-static error_code
-scr1__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
-{
-	assert(p_physical);
-	*p_physical = address;
-
-	if (p_bound) {
-		*p_bound = UINT32_MAX;
-	}
-	return sc_error_code__get(p_target);
-}
-
 static sc_riscv32__Arch_constants const scr1_constants = {
 	.use_ir_select_cache = false,
 	.use_dap_control_cache = false,
@@ -31,14 +19,12 @@ static sc_riscv32__Arch_constants const scr1_constants = {
 	.use_verify_hart_regtrans_write = true,
 	.use_verify_core_regtrans_write = true,
 	.use_queuing_for_dr_scans = true,
-	.expected_idcode = 0xC0D1DEB1u,
-	.expected_idcode_mask = 0xFFFFFFFFu,
 	.expected_dbg_id = 0x00810000u,
 	.debug_scratch_CSR = 0x7C8u,
 	.mstatus_FS_offset = 13u,
 	.opcode_FMV_D_2X = &sc_RISCV_opcode_D_FMV_D_2X,
 	.opcode_FMV_2X_D = &sc_RISCV_opcode_D_FMV_2X_D,
-	.virt_to_phis = &scr1__virt_to_phis
+	.virt_to_phis = &sc_rv32__virt_to_phis_disabled
 };
 
 static sc_riscv32__Arch const scr1_initial_arch = {

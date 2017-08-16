@@ -12,19 +12,7 @@
 #include "target/target_type.h"
 #include "helper/log.h"
 
-static error_code
-scr5__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
-{
-	assert(p_physical);
-	*p_physical = address;
-
-	if (p_bound) {
-		*p_bound = UINT32_MAX;
-	}
-	return sc_error_code__get(p_target);
-}
-
-static sc_riscv32__Arch_constants const scr5_constants = {
+static sc_riscv32__Arch_constants const scr4_constants = {
 	.use_ir_select_cache = true,
 	.use_dap_control_cache = true,
 	.use_verify_dap_control = true,
@@ -36,13 +24,13 @@ static sc_riscv32__Arch_constants const scr5_constants = {
 	.mstatus_FS_offset = 13u,
 	.opcode_FMV_D_2X = &sc_RISCV_opcode_D_FMV_D_2X,
 	.opcode_FMV_2X_D = &sc_RISCV_opcode_D_FMV_2X_D,
-	.virt_to_phis = &scr5__virt_to_phis
+	.virt_to_phis = &sc_rv32__virt_to_phis_disabled
 };
 
 static sc_riscv32__Arch const scr5_initial_arch = {
 	.error_code = ERROR_OK,
 	.last_DAP_ctrl = DAP_CTRL_value_INVALID_CODE,
-	.constants = &scr5_constants
+	.constants = &scr4_constants
 };
 
 static error_code
@@ -59,8 +47,8 @@ scr5__init_target(command_context* cmd_ctx, target* const p_target)
 }
 
 /// @todo make const
-target_type scr5_target = {
-	.name = "scr5",
+target_type scr4_target = {
+	.name = "scr4",
 
 	.poll = sc_riscv32__poll,
 	.arch_state = sc_riscv32__arch_state,

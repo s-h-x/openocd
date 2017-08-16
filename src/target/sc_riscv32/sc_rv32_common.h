@@ -63,8 +63,6 @@ struct sc_riscv32__Arch_constants
 	bool use_verify_hart_regtrans_write;  ///< Verify values of HART REGTRANS after write
 	bool use_verify_core_regtrans_write;  ///< Verify values of CORE REGTRANS after write
 	
-	uint32_t expected_idcode;             ///< expected TAP controller IDCODE
-	uint32_t expected_idcode_mask;        ///< expected TAP controller IDCODE mask
 	uint32_t expected_dbg_id;             ///< Lowest required DBG_ID.
 	
 	csr_num_type debug_scratch_CSR;       ///< Syntacore Debug controller CSR (design-dependent)
@@ -204,5 +202,8 @@ sc_RISCV_opcode_D_FMV_2X_D(reg_num_type rd_hi, reg_num_type rd_lo, reg_num_type 
 rv_instruction32_type
 sc_RISCV_opcode_D_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type rs_lo);
 /// @}
+
+error_code
+sc_rv32__virt_to_phis_disabled(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
 
 #endif  // TARGET_SC_RV32_COMMON_H_
