@@ -735,22 +735,22 @@ static void gdb_signal_reply(struct target *target, struct connection *connectio
 		stop_reason[0] = '\0';
 		if (target->debug_reason == DBG_REASON_WATCHPOINT) {
 			enum watchpoint_rw hit_wp_type;
-			uint32_t hit_wp_address;
+			target_addr_t hit_wp_address;
 
 			if (watchpoint_hit(target, &hit_wp_type, &hit_wp_address) == ERROR_OK) {
 
 				switch (hit_wp_type) {
 					case WPT_WRITE:
 						snprintf(stop_reason, sizeof(stop_reason),
-								"watch:%08" PRIx32 ";", hit_wp_address);
+								"watch:%08" TARGET_PRIxADDR ";", hit_wp_address);
 						break;
 					case WPT_READ:
 						snprintf(stop_reason, sizeof(stop_reason),
-								"rwatch:%08" PRIx32 ";", hit_wp_address);
+								"rwatch:%08" TARGET_PRIxADDR ";", hit_wp_address);
 						break;
 					case WPT_ACCESS:
 						snprintf(stop_reason, sizeof(stop_reason),
-								"awatch:%08" PRIx32 ";", hit_wp_address);
+								"awatch:%08" TARGET_PRIxADDR ";", hit_wp_address);
 						break;
 					default:
 						break;
@@ -1167,8 +1167,20 @@ static int gdb_get_registers_packet(struct connection *connection,
 	reg_packet_p = reg_packet;
 
 	for (i = 0; i < reg_list_size; i++) {
+#if BUILD_RISCV == 1
+		if (!reg_list[i]->valid) {
+			retval = reg_list[i]->type->get(reg_list[i]);
+			if (retval != ERROR_OK) {
+				LOG_DEBUG("Couldn't get register %s.", reg_list[i]->name);
+				free(reg_packet);
+				free(reg_list);
+				return gdb_error(connection, retval);
+			}
+		}
+#else
 		if (!reg_list[i]->valid)
 			reg_list[i]->type->get(reg_list[i]);
+#endif
 		gdb_str_to_target(target, reg_packet_p, reg_list[i]);
 		reg_packet_p += DIV_ROUND_UP(reg_list[i]->size, 8) * 2;
 	}
@@ -1229,7 +1241,17 @@ static int gdb_set_registers_packet(struct connection *connection,
 		bin_buf = malloc(DIV_ROUND_UP(reg_list[i]->size, 8));
 		gdb_target_to_reg(target, packet_p, chars, bin_buf);
 
+#if BUILD_RISCV == 1
+		retval = reg_list[i]->type->set(reg_list[i], bin_buf);
+		if (retval != ERROR_OK) {
+			LOG_DEBUG("Couldn't set register %s.", reg_list[i]->name);
+			free(reg_list);
+			free(bin_buf);
+			return gdb_error(connection, retval);
+		}
+#else
 		reg_list[i]->type->set(reg_list[i], bin_buf);
+#endif
 
 		/* advance packet pointer */
 		packet_p += chars;
@@ -1269,8 +1291,19 @@ static int gdb_get_register_packet(struct connection *connection,
 		return ERROR_SERVER_REMOTE_CLOSED;
 	}
 
+#if BUILD_RISCV == 1
+	if (!reg_list[reg_num]->valid) {
+	        retval = reg_list[reg_num]->type->get(reg_list[reg_num]);
+		if (retval != ERROR_OK) {
+			LOG_DEBUG("Couldn't get register %s.", reg_list[reg_num]->name);
+			free (reg_list);
+			return gdb_error(connection, retval);
+		}
+	}
+#else
 	if (!reg_list[reg_num]->valid)
 		reg_list[reg_num]->type->get(reg_list[reg_num]);
+#endif
 
 	reg_packet = malloc(DIV_ROUND_UP(reg_list[reg_num]->size, 8) * 2 + 1); /* plus one for string termination null */
 
@@ -1324,7 +1357,17 @@ static int gdb_set_register_packet(struct connection *connection,
 
 	gdb_target_to_reg(target, separator + 1, chars, bin_buf);
 
+#if BUILD_RISCV == 1
+	retval = reg_list[reg_num]->type->set(reg_list[reg_num], bin_buf);
+	if (retval != ERROR_OK){
+		LOG_DEBUG("Couldn't set register %s.", reg_list[reg_num]->name);
+		free(bin_buf);
+		free(reg_list);
+		return gdb_error(connection, retval);
+	}
+#else
 	reg_list[reg_num]->type->set(reg_list[reg_num], bin_buf);
+#endif
 
 	gdb_put_packet(connection, "OK", 2);
 
@@ -1355,7 +1398,7 @@ static int gdb_read_memory_packet(struct connection *connection,
 {
 	struct target *target = get_target_from_connection(connection);
 	char *separator;
-	uint32_t addr = 0;
+	uint64_t addr = 0;
 	uint32_t len = 0;
 
 	uint8_t *buffer;
@@ -1366,7 +1409,7 @@ static int gdb_read_memory_packet(struct connection *connection,
 	/* skip command character */
 	packet++;
 
-	addr = strtoul(packet, &separator, 16);
+	addr = strtoull(packet, &separator, 16);
 
 	if (*separator != ',') {
 		LOG_ERROR("incomplete read memory packet received, dropping connection");
@@ -1383,7 +1426,7 @@ static int gdb_read_memory_packet(struct connection *connection,
 
 	buffer = malloc(len);
 
-	LOG_DEBUG("addr: 0x%8.8" PRIx32 ", len: 0x%8.8" PRIx32 "", addr, len);
+	LOG_DEBUG("addr: 0x%16.16" PRIx64 ", len: 0x%8.8" PRIx32 "", addr, len);
 
 	retval = target_read_buffer(target, addr, len, buffer);
 
@@ -1426,7 +1469,7 @@ static int gdb_write_memory_packet(struct connection *connection,
 {
 	struct target *target = get_target_from_connection(connection);
 	char *separator;
-	uint32_t addr = 0;
+	uint64_t addr = 0;
 	uint32_t len = 0;
 
 	uint8_t *buffer;
@@ -1435,7 +1478,7 @@ static int gdb_write_memory_packet(struct connection *connection,
 	/* skip command character */
 	packet++;
 
-	addr = strtoul(packet, &separator, 16);
+	addr = strtoull(packet, &separator, 16);
 
 	if (*separator != ',') {
 		LOG_ERROR("incomplete write memory packet received, dropping connection");
@@ -1451,7 +1494,7 @@ static int gdb_write_memory_packet(struct connection *connection,
 
 	buffer = malloc(len);
 
-	LOG_DEBUG("addr: 0x%8.8" PRIx32 ", len: 0x%8.8" PRIx32 "", addr, len);
+	LOG_DEBUG("addr: 0x%" PRIx64 ", len: 0x%8.8" PRIx32 "", addr, len);
 
 	if (unhexify(buffer, separator, len) != len)
 		LOG_ERROR("unable to decode memory packet");
@@ -1473,7 +1516,7 @@ static int gdb_write_memory_binary_packet(struct connection *connection,
 {
 	struct target *target = get_target_from_connection(connection);
 	char *separator;
-	uint32_t addr = 0;
+	uint64_t addr = 0;
 	uint32_t len = 0;
 
 	int retval = ERROR_OK;
@@ -1485,7 +1528,7 @@ static int gdb_write_memory_binary_packet(struct connection *connection,
 	/* skip command character */
 	packet++;
 
-	addr = strtoul(packet, &separator, 16);
+	addr = strtoull(packet, &separator, 16);
 
 	if (*separator != ',') {
 		LOG_ERROR("incomplete write memory binary packet received, dropping connection");
@@ -1523,7 +1566,7 @@ static int gdb_write_memory_binary_packet(struct connection *connection,
 	}
 
 	if (len) {
-		LOG_DEBUG("addr: 0x%8.8" PRIx32 ", len: 0x%8.8" PRIx32 "", addr, len);
+		LOG_DEBUG("addr: 0x%" PRIx64 ", len: 0x%8.8" PRIx32 "", addr, len);
 
 		retval = target_write_buffer(target, addr, len, (uint8_t *)separator);
 		if (retval != ERROR_OK)
@@ -1547,13 +1590,13 @@ static int gdb_step_continue_packet(struct connection *connection,
 {
 	struct target *target = get_target_from_connection(connection);
 	int current = 0;
-	uint32_t address = 0x0;
+	uint64_t address = 0x0;
 	int retval = ERROR_OK;
 
 	LOG_DEBUG("-");
 
 	if (packet_size > 1)
-		address = strtoul(packet + 1, NULL, 16);
+		address = strtoull(packet + 1, NULL, 16);
 	else
 		current = 1;
 
@@ -1577,7 +1620,7 @@ static int gdb_breakpoint_watchpoint_packet(struct connection *connection,
 	int type;
 	enum breakpoint_type bp_type = BKPT_SOFT /* dummy init to avoid warning */;
 	enum watchpoint_rw wp_type = WPT_READ /* dummy init to avoid warning */;
-	uint32_t address;
+	uint64_t address;
 	uint32_t size;
 	char *separator;
 	int retval;
@@ -1609,7 +1652,7 @@ static int gdb_breakpoint_watchpoint_packet(struct connection *connection,
 		return ERROR_SERVER_REMOTE_CLOSED;
 	}
 
-	address = strtoul(separator + 1, &separator, 16);
+	address = strtoull(separator + 1, &separator, 16);
 
 	if (*separator != ',') {
 		LOG_ERROR("incomplete breakpoint/watchpoint packet received, dropping connection");
@@ -2410,7 +2453,7 @@ static int gdb_query_packet(struct connection *connection,
 			char gdb_reply[10];
 			char *separator;
 			uint32_t checksum;
-			uint32_t addr = 0;
+			target_addr_t addr = 0;
 			uint32_t len = 0;
 
 			/* skip command character */
@@ -2560,6 +2603,15 @@ static int gdb_v_packet(struct connection *connection,
 	struct gdb_connection *gdb_connection = connection->priv;
 	struct gdb_service *gdb_service = connection->service->priv;
 	int result;
+
+#if BUILD_RISCV == 1
+	struct target *target = get_target_from_connection(connection);
+	if (target->rtos != NULL && target->rtos->gdb_v_packet != NULL) {
+		int out = target->rtos->gdb_v_packet(connection, packet, packet_size);
+		if (out != GDB_THREAD_PACKET_NOT_CONSUMED)
+			return out;
+	}
+#endif
 
 	/* if flash programming disabled - send a empty reply */
 
@@ -2759,7 +2811,11 @@ static void gdb_log_callback(void *priv, const char *file, unsigned line,
 	gdb_output_con(connection, string);
 }
 
+#if BUILD_RISCV == 1
+void gdb_sig_halted(struct connection *connection)
+#else
 static void gdb_sig_halted(struct connection *connection)
+#endif
 {
 	char sig_reply[4];
 	snprintf(sig_reply, 4, "T%2.2x", 2);
@@ -3316,3 +3372,11 @@ int gdb_register_commands(struct command_context *cmd_ctx)
 	gdb_port_next = strdup("3333");
 	return register_commands(cmd_ctx, NULL, gdb_command_handlers);
 }
+
+#if BUILD_RISCV == 1
+void gdb_set_frontend_state_running(struct connection *connection)
+{
+	struct gdb_connection *gdb_con = connection->priv;
+	gdb_con->frontend_state = TARGET_RUNNING;
+}
+#endif

@@ -1011,7 +1011,7 @@ static int dsp5680xx_poll(struct target *target)
 }
 
 static int dsp5680xx_resume(struct target *target, int current,
-			    uint32_t address, int hb, int d)
+			    target_addr_t address, int hb, int d)
 {
 	if (target->state == TARGET_RUNNING) {
 		LOG_USER("Target already running.");
@@ -1169,7 +1169,7 @@ static int dsp5680xx_read_32_single(struct target *t, uint32_t a,
 	return retval;
 }
 
-static int dsp5680xx_read(struct target *t, uint32_t a, uint32_t size,
+static int dsp5680xx_read(struct target *t, target_addr_t a, uint32_t size,
 			  uint32_t count, uint8_t *buf)
 {
 	struct target *target = t;
@@ -1424,7 +1424,7 @@ static int dsp5680xx_write_32(struct target *t, uint32_t a, uint32_t c,
  *
  * @return error status
  */
-static int dsp5680xx_write(struct target *t, uint32_t a, uint32_t s, uint32_t c,
+static int dsp5680xx_write(struct target *t, target_addr_t a, uint32_t s, uint32_t c,
 			   const uint8_t *b)
 {
 	/* TODO Cannot write 32bit to odd address, will write 0x12345678  as 0x5678 0x0012 */
@@ -1469,7 +1469,7 @@ static int dsp5680xx_write(struct target *t, uint32_t a, uint32_t s, uint32_t c,
 	return retval;
 }
 
-static int dsp5680xx_write_buffer(struct target *t, uint32_t a, uint32_t size,
+static int dsp5680xx_write_buffer(struct target *t, target_addr_t a, uint32_t size,
 				  const uint8_t *b)
 {
 	check_halt_and_debug(t);
@@ -1486,7 +1486,7 @@ static int dsp5680xx_write_buffer(struct target *t, uint32_t a, uint32_t size,
  *
  * @return error status
  */
-static int dsp5680xx_read_buffer(struct target *t, uint32_t a, uint32_t size,
+static int dsp5680xx_read_buffer(struct target *t, target_addr_t a, uint32_t size,
 				 uint8_t *buf)
 {
 	check_halt_and_debug(t);
@@ -1507,7 +1507,7 @@ static int dsp5680xx_read_buffer(struct target *t, uint32_t a, uint32_t size,
  * @return always ERROR_FAIL
  * @bug trivial return value ERROR_FAIL
  */
-static int dsp5680xx_checksum_memory(struct target *t, uint32_t a, uint32_t s,
+static int dsp5680xx_checksum_memory(struct target *t, target_addr_t a, uint32_t s,
 				     uint32_t *checksum)
 {
 	return ERROR_FAIL;
@@ -2264,7 +2264,7 @@ int dsp5680xx_f_lock(struct target *target)
 	return retval;
 }
 
-static int dsp5680xx_step(struct target *target, int current, uint32_t address,
+static int dsp5680xx_step(struct target *target, int current, target_addr_t address,
 			  int handle_breakpoints)
 {
 	err_check(ERROR_FAIL, DSP5680XX_ERROR_NOT_IMPLEMENTED_STEP,

@@ -103,7 +103,7 @@ static void log_forward(const char *file, unsigned line, const char *function, c
 	}
 }
 
-/* The log_puts() serves to somewhat different goals:
+/* The log_puts() serves two somewhat different goals:
  *
  * - logging
  * - feeding low-level info to the user in GDB or Telnet
@@ -251,9 +251,15 @@ COMMAND_HANDLER(handle_log_output_command)
 {
 	if (CMD_ARGC == 1) {
 		FILE *file = fopen(CMD_ARGV[0], "w");
-
-		if (file)
-			log_output = file;
+		if (file == NULL) {
+			LOG_ERROR("failed to open output log '%s'", CMD_ARGV[0]);
+			return ERROR_FAIL;
+		}
+		if (log_output != stderr && log_output != NULL) {
+			/* Close previous log file, if it was open and wasn't stderr. */
+			fclose(log_output);
+		}
+		log_output = file;
 	}
 
 	return ERROR_OK;

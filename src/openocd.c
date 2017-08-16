@@ -45,12 +45,36 @@
 #include <strings.h>
 #endif
 
+// [GNU MCU Eclipse]
+// Add --enable-branding='GNU MCU Eclipse' at build time
+#if defined(BUILD_BRANDING)
+
+#if INTPTR_MAX == INT32_MAX
+#define OPENOCD_WORDSIZE "32-bits "
+#elif INTPTR_MAX == INT64_MAX
+#define OPENOCD_WORDSIZE "64-bits "
+#else
+#define OPENOCD_WORDSIZE ""
+#endif
+
+#ifdef PKGBLDDATE
+#define OPENOCD_VERSION	BUILD_BRANDING " " OPENOCD_WORDSIZE \
+    "Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
+#else
+#define OPENOCD_VERSION	BUILD_BRANDING " " OPENOCD_WORDSIZE \
+    "Open On-Chip Debugger " VERSION RELSTR
+#endif
+
+#else
+
 #ifdef PKGBLDDATE
 #define OPENOCD_VERSION	\
 	"Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
 #else
 #define OPENOCD_VERSION	\
 	"Open On-Chip Debugger " VERSION RELSTR
+#endif
+
 #endif
 
 static const char openocd_startup_tcl[] = {
@@ -297,8 +321,10 @@ static int openocd_thread(int argc, char *argv[], struct command_context *cmd_ct
 
 	if (init_at_startup) {
 		ret = command_run_line(cmd_ctx, "init");
-		if (ERROR_OK != ret)
+		if (ERROR_OK != ret) {
+			server_quit();
 			return ERROR_FAIL;
+		}
 	}
 
 	ret = server_loop(cmd_ctx);

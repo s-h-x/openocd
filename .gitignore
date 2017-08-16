@@ -80,13 +80,6 @@ INSTALL
 NOTES
 
 # coexist with quilt
-patches
-*.patch
-
-# Eclipse stuff
-.project
-.cproject
-.settings
 
 # Emacs temp files
 *~
@@ -99,3 +92,4 @@ TAGS
 
 # ctags tag files
 tags
+.vscode

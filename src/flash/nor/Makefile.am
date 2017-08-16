@@ -15,13 +15,16 @@ NOR_DRIVERS = \
 	%D%/at91samd.c \
 	%D%/at91sam3.c \
 	%D%/at91sam7.c \
+	%D%/ath79.c \
 	%D%/atsamv.c \
 	%D%/avrf.c \
 	%D%/cfi.c \
 	%D%/dsp5680xx_flash.c \
 	%D%/efm32.c \
 	%D%/em357.c \
+	%D%/fespi.c \
 	%D%/faux.c \
+	%D%/fespi.c \
 	%D%/fm3.c \
 	%D%/fm4.c \
 	%D%/jtagspi.c \
