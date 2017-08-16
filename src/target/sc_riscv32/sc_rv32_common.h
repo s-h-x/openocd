@@ -129,10 +129,10 @@ error_code
 sc_riscv32__halt(target* const p_target);
 
 error_code
-sc_riscv32__resume(target* const p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution);
+sc_riscv32__resume(target* const p_target, int const current, target_addr_t const address, int const handle_breakpoints, int const debug_execution);
 
 error_code
-sc_riscv32__step(target* const p_target, int const current, uint32_t const address, int const handle_breakpoints);
+sc_riscv32__step(target* const p_target, int const current, target_addr_t const address, int const handle_breakpoints);
 
 error_code
 sc_riscv32__assert_reset(target* const p_target);
@@ -147,10 +147,10 @@ error_code
 sc_riscv32__get_gdb_reg_list(target* const p_target, reg** reg_list[], int* const reg_list_size, target_register_class const reg_class);
 
 error_code
-sc_riscv32__read_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer);
+sc_riscv32__read_memory(target* const p_target, target_addr_t address, uint32_t const size, uint32_t count, uint8_t* buffer);
 
 error_code
-sc_riscv32__write_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer);
+sc_riscv32__write_memory(target* const p_target, target_addr_t address, uint32_t const size, uint32_t count, uint8_t const* buffer);
 
 error_code
 sc_riscv32__add_breakpoint(target* const p_target, breakpoint* const p_breakpoint);
@@ -168,10 +168,10 @@ void
 sc_riscv32__deinit_target(target* const p_target);
 
 error_code
-sc_riscv32__read_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer);
+sc_riscv32__read_phys_memory(target* const p_target, target_addr_t address, uint32_t const size, uint32_t count, uint8_t* buffer);
 
 error_code
-sc_riscv32__write_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer);
+sc_riscv32__write_phys_memory(target* const p_target, target_addr_t address, uint32_t const size, uint32_t count, uint8_t const* buffer);
 
 uint32_t
 sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number);
@@ -180,7 +180,7 @@ void
 sc_riscv32__init_regs_cache(target* const p_target);
 
 error_code
-sc_riscv32__virt2phys(target* p_target, uint32_t address, uint32_t* p_physical);
+sc_riscv32__virt2phys(target* p_target, target_addr_t address, target_addr_t* p_physical);
 
 error_code
 sc__mmu_disabled(target* p_target, int* p_mmu_enabled);

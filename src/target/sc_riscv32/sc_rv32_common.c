@@ -3377,8 +3377,9 @@ sc_riscv32__halt(target* const p_target)
 }
 
 error_code
-sc_riscv32__resume(target* const p_target, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
+sc_riscv32__resume(target* const p_target, int const current, target_addr_t const _address, int const handle_breakpoints, int const debug_execution)
 {
+	uint32_t const address = (uint32_t)_address;
 	LOG_DEBUG("resume: current=%d address=0x%08x handle_breakpoints=%d debug_execution=%d", current, address, handle_breakpoints, debug_execution);
 	assert(p_target);
 	static uint32_t const dmode_enabled = HART_DMODE_ENBL_bits_Normal;
@@ -3386,8 +3387,9 @@ sc_riscv32__resume(target* const p_target, int const current, uint32_t const add
 }
 
 error_code
-sc_riscv32__step(target* const p_target, int const current, uint32_t const address, int const handle_breakpoints)
+sc_riscv32__step(target* const p_target, int const current, target_addr_t const _address, int const handle_breakpoints)
 {
+	uint32_t const address = (uint32_t)_address;
 	LOG_DEBUG("step: current=%d address=0x%08x handle_breakpoints=%d", current, address, handle_breakpoints);
 	assert(p_target);
 	// disable halt on SW breakpoint to pass SW breakpoint processing to core
@@ -3496,22 +3498,23 @@ write_memory_space(target* const p_target, uint32_t address, uint32_t const size
 }
 
 error_code
-sc_riscv32__read_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
+sc_riscv32__read_memory(target* const p_target, target_addr_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
 {
-	read_memory_space(p_target, address, size, count, buffer, false);
+	read_memory_space(p_target, (uint32_t)address, size, count, buffer, false);
 	return sc_error_code__get_and_clear(p_target);
 }
 
 error_code
-sc_riscv32__write_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
+sc_riscv32__write_memory(target* const p_target, target_addr_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
 {
-	write_memory_space(p_target, address, size, count, buffer, false);
+	write_memory_space(p_target, (uint32_t)address, size, count, buffer, false);
 	return sc_error_code__get_and_clear(p_target);
 }
 
 error_code
-sc_riscv32__read_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t* buffer)
+sc_riscv32__read_phys_memory(target* const p_target, target_addr_t _address, uint32_t const size, uint32_t count, uint8_t* buffer)
 {
+	uint32_t address = (uint32_t)_address;
 	LOG_DEBUG("Read_memory at 0x%08X, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
 
 	/// Check for size
@@ -3607,8 +3610,9 @@ sc_riscv32__read_phys_memory(target* const p_target, uint32_t address, uint32_t 
 }
 
 error_code
-sc_riscv32__write_phys_memory(target* const p_target, uint32_t address, uint32_t const size, uint32_t count, uint8_t const* buffer)
+sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, uint32_t const size, uint32_t count, uint8_t const* buffer)
 {
+	uint32_t address = (uint32_t)_address;
 	LOG_DEBUG("Write_memory at 0x%08X, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
 
 	/// Check for size
@@ -3800,10 +3804,10 @@ sc_riscv32__add_breakpoint(target* const p_target, breakpoint* const p_breakpoin
 			LOG_ERROR("Invalid breakpoint size: %d", p_breakpoint->length);
 			sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		} else if (p_breakpoint->address % (RVC_enable ? 2 : 4) != 0) {
-			LOG_ERROR("Unaligned breakpoint: 0x%08X", p_breakpoint->address);
+			LOG_ERROR("Unaligned breakpoint: 0x%08X", (uint32_t)p_breakpoint->address);
 			sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		} else {
-			if (ERROR_OK != read_memory_space(p_target, p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true)) {
+			if (ERROR_OK != read_memory_space(p_target, (uint32_t)p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true)) {
 				LOG_ERROR("Can't save original instruction");
 			} else {
 				uint8_t buffer[4];
@@ -3816,7 +3820,7 @@ sc_riscv32__add_breakpoint(target* const p_target, breakpoint* const p_breakpoin
 					assert(/*logic_error:Bad breakpoint size*/ 0);
 				}
 
-				if (ERROR_OK != write_memory_space(p_target, p_breakpoint->address, 2, p_breakpoint->length / 2, buffer, true)) {
+				if (ERROR_OK != write_memory_space(p_target, (uint32_t)p_breakpoint->address, 2, p_breakpoint->length / 2, buffer, true)) {
 					LOG_ERROR("Can't write EBREAK");
 				} else {
 					p_breakpoint->set = 1;
@@ -3835,7 +3839,7 @@ sc_riscv32__remove_breakpoint(target* const p_target, breakpoint* const p_breakp
 		assert(p_breakpoint);
 		assert(p_breakpoint->orig_instr);
 
-		if (ERROR_OK == write_memory_space(p_target, p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true)) {
+		if (ERROR_OK == write_memory_space(p_target, (uint32_t)p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true)) {
 			p_breakpoint->set = 0;
 		} else {
 			sc_riscv32__update_status(p_target);
@@ -3875,11 +3879,13 @@ sc_riscv32__get_gdb_reg_list(target* const p_target, reg** reg_list[], int* cons
 }
 
 error_code
-sc_riscv32__virt2phys(target* p_target, uint32_t address, uint32_t* p_physical)
+sc_riscv32__virt2phys(target* p_target, target_addr_t address, target_addr_t* p_physical)
 {
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	p_arch->constants->virt_to_phis(p_target, address, p_physical, NULL, false);
+	assert(p_physical);
+	*p_physical = 0;
+	p_arch->constants->virt_to_phis(p_target, (uint32_t)address, (uint32_t*)p_physical, NULL, false);
 	return sc_error_code__get_and_clear(p_target);
 }
 
