@@ -92,6 +92,7 @@ struct sc_riscv32__Arch {
 	error_code error_code;                       ///< stored sub-operations error_code
 	uint8_t last_DAP_ctrl;                       ///< DAP_CTRL cache
 	sc_riscv32__Arch_constants const* constants;
+	uint32_t misa;
 };
 typedef struct sc_riscv32__Arch sc_riscv32__Arch;
 

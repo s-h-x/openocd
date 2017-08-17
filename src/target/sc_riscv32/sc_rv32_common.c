@@ -1345,7 +1345,7 @@ sc_rv32_HART_CSR_CAP_read(target const* const p_target, HART_CSR_CAP_indexes con
 	return REGTRANS_read(p_target, unit, DBGC_functional_group_HART_CSR_CAP, index, p_value);
 }
 
-static error_code
+static inline error_code
 get_ISA(target* const p_target, uint32_t* p_value)
 {
 	return sc_rv32_HART_CSR_CAP_read(p_target, HART_MISA_index, p_value);
@@ -2257,11 +2257,10 @@ reg_pc__get(reg* const p_reg)
 static bool
 is_RVC_enable(target* const p_target)
 {
+	assert(p_target);
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	uint32_t isa;
-	get_ISA(p_target, &isa);
-	return 0 != (isa & (UINT32_C(1) << ('C' - 'A')));
+	return 0 != (p_arch->misa & (UINT32_C(1) << ('C' - 'A')));
 }
 
 static error_code
@@ -2505,12 +2504,8 @@ reg_FPU_D__get(reg* const p_reg)
 
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	uint32_t mcpuid;
-	if (ERROR_OK != get_ISA(p_target, &mcpuid)) {
-		return sc_error_code__get_and_clear(p_target);
-	}
 
-	if (0 == (mcpuid & (BIT_MASK('f' - 'a') | BIT_MASK('d' - 'a')))) {
+	if (0 == (p_arch->misa & (BIT_MASK('f' - 'a') | BIT_MASK('d' - 'a')))) {
 		LOG_ERROR("FPU is not supported");
 		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return sc_error_code__get_and_clear(p_target);
@@ -2528,7 +2523,7 @@ reg_FPU_D__get(reg* const p_reg)
 		return sc_error_code__get_and_clear(p_target);
 	}
 
-	bool const FPU_D = 0 != (mcpuid & BIT_MASK('d' - 'a'));
+	bool const FPU_D = 0 != (p_arch->misa & BIT_MASK('d' - 'a'));
 
 	/// Find temporary GP register
 	reg* const p_wrk_reg_1 = prepare_temporary_GP_register(p_target, 0);
@@ -2617,12 +2612,8 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	uint32_t mcpuid;
-	if (ERROR_OK != get_ISA(p_target, &mcpuid)) {
-		return sc_error_code__get_and_clear(p_target);
-	}
 
-	if (0 == (mcpuid & (BIT_MASK('f' - 'a') | BIT_MASK('d' - 'a')))) {
+	if (0 == (p_arch->misa & (BIT_MASK('f' - 'a') | BIT_MASK('d' - 'a')))) {
 		LOG_ERROR("FPU is not supported");
 		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return sc_error_code__get_and_clear(p_target);
@@ -2640,7 +2631,7 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 		return sc_error_code__get_and_clear(p_target);
 	}
 
-	bool const FPU_D = 0 != (mcpuid & BIT_MASK('d' - 'a'));
+	bool const FPU_D = 0 != (p_arch->misa & BIT_MASK('d' - 'a'));
 
 	/// Find temporary GP register
 	reg* const p_wrk_reg_1 = prepare_temporary_GP_register(p_target, 0);
@@ -3215,16 +3206,13 @@ sc_riscv32__target_create(target* const p_target, Jim_Interp* interp)
 static error_code
 adjust_target_registers_cache(target* const p_target)
 {
-	uint32_t isa;
-	if (ERROR_OK != get_ISA(p_target, &isa)) {
-		LOG_ERROR("Can't read ISA capability!");
-		return sc_error_code__get(p_target);
-	}
-
-	bool const RV_I = 0 != (isa & (UINT32_C(1) << ('I' - 'A')));
-	bool const RV_E = 0 != (isa & (UINT32_C(1) << ('E' - 'A')));
-	bool const RV_D = 0 != (isa & (UINT32_C(1) << ('D' - 'A')));
-	bool const RV_F = 0 != (isa & (UINT32_C(1) << ('F' - 'A')));
+	assert(p_target);
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
+	assert(p_arch);
+	bool const RV_I = 0 != (p_arch->misa & (UINT32_C(1) << ('I' - 'A')));
+	bool const RV_E = 0 != (p_arch->misa & (UINT32_C(1) << ('E' - 'A')));
+	bool const RV_D = 0 != (p_arch->misa & (UINT32_C(1) << ('D' - 'A')));
+	bool const RV_F = 0 != (p_arch->misa & (UINT32_C(1) << ('F' - 'A')));
 	assert(!!(RV_I) ^ !!(RV_E));
 	if (RV_I) {
 		assert(!RV_E);
@@ -3314,7 +3302,11 @@ sc_riscv32__examine(target* const p_target)
 				sc_rv32_BLD_ID_get(p_target, &BLD_ID);
 				LOG_INFO("IDCODE=0x%08X DBG_ID=0x%08X BLD_ID=0x%08X", IDCODE, DBG_ID, BLD_ID);
 
+				sc_riscv32__Arch* const p_arch = p_target->arch_info;
+				assert(p_arch);
+
 				if (
+					ERROR_OK == get_ISA(p_target, &p_arch->misa) &&
 					ERROR_OK == set_DEMODE_ENBL(p_target, HART_DMODE_ENBL_bits_Normal) && 
 					ERROR_OK == adjust_target_registers_cache(p_target)
 					) {
