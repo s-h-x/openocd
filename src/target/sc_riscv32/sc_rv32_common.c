@@ -3416,7 +3416,15 @@ sc_riscv32__soft_reset_halt(target* const p_target)
 {
 	LOG_DEBUG("Soft reset halt called");
 
-	sc_riscv32__update_status(p_target);
+	if (ERROR_OK != sc_riscv32__update_status(p_target)) {
+		return sc_error_code__get_and_clear(p_target);
+	}
+
+	// Halt before reset
+	if (TARGET_HALTED != p_target->state) {
+		target_halt(p_target);
+	}
+
 	set_DEMODE_ENBL(p_target, HART_DMODE_ENBL_bits_Normal | HART_DMODE_ENBL_bit_Rst_Exit);
 	sc_rv32_core_reset__set(p_target, true);
 	sc_rv32_core_reset__set(p_target, false);
