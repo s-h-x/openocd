@@ -58,34 +58,6 @@ scr5__init_target(command_context* cmd_ctx, target* const p_target)
 	return ERROR_OK;
 }
 
-enum
-{
-	CSR_satp = 0x180,
-};
-
-static error_code
-scrx_1_9__mmu(target* p_target, int* p_mmu_enabled)
-{
-	assert(p_target);
-	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
-	assert(p_arch);
-	bool const RV_S = 0 != (p_arch->misa & (UINT32_C(1) << ('S' - 'A')));
-
-	if (!RV_S) {
-		*p_mmu_enabled = 0;
-		return ERROR_OK;
-	}
-	uint32_t const satp = sc_riscv32__csr_get_value(p_target, CSR_satp);
-
-	if (ERROR_OK == sc_error_code__get(p_target)) {
-		*p_mmu_enabled = 0 != (satp & (UINT32_C(1) << 31));
-	} else {
-		sc_riscv32__update_status(p_target);
-	}
-
-	return sc_error_code__get_and_clear(p_target);
-}
-
 /// @todo make const
 target_type scr5_target = {
 	.name = "scr5",

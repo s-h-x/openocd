@@ -183,9 +183,6 @@ sc_riscv32__init_regs_cache(target* const p_target);
 error_code
 sc_riscv32__virt2phys(target* p_target, target_addr_t address, target_addr_t* p_physical);
 
-error_code
-sc__mmu_disabled(target* p_target, int* p_mmu_enabled);
-
 /// Old Syntacore opcode extensions
 /// @{
 rv_instruction32_type
@@ -206,5 +203,8 @@ sc_RISCV_opcode_D_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type 
 
 error_code
 sc_rv32__virt_to_phis_disabled(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
+
+error_code
+scrx_1_9__mmu(target* p_target, int* p_mmu_enabled);
 
 #endif  // TARGET_SC_RV32_COMMON_H_

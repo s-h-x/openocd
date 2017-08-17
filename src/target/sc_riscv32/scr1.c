@@ -103,7 +103,7 @@ target_type scr1_target = {
 	.read_phys_memory = sc_riscv32__read_phys_memory,
 	.write_phys_memory = sc_riscv32__write_phys_memory,
 
-	.mmu = sc__mmu_disabled,
+	.mmu = scrx_1_9__mmu,
 	.check_reset = NULL,
 	.get_gdb_fileio_info = NULL,
 	.gdb_fileio_end = NULL,
