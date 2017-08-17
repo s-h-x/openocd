@@ -3915,12 +3915,14 @@ scrx_1_9__mmu(target* p_target, int* p_mmu_enabled)
 	bool const RV_S = 0 != (p_arch->misa & (UINT32_C(1) << ('S' - 'A')));
 
 	if (!RV_S) {
+		LOG_DEBUG("MMU: S-mode is not supporeted");
 		*p_mmu_enabled = 0;
 		return ERROR_OK;
 	}
 	uint32_t const satp = sc_riscv32__csr_get_value(p_target, CSR_satp);
 
 	if (ERROR_OK == sc_error_code__get(p_target)) {
+		LOG_DEBUG("MMU: satp=%08x" PRIx32, satp);
 		*p_mmu_enabled = 0 != (satp & (UINT32_C(1) << 31));
 	} else {
 		sc_riscv32__update_status(p_target);
