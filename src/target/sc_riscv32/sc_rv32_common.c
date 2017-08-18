@@ -3890,7 +3890,7 @@ sc_riscv32__virt2phys(target* p_target, target_addr_t address, target_addr_t* p_
 }
 
 error_code
-sc_rv32__virt_to_phis_disabled(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
+sc_rv32__virt_to_phis_direct_map(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
 {
 	assert(p_physical);
 	*p_physical = address;
@@ -3915,18 +3915,126 @@ scrx_1_9__mmu(target* p_target, int* p_mmu_enabled)
 	bool const RV_S = 0 != (p_arch->misa & (UINT32_C(1) << ('S' - 'A')));
 
 	if (!RV_S) {
-		LOG_DEBUG("MMU: S-mode is not supporeted");
+		LOG_DEBUG("S-mode is not supporeted");
 		*p_mmu_enabled = 0;
 		return ERROR_OK;
 	}
 	uint32_t const satp = sc_riscv32__csr_get_value(p_target, CSR_satp);
 
 	if (ERROR_OK == sc_error_code__get(p_target)) {
-		LOG_DEBUG("MMU: satp=%08x" PRIx32, satp);
+		LOG_DEBUG("satp=%08x" PRIx32, satp);
 		*p_mmu_enabled = 0 != (satp & (UINT32_C(1) << 31));
 	} else {
 		sc_riscv32__update_status(p_target);
 	}
 
 	return sc_error_code__get_and_clear(p_target);
+}
+
+enum
+{
+	user_mode = 0b00u,
+	supervisor_mode = 0b10u,
+	machine_mode = 0b11u,
+};
+error_code
+sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
+{
+	assert(p_target);
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
+	assert(p_arch);
+	bool const RV_S = 0 != (p_arch->misa & (UINT32_C(1) << ('S' - 'A')));
+
+	if (!RV_S) {
+		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
+	}
+
+	uint32_t dbg_status;
+	if (ERROR_OK != sc_rv32_DBG_STATUS_get(p_target, &dbg_status)) {
+		return sc_error_code__get(p_target);
+	}
+
+	if (0 == (dbg_status & DBG_STATUS_bit_HART0_DMODE)) {
+		return sc_error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
+	}
+
+	uint32_t const current_mode = EXTRACT_FIELD(dbg_status, 6, 7);
+
+	if (machine_mode == current_mode) {
+		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
+	}
+
+	uint32_t const satp = sc_riscv32__csr_get_value(p_target, CSR_satp);
+
+	if (ERROR_OK != sc_error_code__get(p_target)) {
+		return sc_error_code__get(p_target);
+	}
+
+	LOG_DEBUG("satp=%08x" PRIx32, satp);
+
+	if (0 == (satp & (UINT32_C(1) << 31))) {
+		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
+	}
+
+	static const uint32_t pagesize = UINT32_C(1) << 12;
+	static const int levels = 2;
+	static const uint32_t PTESIZE = 4;
+
+	// 1
+	uint32_t vpn[2] = {EXTRACT_FIELD(va, 12, 21), EXTRACT_FIELD(va, 22, 31)};
+	uint32_t const ppn = EXTRACT_FIELD(satp, 0, 21);
+	uint32_t a = ppn * pagesize;
+
+	for (int i = levels - 1;;) {
+		// 2
+		uint8_t buf[sizeof(uint32_t)];
+		if (ERROR_OK != target_read_phys_memory(p_target, (target_addr_t)a + vpn[i] * PTESIZE, sizeof buf, 1, buf)) {
+			return sc_riscv32__update_status(p_target);
+		}
+		uint32_t const pte = buf_get_u32(buf, 0, 32);
+
+		// 3
+		uint32_t const pte_v = EXTRACT_FIELD(pte, 0, 0);
+		uint32_t const pte_r = EXTRACT_FIELD(pte, 1, 1);
+		uint32_t const pte_w = EXTRACT_FIELD(pte, 2, 2);
+		if (0 == pte_v || (0 == pte_r && 0 != pte_w)) {
+			return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+		}
+
+		// 4
+		uint32_t const pte_x = EXTRACT_FIELD(pte, 3, 3);
+		if (!(0 != pte_r || 0 != pte_x)) {
+			if (i < 1) {
+				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+			}
+			i = i - 1;
+			a = EXTRACT_FIELD(pte, 10, 31) * pagesize;
+		} else {
+			// 5
+			uint32_t const pte_u = EXTRACT_FIELD(pte, 4, 4);
+			if ((user_mode == current_mode && 0 == pte_u) || (instruction_space && 0 == pte_x)) {
+				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+			}
+
+			// 6
+			if (i > 0 && 0 != EXTRACT_FIELD(pte, 10, 19)) {
+				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+			}
+
+			// 7
+			uint32_t const pte_a = EXTRACT_FIELD(pte, 6, 6);
+			if (0 == pte_a) {
+				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+			}
+
+			// 8
+			unsigned const off_bits = i > 0 ? 22 : 12;
+			assert(p_physical);
+			*p_physical = (EXTRACT_FIELD(pte, off_bits - 2, 32) << off_bits) | EXTRACT_FIELD(va, 0, off_bits - 1);
+			if (p_bound) {
+				*p_bound = UINT32_C(1) << off_bits;
+			}
+			return sc_error_code__get(p_target);
+		}
+	}
 }

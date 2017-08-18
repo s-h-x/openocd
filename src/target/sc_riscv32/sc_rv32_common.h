@@ -202,7 +202,10 @@ sc_RISCV_opcode_D_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type 
 /// @}
 
 error_code
-sc_rv32__virt_to_phis_disabled(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
+sc_rv32__virt_to_phis_direct_map(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
+
+error_code
+sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
 
 error_code
 scrx_1_9__mmu(target* p_target, int* p_mmu_enabled);

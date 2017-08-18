@@ -24,7 +24,7 @@ static sc_riscv32__Arch_constants const scr1_constants = {
 	.mstatus_FS_offset = 13u,
 	.opcode_FMV_D_2X = &sc_RISCV_opcode_D_FMV_D_2X,
 	.opcode_FMV_2X_D = &sc_RISCV_opcode_D_FMV_2X_D,
-	.virt_to_phis = &sc_rv32__virt_to_phis_disabled
+	.virt_to_phis = &sc_rv32__virt_to_phis_direct_map
 };
 
 static sc_riscv32__Arch const scr1_initial_arch = {
