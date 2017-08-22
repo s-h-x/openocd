@@ -356,6 +356,7 @@ typedef enum HART_DBGCMD_indexes HART_DBGCMD_indexes;
 
 enum HART_CSR_CAP_indexes
 {
+#if 0
 	/// @brief Hart MVENDORID (HMVENDORID) Register
 	HART_MVENDORID_index = 0b000,
 
@@ -367,9 +368,11 @@ enum HART_CSR_CAP_indexes
 
 	/// @brief Hart MHARTID (HMHARTID) Register
 	HART_MHARTID_index = 0b011,
+#endif
 
 	/// @brief Hart MISA Register
 	HART_MISA_index = 0b100,
+	HART_MCPUID_index = 0b000,
 };
 typedef enum HART_CSR_CAP_indexes HART_CSR_CAP_indexes;
 
@@ -1348,7 +1351,13 @@ sc_rv32_HART_CSR_CAP_read(target const* const p_target, HART_CSR_CAP_indexes con
 static inline error_code
 get_ISA(target* const p_target, uint32_t* p_value)
 {
-	return sc_rv32_HART_CSR_CAP_read(p_target, HART_MISA_index, p_value);
+	assert(p_target);
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
+	assert(p_arch);
+	HART_CSR_CAP_indexes const misa_index =
+		0x00800000 == (p_arch->constants->expected_dbg_id & 0xFFFFFF00) ? HART_MCPUID_index :
+		HART_MISA_index;
+	return sc_rv32_HART_CSR_CAP_read(p_target, misa_index, p_value);
 }
 
 /** @brief HART REGTRANS write operation
