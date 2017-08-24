@@ -1856,14 +1856,12 @@ static error_code
 sc_rv32_check_that_target_halted(target* const p_target)
 {
 	if (ERROR_OK == sc_riscv32__update_status(p_target)) {
-		if (!p_target->examined) {
-			return sc_error_code__get_and_clear(p_target);
-		}
 		if (p_target->state != TARGET_HALTED) {
 			LOG_ERROR("Target not halted");
 			return sc_error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
 		}
 	}
+
 	return sc_error_code__get(p_target);
 }
 
@@ -2004,61 +2002,53 @@ reg_x__get(reg* const p_reg)
 	error_code const check_result = reg_x__operation_conditions_check(p_reg);
 	if (ERROR_OK != check_result) {
 		return check_result;
-	} else {
-		target* p_target = p_reg->arch_info;
-		if (ERROR_OK == sc_rv32_check_that_target_halted(p_target)) {
-			if (p_reg->valid) {
-				// register cache already valid
-				if (p_reg->dirty) {
-					LOG_WARNING("Try re-read dirty cache register %s", p_reg->name);
-				} else {
-					LOG_DEBUG("Try re-read cache register %s", p_reg->name);
-				}
+	}
+
+	target* p_target = p_reg->arch_info;
+	if (ERROR_OK == sc_rv32_check_that_target_halted(p_target)) {
+		if (p_reg->valid) {
+			// register cache already valid
+			if (p_reg->dirty) {
+				LOG_WARNING("Try re-read dirty cache register %s", p_reg->name);
+			} else {
+				LOG_DEBUG("Try re-read cache register %s", p_reg->name);
+			}
+		}
+
+		uint32_t previous_pc;
+		if (ERROR_OK == sc_rv32_get_PC(p_target, &previous_pc)) {
+			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
+			assert(p_arch);
+
+			uint32_t value;
+			if (
+				ERROR_OK == sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl) &&
+				ERROR_OK == sc_rv32_EXEC__setup(p_target) &&
+				// Save p_reg->number register to Debug scratch CSR
+				ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_reg->number), NULL) &&
+				/// Exec NOP instruction and get previous instruction CSR result.
+				ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value)
+			) {
+				reg__set_valid_value_to_cache(p_reg, value);
+				sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
 			}
 
-			uint32_t previous_pc;
-			if (ERROR_OK == sc_rv32_get_PC(p_target, &previous_pc)) {
-				sc_riscv32__Arch const* const p_arch = p_target->arch_info;
-				assert(p_arch);
-
-				if (ERROR_OK == sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl)) {
-					if (ERROR_OK != sc_rv32_EXEC__setup(p_target)) {
-						return sc_error_code__get_and_clear(p_target);
-					}
-
-					// Save p_reg->number register to Debug scratch CSR
-					if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_reg->number), NULL)) {
-						return sc_error_code__get_and_clear(p_target);
-					}
-
-					/// Exec NOP instruction and get previous instruction CSR result.
-					uint32_t value;
-
-					if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value)) {
-						return sc_error_code__get_and_clear(p_target);
-					}
-
-					reg__set_valid_value_to_cache(p_reg, value);
-
-					sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
-				} else {
-					sc_riscv32__update_status(p_target);
-					if (!p_target->examined) {
-						return sc_error_code__get_and_clear(p_target);
-					}
-				}
-
-				sc_rv32_check_PC_value(p_target, previous_pc);
-			} else {
+			if (ERROR_OK != sc_error_code__get(p_target)) {
 				sc_riscv32__update_status(p_target);
 				if (!p_target->examined) {
 					return sc_error_code__get_and_clear(p_target);
 				}
 			}
-		}
 
-		return sc_error_code__get_and_clear(p_target);
+			sc_rv32_check_PC_value(p_target, previous_pc);
+		}
 	}
+
+	if (ERROR_OK != sc_error_code__get(p_target)) {
+		sc_riscv32__update_status(p_target);
+	}
+
+	return sc_error_code__get_and_clear(p_target);
 }
 
 static error_code
@@ -2215,41 +2205,42 @@ sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 			assert(p_arch);
 			sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl);
 
-			if (ERROR_OK == sc_rv32_EXEC__setup(p_target)) {
+			if (
+				ERROR_OK == sc_rv32_EXEC__setup(p_target) &&
 				/// Copy values to temporary register
-				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg->number, csr_number), NULL)) {
-					/// and store temporary register to Debug scratch CSR.
-					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg->number), NULL)) {
-						/// Exec NOP instruction and get previous instruction CSR result.
-						sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value);
-					} else {
-						sc_riscv32__update_status(p_target);
-						if (!p_target->examined) {
-							return sc_error_code__get_and_clear(p_target);
-						}
-					}
-				} else {
-					sc_riscv32__update_status(p_target);
-					if (!p_target->examined) {
-						return sc_error_code__get_and_clear(p_target);
-					}
-				}
-			} else {
+				ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg->number, csr_number), NULL) &&
+				/// and store temporary register to Debug scratch CSR.
+				ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg->number), NULL)
+			) {
+				/// Exec NOP instruction and get previous instruction CSR result.
+				sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value);
+			}
+
+			if (ERROR_OK != sc_error_code__get(p_target)) {
 				sc_riscv32__update_status(p_target);
 				if (!p_target->examined) {
-					return sc_error_code__get_and_clear(p_target);
+					return value;
 				}
 			}
 
 			sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
-		} else {
+		}
+
+		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
 			if (!p_target->examined) {
-				return sc_error_code__get_and_clear(p_target);
+				return value;
 			}
 		}
 
 		sc_rv32_check_PC_value(p_target, pc_sample_1);
+
+		if (ERROR_OK != sc_error_code__get(p_target)) {
+			sc_riscv32__update_status(p_target);
+			if (!p_target->examined) {
+				return value;
+			}
+		}
 
 		// restore temporary register
 		error_code const old_err_code = sc_error_code__get_and_clear(p_target);
@@ -2359,9 +2350,11 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 		}
 	}
 
-	sc_riscv32__update_status(p_target);
-	if (!p_target->examined) {
-		return sc_error_code__get_and_clear(p_target);
+	if (ERROR_OK != sc_error_code__get(p_target)) {
+		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
 	}
 
 	// restore temporary register
@@ -2574,42 +2567,23 @@ reg_FPU_D__get(reg* const p_reg)
 				p_arch->constants->opcode_FMV_2X_D(p_wrk_reg_2->number, p_wrk_reg_1->number, p_reg->number - RISCV_regnum_FP_first) :
 				RISCV_OPCODE_FMV_X_S(p_wrk_reg_1->number, p_reg->number - RISCV_regnum_FP_first);
 
-			if (ERROR_OK == sc_rv32_EXEC__step(p_target, opcode_1, NULL)) {
+			uint32_t value_hi;
+			uint32_t value_lo;
+			if (
+				ERROR_OK == sc_rv32_EXEC__step(p_target, opcode_1, NULL) &&
 				/// and store temporary register to Debug scratch CSR.
-				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_1->number), NULL)) {
-					uint32_t value_lo;
-					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_2->number), &value_lo)) {
-						/// Exec NOP instruction and get previous instruction CSR result.
-						uint32_t value_hi;
-						if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value_hi)) {
-							buf_set_u64(p_reg->value, 0, p_reg->size, (FPU_D ? (uint64_t)value_hi << 32 : 0u) | (uint64_t)value_lo);
-							p_reg->valid = true;
-							p_reg->dirty = false;
-						} else {
-							sc_riscv32__update_status(p_target);
-							if (!p_target->examined) {
-								return sc_error_code__get_and_clear(p_target);
-							}
-						}
-					} else {
-						sc_riscv32__update_status(p_target);
-						if (!p_target->examined) {
-							return sc_error_code__get_and_clear(p_target);
-						}
-					}
-				} else {
-					sc_riscv32__update_status(p_target);
-					if (!p_target->examined) {
-						return sc_error_code__get_and_clear(p_target);
-					}
-				}
-			} else {
-				sc_riscv32__update_status(p_target);
-				if (!p_target->examined) {
-					return sc_error_code__get_and_clear(p_target);
-				}
+				ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_1->number), NULL) &&
+				ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_arch->constants->debug_scratch_CSR, p_wrk_reg_2->number), &value_lo) &&
+				/// Exec NOP instruction and get previous instruction CSR result.
+				ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value_hi)
+			) {
+				buf_set_u64(p_reg->value, 0, p_reg->size, (FPU_D ? (uint64_t)value_hi << 32 : 0u) | (uint64_t)value_lo);
+				p_reg->valid = true;
+				p_reg->dirty = false;
 			}
-		} else {
+		}
+
+		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
 			if (!p_target->examined) {
 				return sc_error_code__get_and_clear(p_target);
@@ -2619,7 +2593,21 @@ reg_FPU_D__get(reg* const p_reg)
 		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
 	}
 
+	if (ERROR_OK != sc_error_code__get(p_target)) {
+		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
+	}
+
 	sc_rv32_check_PC_value(p_target, pc_sample_1);
+
+	if (ERROR_OK != sc_error_code__get(p_target)) {
+		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
+	}
 
 	// restore temporary register
 	error_code const old_err_code = sc_error_code__get_and_clear(p_target);
@@ -2693,42 +2681,45 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 	assert(0 < p_wrk_reg_2->number && p_wrk_reg_2->number < RISCV_regnum_PC);
 
 	uint32_t pc_sample_1;
-	if (ERROR_OK == sc_rv32_get_PC(p_target, &pc_sample_1)) {
-		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl);
+	if (
+		ERROR_OK == sc_rv32_get_PC(p_target, &pc_sample_1) &&
+		ERROR_OK == sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl) &&
+		ERROR_OK == sc_rv32_EXEC__setup(p_target)
+	) {
+		reg__set_new_cache_value(p_reg, buf);
 
-		if (ERROR_OK == sc_rv32_EXEC__setup(p_target)) {
-			reg__set_new_cache_value(p_reg, buf);
+		if (
+			ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size)) &&
+			// set temporary register value to restoring pc value
+			ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg_1->number, p_arch->constants->debug_scratch_CSR), NULL) &&
+			ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(&((uint8_t const*)p_reg->value)[4], 0, p_reg->size)) &&
+			ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg_2->number, p_arch->constants->debug_scratch_CSR), NULL)
+		) {
+			uint32_t const opcode_1 =
+				FPU_D ?
+				p_arch->constants->opcode_FMV_D_2X(p_reg->number - RISCV_regnum_FP_first, p_wrk_reg_2->number, p_wrk_reg_1->number) :
+				RISCV_OPCODE_FMV_S_X(p_reg->number - RISCV_regnum_FP_first, p_wrk_reg_1->number);
 
-			if (ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size))) {
-				// set temporary register value to restoring pc value
-				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg_1->number, p_arch->constants->debug_scratch_CSR), NULL)) {
-					if (ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(&((uint8_t const*)p_reg->value)[4], 0, p_reg->size))) {
-						if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg_2->number, p_arch->constants->debug_scratch_CSR), NULL)) {
-							uint32_t const opcode_1 =
-								FPU_D ?
-								p_arch->constants->opcode_FMV_D_2X(p_reg->number - RISCV_regnum_FP_first, p_wrk_reg_2->number, p_wrk_reg_1->number) :
-								RISCV_OPCODE_FMV_S_X(p_reg->number - RISCV_regnum_FP_first, p_wrk_reg_1->number);
-
-							if (ERROR_OK == sc_rv32_EXEC__step(p_target, opcode_1, NULL)) {
-								/// Correct pc by jump 2 instructions back and get previous command result.
-								assert(p_reg->valid);
-								assert(p_reg->dirty);
-								p_reg->dirty = false;
-								LOG_DEBUG("Store register value 0x%016lX from cache to register %s", buf_get_u64(p_reg->value, 0, p_reg->size), p_reg->name);
-							}
-						}
-					}
-				}
+			if (ERROR_OK == sc_rv32_EXEC__step(p_target, opcode_1, NULL)) {
+				/// Correct pc by jump 2 instructions back and get previous command result.
+				assert(p_reg->valid);
+				assert(p_reg->dirty);
+				p_reg->dirty = false;
+				LOG_DEBUG("Store register value 0x%016lX from cache to register %s", buf_get_u64(p_reg->value, 0, p_reg->size), p_reg->name);
 			}
 		}
 
-		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
-			return sc_error_code__get_and_clear(p_target);
+		if (ERROR_OK != sc_error_code__get(p_target)) {
+			sc_riscv32__update_status(p_target);
+			if (!p_target->examined) {
+				return sc_error_code__get_and_clear(p_target);
+			}
 		}
 
 		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
-	} else {
+	}
+
+	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
 		if (!p_target->examined) {
 			return sc_error_code__get_and_clear(p_target);
@@ -2736,6 +2727,14 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 	}
 
 	sc_rv32_check_PC_value(p_target, pc_sample_1);
+
+	if (ERROR_OK != sc_error_code__get(p_target)) {
+		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
+	}
+
 	// restore temporary register
 	error_code const old_err_code = sc_error_code__get_and_clear(p_target);
 
@@ -2812,33 +2811,40 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 	if (ERROR_OK == sc_rv32_get_PC(p_target, &pc_sample_1)) {
 		sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
-		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl);
 
-		if (ERROR_OK == sc_rv32_EXEC__setup(p_target)) {
+		if (
+			ERROR_OK == sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl) &&
+			ERROR_OK == sc_rv32_EXEC__setup(p_target)
+		) {
 			reg__set_new_cache_value(p_reg, buf);
 
-			if (ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size))) {
+			if (
+				ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(p_reg->value, 0, p_reg->size)) &&
 				// set temporary register value
-				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR), NULL)) {
-					assert(p_wrk_reg->dirty);
-					assert(p_wrk_reg->number < number_of_regs_X);
-					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_reg->number - RISCV_regnum_CSR_first, p_wrk_reg->number), NULL)) {
-						assert(p_reg->valid);
-						assert(p_reg->dirty);
-						p_reg->dirty = false;
-						LOG_DEBUG("Store register value 0x%08X from cache to register %s", buf_get_u32(p_reg->value, 0, p_reg->size), p_reg->name);
-					}
+				ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_wrk_reg->number, p_arch->constants->debug_scratch_CSR), NULL)
+			) {
+				assert(p_wrk_reg->dirty);
+				assert(p_wrk_reg->number < number_of_regs_X);
+				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_reg->number - RISCV_regnum_CSR_first, p_wrk_reg->number), NULL)) {
+					assert(p_reg->valid);
+					assert(p_reg->dirty);
+					p_reg->dirty = false;
+					LOG_DEBUG("Store register value 0x%08X from cache to register %s", buf_get_u32(p_reg->value, 0, p_reg->size), p_reg->name);
 				}
 			}
 		}
 
-		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
-			return sc_error_code__get_and_clear(p_target);
+		if (ERROR_OK != sc_error_code__get(p_target)) {
+			sc_riscv32__update_status(p_target);
+			if (!p_target->examined) {
+				return sc_error_code__get_and_clear(p_target);
+			}
 		}
 
 		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
-	} else {
+	}
+
+	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
 		if (!p_target->examined) {
 			return sc_error_code__get_and_clear(p_target);
@@ -2846,6 +2852,14 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 	}
 
 	sc_rv32_check_PC_value(p_target, pc_sample_1);
+
+	if (ERROR_OK != sc_error_code__get(p_target)) {
+		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
+	}
+
 	// restore temporary register
 	error_code const old_err_code = sc_error_code__get_and_clear(p_target);
 	sc_error_code__update(p_target, reg_x__store(p_wrk_reg));
@@ -3004,9 +3018,6 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
 
 	sc_riscv32__update_status(p_target);
-	if (!p_target->examined) {
-		return sc_error_code__get_and_clear(p_target);
-	}
 	return sc_error_code__get_and_clear(p_target);
 }
 
@@ -3049,9 +3060,6 @@ sc_rv32_core_reset__set(target* const p_target, bool const active)
 					}
 				}
 			}
-			if (!p_target->examined) {
-				return sc_error_code__get_and_clear(p_target);
-			}
 		}
 	}
 
@@ -3072,9 +3080,6 @@ scrv32_sys_reset__set(target* const p_target, bool const active)
 	sc_error_code__update(p_target, jtag_execute_queue());
 	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, *field.out_value);
 	sc_riscv32__update_status(p_target);
-	if (!p_target->examined) {
-		return sc_error_code__get_and_clear(p_target);
-	}
 	return sc_error_code__get_and_clear(p_target);
 }
 
@@ -3388,9 +3393,9 @@ sc_riscv32__examine(target* const p_target)
 					ERROR_OK == get_ISA(p_target, &p_arch->misa) &&
 					ERROR_OK == set_DEMODE_ENBL(p_target, HART_DMODE_ENBL_bits_Normal) && 
 					ERROR_OK == adjust_target_registers_cache(p_target)
-					) {
-						LOG_DEBUG("Examined OK");
-						target_set_examined(p_target);
+				) {
+					LOG_DEBUG("Examined OK");
+					target_set_examined(p_target);
 				}
 			}
 		}
@@ -3422,9 +3427,6 @@ sc_riscv32__halt(target* const p_target)
 	// May be already halted?
 	{
 		if (ERROR_OK != sc_riscv32__update_status(p_target)) {
-			if (!p_target->examined) {
-				return sc_error_code__get_and_clear(p_target);
-			}
 			return sc_error_code__get_and_clear(p_target);
 		}
 
@@ -3491,9 +3493,6 @@ sc_riscv32__soft_reset_halt(target* const p_target)
 	LOG_DEBUG("Soft reset halt called");
 
 	if (ERROR_OK != sc_riscv32__update_status(p_target)) {
-		if (!p_target->examined) {
-			return sc_error_code__get_and_clear(p_target);
-		}
 		return sc_error_code__get_and_clear(p_target);
 	}
 
@@ -3674,11 +3673,6 @@ sc_riscv32__read_phys_memory(target* const p_target, target_addr_t _address, uin
 			}
 
 			sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
-		} else {
-			sc_riscv32__update_status(p_target);
-			if (!p_target->examined) {
-				return sc_error_code__get_and_clear(p_target);
-			}
 		}
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
@@ -3690,6 +3684,12 @@ sc_riscv32__read_phys_memory(target* const p_target, target_addr_t _address, uin
 
 		sc_rv32_check_PC_value(p_target, pc_sample_1);
 
+		if (ERROR_OK != sc_error_code__get(p_target)) {
+			sc_riscv32__update_status(p_target);
+			if (!p_target->examined) {
+				return sc_error_code__get_and_clear(p_target);
+			}
+		}
 		/// restore temporary register
 		error_code const old_err_code = sc_error_code__get_and_clear(p_target);
 		sc_error_code__update(p_target, reg_x__store(p_wrk_reg));
@@ -3857,12 +3857,8 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 				return sc_error_code__get_and_clear(p_target);
 			}
 		}
+
 		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
-	} else {
-		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
-			return sc_error_code__get_and_clear(p_target);
-		}
 	}
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
@@ -3873,6 +3869,13 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 	}
 
 	sc_rv32_check_PC_value(p_target, pc_sample_1);
+
+	if (ERROR_OK != sc_error_code__get(p_target)) {
+		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
+	}
 
 	/// restore temporary registers
 	error_code const old_err_code = sc_error_code__get_and_clear(p_target);
@@ -3941,16 +3944,6 @@ sc_riscv32__remove_breakpoint(target* const p_target, breakpoint* const p_breakp
 
 		if (ERROR_OK == write_memory_space(p_target, (uint32_t)p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true)) {
 			p_breakpoint->set = 0;
-		} else {
-			sc_riscv32__update_status(p_target);
-			if (!p_target->examined) {
-				return sc_error_code__get_and_clear(p_target);
-			}
-		}
-	} else {
-		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
-			return sc_error_code__get_and_clear(p_target);
 		}
 	}
 
@@ -4030,11 +4023,6 @@ scrx_1_9__mmu(target* p_target, int* p_mmu_enabled)
 	if (ERROR_OK == sc_error_code__get(p_target)) {
 		LOG_DEBUG("satp=%08x" PRIx32, satp);
 		*p_mmu_enabled = 0 != (satp & (UINT32_C(1) << 31));
-	} else {
-		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
-			return sc_error_code__get_and_clear(p_target);
-		}
 	}
 
 	return sc_error_code__get_and_clear(p_target);
@@ -4100,9 +4088,6 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 
 		if (ERROR_OK != target_read_phys_memory(p_target, (target_addr_t)a + vpn[i] * PTESIZE, sizeof buf, 1, buf)) {
 			return sc_riscv32__update_status(p_target);
-			if (!p_target->examined) {
-				return sc_error_code__get_and_clear(p_target);
-			}
 		}
 
 		uint32_t const pte = buf_get_u32(buf, 0, 32);
