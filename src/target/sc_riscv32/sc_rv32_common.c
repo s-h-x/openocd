@@ -2035,7 +2035,7 @@ reg_x__get(reg* const p_reg)
 
 			if (ERROR_OK != sc_error_code__get(p_target)) {
 				sc_riscv32__update_status(p_target);
-				if (!p_target->examined) {
+				if (!target_was_examined(p_target)) {
 					return sc_error_code__get_and_clear(p_target);
 				}
 			}
@@ -2218,7 +2218,7 @@ sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 
 			if (ERROR_OK != sc_error_code__get(p_target)) {
 				sc_riscv32__update_status(p_target);
-				if (!p_target->examined) {
+				if (!target_was_examined(p_target)) {
 					return value;
 				}
 			}
@@ -2228,7 +2228,7 @@ sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
-			if (!p_target->examined) {
+			if (!target_was_examined(p_target)) {
 				return value;
 			}
 		}
@@ -2237,7 +2237,7 @@ sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
-			if (!p_target->examined) {
+			if (!target_was_examined(p_target)) {
 				return value;
 			}
 		}
@@ -2352,7 +2352,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
+		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
 	}
@@ -2585,7 +2585,7 @@ reg_FPU_D__get(reg* const p_reg)
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
-			if (!p_target->examined) {
+			if (!target_was_examined(p_target)) {
 				return sc_error_code__get_and_clear(p_target);
 			}
 		}
@@ -2595,7 +2595,7 @@ reg_FPU_D__get(reg* const p_reg)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
+		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
 	}
@@ -2604,7 +2604,7 @@ reg_FPU_D__get(reg* const p_reg)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
+		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
 	}
@@ -2711,7 +2711,7 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
-			if (!p_target->examined) {
+			if (!target_was_examined(p_target)) {
 				return sc_error_code__get_and_clear(p_target);
 			}
 		}
@@ -2721,7 +2721,7 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
+		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
 	}
@@ -2730,7 +2730,7 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
+		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
 	}
@@ -2836,7 +2836,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
-			if (!p_target->examined) {
+			if (!target_was_examined(p_target)) {
 				return sc_error_code__get_and_clear(p_target);
 			}
 		}
@@ -2846,7 +2846,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
+		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
 	}
@@ -2855,7 +2855,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
+		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
 	}
@@ -2980,7 +2980,7 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 					set_DEMODE_ENBL(p_target, dmode_enabled);
 					// set debug reason
 					sc_riscv32__update_status(p_target);
-					if (!p_target->examined) {
+					if (!target_was_examined(p_target)) {
 						return sc_error_code__get_and_clear(p_target);
 					}
 					LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_SINGLESTEP);
@@ -3677,7 +3677,7 @@ sc_riscv32__read_phys_memory(target* const p_target, target_addr_t _address, uin
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
-			if (!p_target->examined) {
+			if (!target_was_examined(p_target)) {
 				return sc_error_code__get_and_clear(p_target);
 			}
 		}
@@ -3686,7 +3686,7 @@ sc_riscv32__read_phys_memory(target* const p_target, target_addr_t _address, uin
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
-			if (!p_target->examined) {
+			if (!target_was_examined(p_target)) {
 				return sc_error_code__get_and_clear(p_target);
 			}
 		}
@@ -3853,7 +3853,7 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
-			if (!p_target->examined) {
+			if (!target_was_examined(p_target)) {
 				return sc_error_code__get_and_clear(p_target);
 			}
 		}
@@ -3863,7 +3863,7 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
+		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
 	}
@@ -3872,7 +3872,7 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
-		if (!p_target->examined) {
+		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
 	}
