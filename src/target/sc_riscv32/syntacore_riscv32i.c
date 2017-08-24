@@ -69,123 +69,106 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		return sc_riscv32__update_status(p_target);
-	} else {
-		/// @todo Privileged Instruction 1.7 version
-		uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
-		/// @todo Privileged Instruction 1.7 version
-		uint32_t const VM = PRV == Priv_M || PRV == Priv_H ? VM_Mbare : (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
-		assert(p_physical);
+	}
 
-		switch (VM) {
-		case VM_Mbare:
-			*p_physical = address;
+	/// @todo Privileged Instruction 1.7 version
+	uint32_t const PRV = (mstatus >> 1) & LOW_BITS_MASK(2);
+	/// @todo Privileged Instruction 1.7 version
+	uint32_t const VM = PRV == Priv_M || PRV == Priv_H ? VM_Mbare : (mstatus >> 17) & LOW_BITS_MASK(21 - 16);
+	assert(p_physical);
 
-			if (p_bound) {
-				*p_bound = UINT32_MAX;
-			}
+	switch (VM) {
+	case VM_Mbare:
+		*p_physical = address;
 
-			break;
-
-		case VM_Mbb:
-		case VM_Mbbid:
-			{
-				uint32_t const bound = sc_riscv32__csr_get_value(p_target, VM == VM_Mbb ? CSR_mbound_Pr_ISA_1_7 : /*VM == VM_Mbbid*/instruction_space ? CSR_mibound_Pr_ISA_1_7 : CSR_mdbound_Pr_ISA_1_7);
-
-				if (ERROR_OK == sc_error_code__get(p_target)) {
-					if (!(address < bound)) {
-						sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-					} else {
-						uint32_t const base = sc_riscv32__csr_get_value(p_target, VM_Mbb ? CSR_mbase_Pr_ISA_1_7 : /*VM == VM_Mbbid*/instruction_space ? CSR_mibase_Pr_ISA_1_7 : CSR_mdbase_Pr_ISA_1_7);
-
-						if (ERROR_OK == sc_error_code__get(p_target)) {
-							*p_physical = address + base;
-
-							if (p_bound) {
-								*p_bound = bound - address;
-							}
-						} else {
-							sc_riscv32__update_status(p_target);
-							if (!p_target->examined) {
-								return sc_error_code__get(p_target);
-							}
-						}
-					}
-				} else {
-					sc_riscv32__update_status(p_target);
-					if (!p_target->examined) {
-						return sc_error_code__get(p_target);
-					}
-				}
-			}
-			break;
-
-		case VM_Sv32:
-			{
-				static uint32_t const offset_mask = LOW_BITS_MASK(10) << 2;
-				uint32_t const main_page = sc_riscv32__csr_get_value(p_target, CSR_sptbr_Pr_ISA_1_7);
-
-				if (ERROR_OK == sc_error_code__get(p_target)) {
-					// lower bits should be zero
-					assert(0 == (main_page & LOW_BITS_MASK(12)));
-					uint32_t const offset_bits1 = address >> 20 & offset_mask;
-					uint8_t pte1_buf[4];
-
-					if (ERROR_OK == sc_error_code__update(p_target, target_read_phys_memory(p_target, main_page | offset_bits1, 4, 1, pte1_buf))) {
-						uint32_t const pte1 = buf_get_u32(pte1_buf, 0, 32);
-
-						if (0 == (pte1 & BIT_MASK(0))) {
-							sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-						} else if ((pte1 >> 1 & LOW_BITS_MASK(4)) >= 2) {
-							*p_physical = (pte1 << 2 & ~LOW_BITS_MASK(22)) | (address & LOW_BITS_MASK(22));
-
-							if (p_bound) {
-								*p_bound = BIT_MASK(22) - (address & LOW_BITS_MASK(22));
-							}
-						} else {
-							uint32_t const base_0 = pte1 << 2 & ~LOW_BITS_MASK(12);
-							uint32_t const offset_bits0 = address >> 10 & offset_mask;
-							uint8_t pte0_buf[4];
-
-							if (ERROR_OK == sc_error_code__update(p_target, target_read_phys_memory(p_target, base_0 | offset_bits0, 4, 1, pte0_buf))) {
-								uint32_t const pte0 = buf_get_u32(pte0_buf, 0, 32);
-
-								if (0 == (pte0 & BIT_MASK(0)) || (pte0 >> 1 & LOW_BITS_MASK(4)) < 2) {
-									sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-								} else {
-									*p_physical = (pte0 << 2 & ~LOW_BITS_MASK(12)) | (address & LOW_BITS_MASK(12));
-
-									if (p_bound) {
-										*p_bound = BIT_MASK(12) - (address & LOW_BITS_MASK(12));
-									}
-								}
-							} else {
-								sc_riscv32__update_status(p_target);
-								if (!p_target->examined) {
-									return sc_error_code__get(p_target);
-								}
-							}
-						}
-					} else {
-						sc_riscv32__update_status(p_target);
-						if (!p_target->examined) {
-							return sc_error_code__get(p_target);
-						}
-					}
-				} else {
-					sc_riscv32__update_status(p_target);
-					if (!p_target->examined) {
-						return sc_error_code__get(p_target);
-					}
-				}
-			}
-			break;
-
-		case VM_Sv39:
-		case VM_Sv48:
-		default:
-			return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
-			break;
+		if (p_bound) {
+			*p_bound = UINT32_MAX;
 		}
+
+		return sc_error_code__get(p_target);
+		break;
+
+	case VM_Mbb:
+	case VM_Mbbid:
+		{
+			uint32_t const bound = sc_riscv32__csr_get_value(p_target, VM == VM_Mbb ? CSR_mbound_Pr_ISA_1_7 : /*VM == VM_Mbbid*/instruction_space ? CSR_mibound_Pr_ISA_1_7 : CSR_mdbound_Pr_ISA_1_7);
+
+			if (ERROR_OK == sc_error_code__get(p_target)) {
+				if (!(address < bound)) {
+					return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+				} 
+
+				uint32_t const base = sc_riscv32__csr_get_value(p_target, VM_Mbb ? CSR_mbase_Pr_ISA_1_7 : /*VM == VM_Mbbid*/instruction_space ? CSR_mibase_Pr_ISA_1_7 : CSR_mdbase_Pr_ISA_1_7);
+
+				if (ERROR_OK == sc_error_code__get(p_target)) {
+					*p_physical = address + base;
+
+					if (p_bound) {
+						*p_bound = bound - address;
+					}
+					return sc_error_code__get(p_target);
+				}
+			}
+		}
+		break;
+
+	case VM_Sv32:
+		{
+			static uint32_t const offset_mask = LOW_BITS_MASK(10) << 2;
+			uint32_t const main_page = sc_riscv32__csr_get_value(p_target, CSR_sptbr_Pr_ISA_1_7);
+
+			if (ERROR_OK == sc_error_code__get(p_target)) {
+				// lower bits should be zero
+				assert(0 == (main_page & LOW_BITS_MASK(12)));
+				uint32_t const offset_bits1 = address >> 20 & offset_mask;
+				uint8_t pte1_buf[4];
+
+				if (ERROR_OK == sc_error_code__update(p_target, target_read_phys_memory(p_target, main_page | offset_bits1, 4, 1, pte1_buf))) {
+					uint32_t const pte1 = buf_get_u32(pte1_buf, 0, 32);
+
+					if (0 == (pte1 & BIT_MASK(0))) {
+						return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+					}
+					
+					if ((pte1 >> 1 & LOW_BITS_MASK(4)) >= 2) {
+						*p_physical = (pte1 << 2 & ~LOW_BITS_MASK(22)) | (address & LOW_BITS_MASK(22));
+
+						if (p_bound) {
+							*p_bound = BIT_MASK(22) - (address & LOW_BITS_MASK(22));
+						}
+					} else {
+						uint32_t const base_0 = pte1 << 2 & ~LOW_BITS_MASK(12);
+						uint32_t const offset_bits0 = address >> 10 & offset_mask;
+						uint8_t pte0_buf[4];
+
+						if (ERROR_OK == sc_error_code__update(p_target, target_read_phys_memory(p_target, base_0 | offset_bits0, 4, 1, pte0_buf))) {
+							uint32_t const pte0 = buf_get_u32(pte0_buf, 0, 32);
+
+							if (0 == (pte0 & BIT_MASK(0)) || (pte0 >> 1 & LOW_BITS_MASK(4)) < 2) {
+								return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+							}
+
+							*p_physical = (pte0 << 2 & ~LOW_BITS_MASK(12)) | (address & LOW_BITS_MASK(12));
+
+							if (p_bound) {
+								*p_bound = BIT_MASK(12) - (address & LOW_BITS_MASK(12));
+							}
+						}
+					}
+				}
+			}
+		}
+		break;
+
+	case VM_Sv39:
+	case VM_Sv48:
+	default:
+		return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
+		break;
+	}
+
+	if (ERROR_OK != sc_error_code__get(p_target)) {
+		sc_riscv32__update_status(p_target);
 	}
 	return sc_error_code__get(p_target);
 }
