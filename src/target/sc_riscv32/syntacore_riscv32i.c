@@ -105,10 +105,16 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 							}
 						} else {
 							sc_riscv32__update_status(p_target);
+							if (!p_target->examined) {
+								return sc_error_code__get_and_clear(p_target);
+							}
 						}
 					}
 				} else {
 					sc_riscv32__update_status(p_target);
+					if (!p_target->examined) {
+						return sc_error_code__get_and_clear(p_target);
+					}
 				}
 			}
 			break;
@@ -154,13 +160,22 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 								}
 							} else {
 								sc_riscv32__update_status(p_target);
+								if (!p_target->examined) {
+									return sc_error_code__get_and_clear(p_target);
+								}
 							}
 						}
 					} else {
 						sc_riscv32__update_status(p_target);
+						if (!p_target->examined) {
+							return sc_error_code__get_and_clear(p_target);
+						}
 					}
 				} else {
 					sc_riscv32__update_status(p_target);
+					if (!p_target->examined) {
+						return sc_error_code__get_and_clear(p_target);
+					}
 				}
 			}
 			break;

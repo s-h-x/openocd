@@ -1856,6 +1856,9 @@ static error_code
 sc_rv32_check_that_target_halted(target* const p_target)
 {
 	if (ERROR_OK == sc_riscv32__update_status(p_target)) {
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
 		if (p_target->state != TARGET_HALTED) {
 			LOG_ERROR("Target not halted");
 			return sc_error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
@@ -2040,11 +2043,17 @@ reg_x__get(reg* const p_reg)
 					sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
 				} else {
 					sc_riscv32__update_status(p_target);
+					if (!p_target->examined) {
+						return sc_error_code__get_and_clear(p_target);
+					}
 				}
 
 				sc_rv32_check_PC_value(p_target, previous_pc);
 			} else {
 				sc_riscv32__update_status(p_target);
+				if (!p_target->examined) {
+					return sc_error_code__get_and_clear(p_target);
+				}
 			}
 		}
 
@@ -2215,17 +2224,29 @@ sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 						sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value);
 					} else {
 						sc_riscv32__update_status(p_target);
+						if (!p_target->examined) {
+							return sc_error_code__get_and_clear(p_target);
+						}
 					}
 				} else {
 					sc_riscv32__update_status(p_target);
+					if (!p_target->examined) {
+						return sc_error_code__get_and_clear(p_target);
+					}
 				}
 			} else {
 				sc_riscv32__update_status(p_target);
+				if (!p_target->examined) {
+					return sc_error_code__get_and_clear(p_target);
+				}
 			}
 
 			sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
 		} else {
 			sc_riscv32__update_status(p_target);
+			if (!p_target->examined) {
+				return sc_error_code__get_and_clear(p_target);
+			}
 		}
 
 		sc_rv32_check_PC_value(p_target, pc_sample_1);
@@ -2339,6 +2360,9 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 	}
 
 	sc_riscv32__update_status(p_target);
+	if (!p_target->examined) {
+		return sc_error_code__get_and_clear(p_target);
+	}
 
 	// restore temporary register
 	error_code const old_err_code = sc_error_code__get_and_clear(p_target);
@@ -2563,18 +2587,33 @@ reg_FPU_D__get(reg* const p_reg)
 							p_reg->dirty = false;
 						} else {
 							sc_riscv32__update_status(p_target);
+							if (!p_target->examined) {
+								return sc_error_code__get_and_clear(p_target);
+							}
 						}
 					} else {
 						sc_riscv32__update_status(p_target);
+						if (!p_target->examined) {
+							return sc_error_code__get_and_clear(p_target);
+						}
 					}
 				} else {
 					sc_riscv32__update_status(p_target);
+					if (!p_target->examined) {
+						return sc_error_code__get_and_clear(p_target);
+					}
 				}
 			} else {
 				sc_riscv32__update_status(p_target);
+				if (!p_target->examined) {
+					return sc_error_code__get_and_clear(p_target);
+				}
 			}
 		} else {
 			sc_riscv32__update_status(p_target);
+			if (!p_target->examined) {
+				return sc_error_code__get_and_clear(p_target);
+			}
 		}
 
 		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
@@ -2684,10 +2723,16 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 		}
 
 		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
 
 		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
 	} else {
 		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
 	}
 
 	sc_rv32_check_PC_value(p_target, pc_sample_1);
@@ -2788,10 +2833,16 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 		}
 
 		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
 
 		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
 	} else {
 		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
 	}
 
 	sc_rv32_check_PC_value(p_target, pc_sample_1);
@@ -2915,6 +2966,9 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 					set_DEMODE_ENBL(p_target, dmode_enabled);
 					// set debug reason
 					sc_riscv32__update_status(p_target);
+					if (!p_target->examined) {
+						return sc_error_code__get_and_clear(p_target);
+					}
 					LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_SINGLESTEP);
 					p_target->debug_reason = DBG_REASON_SINGLESTEP;
 					// raise halt event
@@ -2950,6 +3004,9 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
 
 	sc_riscv32__update_status(p_target);
+	if (!p_target->examined) {
+		return sc_error_code__get_and_clear(p_target);
+	}
 	return sc_error_code__get_and_clear(p_target);
 }
 
@@ -2992,6 +3049,9 @@ sc_rv32_core_reset__set(target* const p_target, bool const active)
 					}
 				}
 			}
+			if (!p_target->examined) {
+				return sc_error_code__get_and_clear(p_target);
+			}
 		}
 	}
 
@@ -3012,6 +3072,9 @@ scrv32_sys_reset__set(target* const p_target, bool const active)
 	sc_error_code__update(p_target, jtag_execute_queue());
 	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, *field.out_value);
 	sc_riscv32__update_status(p_target);
+	if (!p_target->examined) {
+		return sc_error_code__get_and_clear(p_target);
+	}
 	return sc_error_code__get_and_clear(p_target);
 }
 
@@ -3223,9 +3286,17 @@ adjust_target_registers_cache(target* const p_target)
 	bool const RV_D = 0 != (p_arch->misa & (UINT32_C(1) << ('D' - 'A')));
 	bool const RV_F = 0 != (p_arch->misa & (UINT32_C(1) << ('F' - 'A')));
 	assert(!!(RV_I) ^ !!(RV_E));
+	assert(p_target->reg_cache && p_target->reg_cache->reg_list && 33 == p_target->reg_cache->num_regs);
+	{
+		reg* const p_regs = p_target->reg_cache->reg_list;
+		for (int i = 0; i < 32; ++i) {
+			p_regs[i].dirty = false;
+			p_regs[i].valid = false;
+		}
+	}
+
 	if (RV_I) {
 		assert(!RV_E);
-		assert(p_target->reg_cache && p_target->reg_cache->reg_list && 33 == p_target->reg_cache->num_regs);
 		reg* const p_regs = p_target->reg_cache->reg_list;
 		for (int i = 16; i < 32; ++i) {
 			p_regs[i].exist = true;
@@ -3233,7 +3304,6 @@ adjust_target_registers_cache(target* const p_target)
 		LOG_INFO("Enable RVI upper X registers");
 	} else if (RV_E) {
 		assert(!RV_I);
-		assert(p_target->reg_cache && p_target->reg_cache->reg_list && 33 == p_target->reg_cache->num_regs);
 		reg* const p_regs = p_target->reg_cache->reg_list;
 		for (int i = 16; i < 32; ++i) {
 			p_regs[i].exist = false;
@@ -3352,6 +3422,9 @@ sc_riscv32__halt(target* const p_target)
 	// May be already halted?
 	{
 		if (ERROR_OK != sc_riscv32__update_status(p_target)) {
+			if (!p_target->examined) {
+				return sc_error_code__get_and_clear(p_target);
+			}
 			return sc_error_code__get_and_clear(p_target);
 		}
 
@@ -3418,6 +3491,9 @@ sc_riscv32__soft_reset_halt(target* const p_target)
 	LOG_DEBUG("Soft reset halt called");
 
 	if (ERROR_OK != sc_riscv32__update_status(p_target)) {
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
 		return sc_error_code__get_and_clear(p_target);
 	}
 
@@ -3600,10 +3676,16 @@ sc_riscv32__read_phys_memory(target* const p_target, target_addr_t _address, uin
 			sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
 		} else {
 			sc_riscv32__update_status(p_target);
+			if (!p_target->examined) {
+				return sc_error_code__get_and_clear(p_target);
+			}
 		}
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
+			if (!p_target->examined) {
+				return sc_error_code__get_and_clear(p_target);
+			}
 		}
 
 		sc_rv32_check_PC_value(p_target, pc_sample_1);
@@ -3737,19 +3819,16 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 						buffer += size;
 
 						if (++count1 >= WRITE_BUFFER_THRESHOLD) {
-							LOG_DEBUG("Force jtag_execute_queue_noclear()");
-							jtag_execute_queue_noclear();
+							LOG_DEBUG("Force jtag execute queue");
+							sc_error_code__update(p_target, jtag_execute_queue());
 							count1 = 0;
 						}
 					}
 
 					LOG_DEBUG("End loop");
 
-					sc_error_code__update(p_target, jtag_execute_queue());
-
-					if ((DAP_OPSTATUS & DAP_status_mask) != DAP_status_good) {
-						LOG_ERROR("DAP_OPSTATUS == 0x%1X", (uint32_t)DAP_OPSTATUS);
-						sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
+					if (ERROR_OK == sc_error_code__get(p_target)) {
+						sc_error_code__update(p_target, jtag_execute_queue());
 					}
 				} else {
 					while (ERROR_OK == sc_error_code__get(p_target) && count--) {
@@ -3772,13 +3851,25 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 			}
 		}
 
+		if (ERROR_OK != sc_error_code__get(p_target)) {
+			sc_riscv32__update_status(p_target);
+			if (!p_target->examined) {
+				return sc_error_code__get_and_clear(p_target);
+			}
+		}
 		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, 0);
 	} else {
 		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
 	}
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
 	}
 
 	sc_rv32_check_PC_value(p_target, pc_sample_1);
@@ -3852,9 +3943,15 @@ sc_riscv32__remove_breakpoint(target* const p_target, breakpoint* const p_breakp
 			p_breakpoint->set = 0;
 		} else {
 			sc_riscv32__update_status(p_target);
+			if (!p_target->examined) {
+				return sc_error_code__get_and_clear(p_target);
+			}
 		}
 	} else {
 		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
 	}
 
 	return sc_error_code__get_and_clear(p_target);
@@ -3935,6 +4032,9 @@ scrx_1_9__mmu(target* p_target, int* p_mmu_enabled)
 		*p_mmu_enabled = 0 != (satp & (UINT32_C(1) << 31));
 	} else {
 		sc_riscv32__update_status(p_target);
+		if (!p_target->examined) {
+			return sc_error_code__get_and_clear(p_target);
+		}
 	}
 
 	return sc_error_code__get_and_clear(p_target);
@@ -3997,9 +4097,14 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 	for (int i = levels - 1;;) {
 		// 2
 		uint8_t buf[sizeof(uint32_t)];
+
 		if (ERROR_OK != target_read_phys_memory(p_target, (target_addr_t)a + vpn[i] * PTESIZE, sizeof buf, 1, buf)) {
 			return sc_riscv32__update_status(p_target);
+			if (!p_target->examined) {
+				return sc_error_code__get_and_clear(p_target);
+			}
 		}
+
 		uint32_t const pte = buf_get_u32(buf, 0, 32);
 
 		// 3
