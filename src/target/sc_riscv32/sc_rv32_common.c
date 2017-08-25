@@ -30,9 +30,12 @@
 /// Number of array 'arr' elements
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
 
+/// @return bit-field value
+#define EXTRACT_FIELD(bits, first_bit, last_bit) (((bits) >> (first_bit)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit)))
+
 /// @return true if values bits except lower 'LEN' are zero
 #define IS_VALID_UNSIGNED_FIELD(FLD,LEN) ((FLD & ~LOW_BITS_MASK(LEN)) == 0)
-#define NORMALIZE_INT_FIELD(FLD, SIGN_BIT, ZEROS) ( ( ( ( -( ( (FLD) >> (SIGN_BIT) ) & LOW_BITS_MASK(1) ) ) << (SIGN_BIT) ) | (FLD) ) & ~LOW_BITS_MASK(ZEROS) )
+#define NORMALIZE_INT_FIELD(FLD, SIGN_BIT, ZEROS) ( ~LOW_BITS_MASK(ZEROS) & ( (FLD) | ( -EXTRACT_FIELD((FLD),(SIGN_BIT),(SIGN_BIT)) << (SIGN_BIT) )))
 #define IS_VALID_SIGNED_IMMEDIATE_FIELD(FLD, SIGN_BIT, LOW_ZEROS) ( (FLD) == NORMALIZE_INT_FIELD((FLD), (SIGN_BIT), (LOW_ZEROS)) )
 
 /// Specialized assert check that register number is 5 bits only
@@ -62,8 +65,8 @@
 /// @return expression of TYPE with 'first_bit':'last_bit' bits set
 #define MAKE_TYPE_FIELD(TYPE, bits, first_bit, last_bit)     ((((TYPE)(bits)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
 
-/// @return bit-field value
-#define EXTRACT_FIELD(bits, first_bit, last_bit) (((bits) >> (first_bit)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit)))
+#define INT12_MAX NORMALIZE_INT_FIELD(~(~0 << 11), 11, 0)
+#define INT12_MIN NORMALIZE_INT_FIELD(~INT12_MAX, 11, 0)
 
 static_assert(CHAR_BIT == 8, "Unsupported char size");
 
@@ -734,19 +737,19 @@ RISCV_opcode_LW(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm)
 	return RISCV_OPCODE_INSTR_I_TYPE(imm, rs1, 2u, rd, 0x03u);
 }
 
-static inline rv_instruction32_type
+static rv_instruction32_type
 RISCV_opcode_SB(reg_num_type rs_data, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_OPCODE_INSTR_S_TYPE(imm, rs_data, rs1, 0u, 0x23);
 }
 
-static inline rv_instruction32_type
+static rv_instruction32_type
 RISCV_opcode_SH(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_OPCODE_INSTR_S_TYPE(imm, rs, rs1, 1u, 0x23);
 }
 
-static inline rv_instruction32_type
+static rv_instruction32_type
 RISCV_opcode_SW(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm)
 {
 	return RISCV_OPCODE_INSTR_S_TYPE(imm, rs, rs1, 2u, 0x23);
@@ -3748,20 +3751,22 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 
 		/// Setup exec operations mode
 		if (ERROR_OK == sc_rv32_EXEC__setup(p_target)) {
-			// Set address to CSR
-			if (ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, address)) {
-				/// Load address to work register
-				sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_addr_reg->number, p_arch->constants->debug_scratch_CSR), NULL);
-				// Opcodes
-				uint32_t const instructions[3] = {
-					RISCV_OPCODE_CSRR(p_data_reg->number, p_arch->constants->debug_scratch_CSR),
-					(size == 4 ? RISCV_opcode_SW(p_data_reg->number, p_addr_reg->number, 0) :
-					 size == 2 ? RISCV_opcode_SH(p_data_reg->number, p_addr_reg->number, 0) :
-					 /*size == 1*/ RISCV_opcode_SB(p_data_reg->number, p_addr_reg->number, 0)),
-					RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, size)
-				};
+			if (p_arch->constants->use_queuing_for_dr_scans) {
+				// Set address to CSR
+				// Load address to work register
+				if (
+					ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, address) &&
+					ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_addr_reg->number, p_arch->constants->debug_scratch_CSR), NULL)
+				) {
+					// Opcodes
+					uint32_t const instructions[3] = {
+						RISCV_OPCODE_CSRR(p_data_reg->number, p_arch->constants->debug_scratch_CSR),
+						(size == 4 ? RISCV_opcode_SW(p_data_reg->number, p_addr_reg->number, 0) :
+						 size == 2 ? RISCV_opcode_SH(p_data_reg->number, p_addr_reg->number, 0) :
+						 /*size == 1*/ RISCV_opcode_SB(p_data_reg->number, p_addr_reg->number, 0)),
+						RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, size)
+					};
 
-				if (p_arch->constants->use_queuing_for_dr_scans) {
 					uint8_t DAP_OPSTATUS = 0;
 					uint8_t const data_wr_opcode[1] = {DBGDATA_WR_index};
 					static uint8_t const DAP_OPSTATUS_GOOD = DAP_status_good;
@@ -3830,22 +3835,49 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 					if (ERROR_OK == sc_error_code__get(p_target)) {
 						sc_error_code__update(p_target, jtag_execute_queue());
 					}
-				} else {
-					while (ERROR_OK == sc_error_code__get(p_target) && count--) {
+				}
+			} else {
+				rv_instruction32_type
+				(*store_item_opcode)(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm) =
+					size == 4 ? &RISCV_opcode_SW :
+					size == 2 ? &RISCV_opcode_SH :
+					/*size == 1*/ &RISCV_opcode_SB;
+				// Set address to CSR
+				// Load address to work register
+				if (
+					ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, address - INT12_MIN) &&
+					ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_addr_reg->number, p_arch->constants->debug_scratch_CSR), NULL)
+				) {
+
+					riscv_short_signed_type offset = INT12_MIN;
+
+					while (ERROR_OK == sc_error_code__get(p_target) && 0 < count) {
 						/// Set data to CSR
-						if (ERROR_OK != sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(buffer, 0, CHAR_BIT * size))) {
+						if (
+							ERROR_OK != sc_rv32_EXEC__push_data_to_CSR(p_target, buf_get_u32(buffer, 0, CHAR_BIT * size)) ||
+							ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_data_reg->number, p_arch->constants->debug_scratch_CSR), NULL) ||
+							ERROR_OK != sc_rv32_EXEC__step(p_target, store_item_opcode(p_data_reg->number, p_addr_reg->number, offset), NULL)
+						) {
 							break;
 						}
-
-						for (unsigned i = 0; i < ARRAY_LEN(instructions); ++i) {
-							sc_rv32_EXEC__step(p_target, instructions[i], NULL);
-
-							if (ERROR_OK != sc_error_code__get(p_target)) {
-								break;
-							}
-						}
-
+						offset += (riscv_short_signed_type)size;
 						buffer += size;
+						--count;
+						if (offset <= INT12_MAX) {
+							continue;
+						}
+						if (
+							ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, 1 << 10), NULL) &&
+							ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, 1 << 10), NULL) &&
+							ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, 1 << 10), NULL) &&
+							ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, 1 << 10), NULL)
+						) {
+							break;
+						}
+						offset -= 1 << 10;
+						offset -= 1 << 10;
+						offset -= 1 << 10;
+						offset -= 1 << 10;
 					}
 				}
 			}
