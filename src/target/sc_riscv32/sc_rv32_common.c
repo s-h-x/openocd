@@ -3751,22 +3751,21 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 
 		/// Setup exec operations mode
 		if (ERROR_OK == sc_rv32_EXEC__setup(p_target)) {
-			if (p_arch->constants->use_queuing_for_dr_scans) {
-				// Set address to CSR
-				// Load address to work register
-				if (
-					ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, address) &&
-					ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_addr_reg->number, p_arch->constants->debug_scratch_CSR), NULL)
-				) {
-					// Opcodes
-					uint32_t const instructions[3] = {
-						RISCV_OPCODE_CSRR(p_data_reg->number, p_arch->constants->debug_scratch_CSR),
-						(size == 4 ? RISCV_opcode_SW(p_data_reg->number, p_addr_reg->number, 0) :
-						 size == 2 ? RISCV_opcode_SH(p_data_reg->number, p_addr_reg->number, 0) :
-						 /*size == 1*/ RISCV_opcode_SB(p_data_reg->number, p_addr_reg->number, 0)),
-						RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, size)
-					};
+			rv_instruction32_type
+			(*store_item_opcode)(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm) =
+				size == 4 ? &RISCV_opcode_SW :
+				size == 2 ? &RISCV_opcode_SH :
+				/*size == 1*/ &RISCV_opcode_SB;
 
+			// Set address to CSR
+			// Load address to work register
+			if (
+				ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, address - INT12_MIN) &&
+				ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_addr_reg->number, p_arch->constants->debug_scratch_CSR), NULL)
+			) {
+				riscv_short_signed_type offset = INT12_MIN;
+
+				if (p_arch->constants->use_queuing_for_dr_scans) {
 					uint8_t DAP_OPSTATUS = 0;
 					uint8_t const data_wr_opcode[1] = {DBGDATA_WR_index};
 					static uint8_t const DAP_OPSTATUS_GOOD = DAP_status_good;
@@ -3787,70 +3786,66 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 						.check_value = &DAP_OPSTATUS_GOOD,
 						.check_mask = &DAP_STATUS_MASK,
 					};
-					uint8_t instr_buf[ARRAY_LEN(instructions)][sizeof(uint32_t)];
-					scan_field instr_fields[ARRAY_LEN(instructions)][TAP_number_of_fields_DAP_CMD];
-
-					for (size_t i = 0; i < ARRAY_LEN(instructions); ++i) {
-						buf_set_u32(instr_buf[i], 0, TAP_length_of_DAP_CMD_OPCODE_EXT, instructions[i]);
-						scan_field const fld = {.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = instr_buf[i]};
-						instr_fields[i][0] = fld;
-						instr_fields[i][1] = instr_scan_opcode_field;
-					}
 
 					assert(buffer);
 					data_scan_fields[0].out_value = buffer;
-					LOG_DEBUG("Repeat in loop %d times:", count);
-					LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
-							  data_scan_fields[0].num_bits, buf_get_u32(data_scan_fields[0].out_value, 0, data_scan_fields[0].num_bits),
-							  data_scan_fields[1].num_bits, buf_get_u32(data_scan_fields[1].out_value, 0, data_scan_fields[1].num_bits));
 
-					for (unsigned i = 0; i < ARRAY_LEN(instr_fields); ++i) {
-						LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
-								  instr_fields[i][0].num_bits, buf_get_u32(instr_fields[i][0].out_value, 0, instr_fields[i][0].num_bits),
-								  instr_fields[i][1].num_bits, buf_get_u32(instr_fields[i][1].out_value, 0, instr_fields[i][1].num_bits));
-					}
-
-					size_t count1 = 0;
-
-					while (ERROR_OK == sc_error_code__get(p_target) && count--) {
+					while (ERROR_OK == sc_error_code__get(p_target) && 0 < count) {
 						assert(p_target->tap);
 						data_scan_fields[0].out_value = buffer;
 						jtag_add_dr_scan_check(p_target->tap, ARRAY_LEN(data_scan_fields), data_scan_fields, TAP_IDLE);
 
-						for (unsigned i = 0; i < ARRAY_LEN(instr_fields); ++i) {
-							jtag_add_dr_scan_check(p_target->tap, TAP_number_of_fields_DAP_CMD, instr_fields[i], TAP_IDLE);
+						{
+							uint8_t instr_buf[sizeof(uint32_t)];
+							buf_set_u32(instr_buf, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, RISCV_OPCODE_CSRR(p_data_reg->number, p_arch->constants->debug_scratch_CSR));
+							scan_field const fld = {.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = instr_buf};
+							scan_field instr_fields[TAP_number_of_fields_DAP_CMD];
+							instr_fields[0] = fld;
+							instr_fields[1] = instr_scan_opcode_field;
+							jtag_add_dr_scan_check(p_target->tap, TAP_number_of_fields_DAP_CMD, instr_fields, TAP_IDLE);
 						}
 
-						buffer += size;
+						{
+							uint8_t instr_buf[sizeof(uint32_t)];
+							buf_set_u32(instr_buf, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, store_item_opcode(p_data_reg->number, p_addr_reg->number, offset));
+							scan_field const fld = {.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = instr_buf};
+							scan_field instr_fields[TAP_number_of_fields_DAP_CMD];
+							instr_fields[0] = fld;
+							instr_fields[1] = instr_scan_opcode_field;
+							jtag_add_dr_scan_check(p_target->tap, TAP_number_of_fields_DAP_CMD, instr_fields, TAP_IDLE);
+						}
 
-						if (++count1 >= WRITE_BUFFER_THRESHOLD) {
-							LOG_DEBUG("Force jtag execute queue");
-							sc_error_code__update(p_target, jtag_execute_queue());
-							count1 = 0;
+						offset += (riscv_short_signed_type)size;
+						buffer += size;
+						--count;
+
+						if (offset <= INT12_MAX) {
+							continue;
+						}
+
+						for (int i = 0; i < 4; ++i) {
+							{
+								uint8_t instr_buf[sizeof(uint32_t)];
+								buf_set_u32(instr_buf, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, 1 << 10));
+								scan_field const fld = {.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = instr_buf};
+								scan_field instr_fields[TAP_number_of_fields_DAP_CMD];
+								instr_fields[0] = fld;
+								instr_fields[1] = instr_scan_opcode_field;
+								jtag_add_dr_scan_check(p_target->tap, TAP_number_of_fields_DAP_CMD, instr_fields, TAP_IDLE);
+							}
+							offset -= 1 << 10;
+						}
+						LOG_DEBUG("Force jtag_execute_queue()");
+						if (ERROR_OK != sc_error_code__update(p_target, jtag_execute_queue())) {
+							break;
 						}
 					}
-
-					LOG_DEBUG("End loop");
 
 					if (ERROR_OK == sc_error_code__get(p_target)) {
+						LOG_DEBUG("Force jtag_execute_queue()");
 						sc_error_code__update(p_target, jtag_execute_queue());
 					}
-				}
-			} else {
-				rv_instruction32_type
-				(*store_item_opcode)(reg_num_type rs, reg_num_type rs1, riscv_short_signed_type imm) =
-					size == 4 ? &RISCV_opcode_SW :
-					size == 2 ? &RISCV_opcode_SH :
-					/*size == 1*/ &RISCV_opcode_SB;
-				// Set address to CSR
-				// Load address to work register
-				if (
-					ERROR_OK == sc_rv32_EXEC__push_data_to_CSR(p_target, address - INT12_MIN) &&
-					ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_addr_reg->number, p_arch->constants->debug_scratch_CSR), NULL)
-				) {
-
-					riscv_short_signed_type offset = INT12_MIN;
-
+				} else {
 					while (ERROR_OK == sc_error_code__get(p_target) && 0 < count) {
 						/// Set data to CSR
 						if (
@@ -3866,18 +3861,13 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 						if (offset <= INT12_MAX) {
 							continue;
 						}
-						if (
-							ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, 1 << 10), NULL) &&
-							ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, 1 << 10), NULL) &&
-							ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, 1 << 10), NULL) &&
-							ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, 1 << 10), NULL)
-						) {
-							break;
+
+						for (int i = 0; i < 4; ++i) {
+							if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, 1 << 10), NULL)) {
+								break;
+							}
+							offset -= 1 << 10;
 						}
-						offset -= 1 << 10;
-						offset -= 1 << 10;
-						offset -= 1 << 10;
-						offset -= 1 << 10;
 					}
 				}
 			}
