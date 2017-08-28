@@ -49,6 +49,7 @@
 #define CHECK_IMM_11_00(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 11, 0))
 #define CHECK_IMM_12_01(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 12, 1))
 #define CHECK_IMM_20_01(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 20, 1))
+#define CHECK_IMM_31_12(imm) assert(IS_VALID_SIGNED_IMMEDIATE_FIELD(imm, 31, 12))
 /// @}
 
 /// @todo static_assert
@@ -706,8 +707,18 @@ sc_error_code__prepend(target const* const p_target, error_code const older_err_
 	MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 0, 4), 7, 11) | \
 	MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6) )
 
+#define RV_INSTR_U_TYPE(imm_31_12, rd, opcode) ( \
+	CHECK_OPCODE(opcode), \
+	CHECK_REG(rd), \
+	CHECK_IMM_31_12(imm_31_12), \
+	MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_31_12, 12, 31), 12, 31) | \
+	MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) | \
+	MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6))
+
+#define RISCV_OPCODE_ADD(rd, rs1, rs2) RISCV_OPCODE_INSTR_R_TYPE(0b0000000, (rs2), (rs1), 0u, (rd), 0b0110011u)
 #define RISCV_OPCODE_FMV_X_S(rd, rs1_fp) RISCV_OPCODE_INSTR_R_TYPE(0x70u, 0u, (rs1_fp), 0u, (rd), 0x53u)
 #define RISCV_OPCODE_FMV_S_X(rd_fp, rs1) RISCV_OPCODE_INSTR_R_TYPE(0x78u, 0u, (rs1), 0u, (rd_fp), 0x53u)
+#define RISCV_OPCODE_LUI(rd, imm_31_12) RV_INSTR_U_TYPE(imm_31_12, (rd), 0b0110111u)
 #define RISCV_OPCODE_ADDI(rd, rs1, imm) RISCV_OPCODE_INSTR_I_TYPE((imm), (rs1), 0u, (rd), 0x13u)
 #define RISCV_OPCODE_NOP() RISCV_OPCODE_ADDI(0, 0, 0)
 #define RISCV_OPCODE_JALR(rd, rs1, imm) RISCV_OPCODE_INSTR_I_TYPE((imm), (rs1), 0u, (rd), 0x67u)
@@ -3823,18 +3834,26 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 							continue;
 						}
 
-						for (int i = 0; i < 4; ++i) {
-							{
-								uint8_t instr_buf[sizeof(uint32_t)];
-								buf_set_u32(instr_buf, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, 1 << 10));
-								scan_field const fld = {.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = instr_buf};
-								scan_field instr_fields[TAP_number_of_fields_DAP_CMD];
-								instr_fields[0] = fld;
-								instr_fields[1] = instr_scan_opcode_field;
-								jtag_add_dr_scan_check(p_target->tap, TAP_number_of_fields_DAP_CMD, instr_fields, TAP_IDLE);
-							}
-							offset -= 1 << 10;
+						{
+							uint8_t instr_buf[sizeof(uint32_t)];
+							buf_set_u32(instr_buf, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, RISCV_OPCODE_LUI(p_data_reg->number, 1 << 12));
+							scan_field const fld = {.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = instr_buf};
+							scan_field instr_fields[TAP_number_of_fields_DAP_CMD];
+							instr_fields[0] = fld;
+							instr_fields[1] = instr_scan_opcode_field;
+							jtag_add_dr_scan_check(p_target->tap, TAP_number_of_fields_DAP_CMD, instr_fields, TAP_IDLE);
 						}
+						{
+							uint8_t instr_buf[sizeof(uint32_t)];
+							buf_set_u32(instr_buf, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, RISCV_OPCODE_ADD(p_addr_reg->number, p_addr_reg->number, p_data_reg->number));
+							scan_field const fld = {.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = instr_buf};
+							scan_field instr_fields[TAP_number_of_fields_DAP_CMD];
+							instr_fields[0] = fld;
+							instr_fields[1] = instr_scan_opcode_field;
+							jtag_add_dr_scan_check(p_target->tap, TAP_number_of_fields_DAP_CMD, instr_fields, TAP_IDLE);
+						}
+						offset -= 1 << 12;
+
 						LOG_DEBUG("Force jtag_execute_queue()");
 						if (ERROR_OK != sc_error_code__update(p_target, jtag_execute_queue())) {
 							break;
@@ -3842,7 +3861,7 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 					}
 
 					if (ERROR_OK == sc_error_code__get(p_target)) {
-						LOG_DEBUG("Force jtag_execute_queue()");
+						LOG_DEBUG("Force jtag_execute_queue() - last time");
 						sc_error_code__update(p_target, jtag_execute_queue());
 					}
 				} else {
@@ -3862,12 +3881,13 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 							continue;
 						}
 
-						for (int i = 0; i < 4; ++i) {
-							if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_ADDI(p_addr_reg->number, p_addr_reg->number, 1 << 10), NULL)) {
-								break;
-							}
-							offset -= 1 << 10;
+						if (
+							ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_LUI(p_data_reg->number, 1 << 12), NULL) &&
+							ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_ADD(p_addr_reg->number, p_addr_reg->number, p_data_reg->number), NULL)
+						) {
+							break;
 						}
+						offset -= 1 << 12;
 					}
 				}
 			}
