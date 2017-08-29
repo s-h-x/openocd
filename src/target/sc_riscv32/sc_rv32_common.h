@@ -58,6 +58,7 @@ struct sc_riscv32__Arch_constants
 	/// Debug controller related parameters
 	bool use_ir_select_cache;             ///< Don't make irscan if IR is the same
 	bool use_queuing_for_dr_scans;        ///< DR scan queuing instead separate
+	bool use_separate_items;
 	bool use_dap_control_cache;           ///< Don't write to DAP_CONTROL if it has same value
 	bool use_verify_dap_control;          ///< Verify value of DAP_CONTROL after write
 	bool use_verify_hart_regtrans_write;  ///< Verify values of HART REGTRANS after write

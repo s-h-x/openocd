@@ -174,12 +174,13 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 }
 
 static sc_riscv32__Arch_constants const scrx_constants = {
-	.use_ir_select_cache = false,
-	.use_dap_control_cache = false,
-	.use_verify_dap_control = true,
-	.use_verify_hart_regtrans_write = true,
-	.use_verify_core_regtrans_write = true,
+	.use_ir_select_cache = true,
+	.use_dap_control_cache = true,
+	.use_verify_dap_control = false,
+	.use_verify_hart_regtrans_write = false,
+	.use_verify_core_regtrans_write = false,
 	.use_queuing_for_dr_scans = true,
+	.use_separate_items = false,
 	.expected_dbg_id = 0x00800001u,
 	.debug_scratch_CSR = 0x788u,
 	.mstatus_FS_offset = 12u,

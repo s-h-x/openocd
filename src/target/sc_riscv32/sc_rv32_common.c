@@ -3832,6 +3832,18 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 						buffer += size;
 						--count;
 
+						if (0 == count) {
+							LOG_DEBUG("Force jtag_execute_queue() - last time");
+							sc_error_code__update(p_target, jtag_execute_queue());
+							break;
+						}
+
+						if (p_arch->constants->use_separate_items) {
+							if (ERROR_OK != sc_error_code__update(p_target, jtag_execute_queue())) {
+								break;
+							}
+						}
+
 						if (offset <= INT12_MAX) {
 							continue;
 						}
@@ -3860,11 +3872,6 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 						if (ERROR_OK != sc_error_code__update(p_target, jtag_execute_queue())) {
 							break;
 						}
-					}
-
-					if (ERROR_OK == sc_error_code__get(p_target)) {
-						LOG_DEBUG("Force jtag_execute_queue() - last time");
-						sc_error_code__update(p_target, jtag_execute_queue());
 					}
 				} else {
 					while (ERROR_OK == sc_error_code__get(p_target) && 0 < count) {
