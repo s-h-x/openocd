@@ -3872,6 +3872,7 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 						if (ERROR_OK != sc_error_code__update(p_target, jtag_execute_queue())) {
 							break;
 						}
+						LOG_DEBUG("jtag_execute_queue() - OK");
 					}
 				} else {
 					while (ERROR_OK == sc_error_code__get(p_target) && 0 < count) {
