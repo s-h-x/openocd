@@ -3122,7 +3122,7 @@ scrv32_sys_reset__set(target* const p_target, bool const active)
 	sc_error_code__update(p_target, jtag_execute_queue());
 	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, *field.out_value);
 	sc_riscv32__update_status(p_target);
-	return sc_error_code__get_and_clear(p_target);
+	return sc_error_code__get(p_target);
 }
 
 static reg const def_GP_regs_array[] = {
@@ -3490,20 +3490,6 @@ sc_riscv32__step(target* const p_target, int const current, target_addr_t const 
 }
 
 error_code
-sc_riscv32__assert_reset(target* const p_target)
-{
-	LOG_DEBUG("Assert reset");
-	return scrv32_sys_reset__set(p_target, true);
-}
-
-error_code
-sc_riscv32__deassert_reset(target* const p_target)
-{
-	LOG_DEBUG("Deassert reset");
-	return scrv32_sys_reset__set(p_target, false);
-}
-
-error_code
 sc_riscv32__soft_reset_halt(target* const p_target)
 {
 	LOG_DEBUG("Soft reset halt called");
@@ -3520,6 +3506,24 @@ sc_riscv32__soft_reset_halt(target* const p_target)
 	set_DEMODE_ENBL(p_target, HART_DMODE_ENBL_bits_Normal | HART_DMODE_ENBL_bit_Rst_Exit);
 	sc_rv32_core_reset__set(p_target, true);
 	sc_rv32_core_reset__set(p_target, false);
+	return sc_error_code__get_and_clear(p_target);
+}
+
+error_code
+sc_riscv32__assert_reset(target* const p_target)
+{
+	LOG_DEBUG("Assert reset");
+	scrv32_sys_reset__set(p_target, true);
+	return sc_error_code__get_and_clear(p_target);
+}
+
+error_code
+sc_riscv32__deassert_reset(target* const p_target)
+{
+	LOG_DEBUG("Deassert reset");
+	if (ERROR_OK == scrv32_sys_reset__set(p_target, false) && p_target->reset_halt) {
+		return sc_riscv32__soft_reset_halt(p_target);
+	}
 	return sc_error_code__get_and_clear(p_target);
 }
 
