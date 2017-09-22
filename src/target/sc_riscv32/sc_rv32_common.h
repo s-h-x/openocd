@@ -28,7 +28,7 @@
 #define BIT_MASK(bit_num) (1u << (bit_num))
 
 /// Bit mask value with low 'n' bits set
-#define LOW_BITS_MASK(n) (~(~0 << (n)))
+#define LOW_BITS_MASK(n) (~(~0u << (n)))
 
 /// @}
 
