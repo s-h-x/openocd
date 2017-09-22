@@ -17,6 +17,9 @@
 /// Queuing operations before force jtag operations
 #define WRITE_BUFFER_THRESHOLD (1u << 18)
 
+//#define ECLIPSE_WORKAROUND(code) (code)
+#define ECLIPSE_WORKAROUND(code) (ERROR_OK)
+
 /// Parameters of RISC-V core
 /// @{
 /// Size of RISC-V GP registers in bits
@@ -2426,7 +2429,7 @@ reg_FPU_S__get(reg* const p_reg)
 
 	if (0 == (p_arch->misa & BIT_MASK('F' - 'A'))) {
 		LOG_WARNING("F extention is unavailable");
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+		return ECLIPSE_WORKAROUND(ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 	}
 
 	if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
@@ -2573,7 +2576,7 @@ reg_FPU_D__get(reg* const p_reg)
 
 	if (0 == (p_arch->misa & BIT_MASK('d' - 'a'))) {
 		LOG_WARNING("D/F extentions are unavailable");
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+		return ECLIPSE_WORKAROUND(ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 	}
 
 	if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
