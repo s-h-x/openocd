@@ -39,7 +39,7 @@
 /// @return true if values bits except lower 'LEN' are zero
 #define IS_VALID_UNSIGNED_FIELD(FLD,LEN) ((FLD & ~LOW_BITS_MASK(LEN)) == 0)
 #define NORMALIZE_INT_FIELD(FLD, SIGN_BIT, ZEROS) ( ~LOW_BITS_MASK(ZEROS) & ( (FLD) | ( -EXTRACT_FIELD((FLD),(SIGN_BIT),(SIGN_BIT)) << (SIGN_BIT) )))
-#define IS_VALID_SIGNED_IMMEDIATE_FIELD(FLD, SIGN_BIT, LOW_ZEROS) ( (FLD) == NORMALIZE_INT_FIELD((FLD), (SIGN_BIT), (LOW_ZEROS)) )
+#define IS_VALID_SIGNED_IMMEDIATE_FIELD(FLD, SIGN_BIT, LOW_ZEROS) ( (0u + (FLD)) == NORMALIZE_INT_FIELD((FLD), (SIGN_BIT), (LOW_ZEROS)) )
 
 /// Specialized assert check that register number is 5 bits only
 /// @todo static_assert
@@ -69,8 +69,8 @@
 /// @return expression of TYPE with 'first_bit':'last_bit' bits set
 #define MAKE_TYPE_FIELD(TYPE, bits, first_bit, last_bit)     ((((TYPE)(bits)) & LOW_BITS_MASK((last_bit) + 1u - (first_bit))) << (first_bit))
 
-#define INT12_MAX NORMALIZE_INT_FIELD(~(~0 << 11), 11, 0)
-#define INT12_MIN NORMALIZE_INT_FIELD(~INT12_MAX, 11, 0)
+#define INT12_MAX ((riscv_short_signed_type)NORMALIZE_INT_FIELD(LOW_BITS_MASK(11), 11, 0))
+#define INT12_MIN ((riscv_short_signed_type)NORMALIZE_INT_FIELD(~INT12_MAX, 11, 0))
 
 static_assert(CHAR_BIT == 8, "Unsupported char size");
 
@@ -2314,7 +2314,7 @@ is_RVC_enable(target* const p_target)
 	assert(p_target);
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	return 0 != (p_arch->misa & (UINT32_C(1) << ('C' - 'A')));
+	return 0 != (p_arch->misa & BIT_MASK('C' - 'A'));
 }
 
 static error_code
@@ -2502,7 +2502,7 @@ reg_FPU_S__set(reg* const p_reg, uint8_t* const buf)
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 
-	if (0 == (p_arch->misa & (1 << ('F' - 'A')))) {
+	if (0 == (p_arch->misa & BIT_MASK('F' - 'A'))) {
 		LOG_WARNING("F extention is unavailable");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
@@ -3331,8 +3331,8 @@ adjust_target_registers_cache(target* const p_target)
 	assert(p_target);
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	bool const RV_D = 0 != (p_arch->misa & (UINT32_C(1) << ('D' - 'A')));
-	bool const RV_F = 0 != (p_arch->misa & (UINT32_C(1) << ('F' - 'A')));
+	bool const RV_D = 0 != (p_arch->misa & BIT_MASK('D' - 'A'));
+	bool const RV_F = 0 != (p_arch->misa & BIT_MASK('F' - 'A'));
 	assert(!!(0 != (p_arch->misa & BIT_MASK('I' - 'A'))) ^ !!(0 != (p_arch->misa & BIT_MASK('E' - 'A'))));
 	assert(p_target->reg_cache && p_target->reg_cache->reg_list && 33 == p_target->reg_cache->num_regs);
 	{
@@ -4070,7 +4070,7 @@ scrx_1_9__mmu(target* p_target, int* p_mmu_enabled)
 	assert(p_target);
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	bool const RV_S = 0 != (p_arch->misa & (UINT32_C(1) << ('S' - 'A')));
+	bool const RV_S = 0 != (p_arch->misa & BIT_MASK('S' - 'A'));
 
 	if (!RV_S) {
 		LOG_DEBUG("S-mode is not supporeted");
@@ -4081,7 +4081,7 @@ scrx_1_9__mmu(target* p_target, int* p_mmu_enabled)
 
 	if (ERROR_OK == sc_error_code__get(p_target)) {
 		LOG_DEBUG("satp=%08x" PRIx32, satp);
-		*p_mmu_enabled = 0 != (satp & (UINT32_C(1) << 31));
+		*p_mmu_enabled = 0 != (satp & BIT_MASK(31));
 	}
 
 	return sc_error_code__get_and_clear(p_target);
@@ -4099,7 +4099,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 	assert(p_target);
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	bool const RV_S = 0 != (p_arch->misa & (UINT32_C(1) << ('S' - 'A')));
+	bool const RV_S = 0 != (p_arch->misa & BIT_MASK('S' - 'A'));
 
 	if (!RV_S) {
 		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
@@ -4128,7 +4128,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 
 	LOG_DEBUG("satp=%08x" PRIx32, satp);
 
-	if (0 == (satp & (UINT32_C(1) << 31))) {
+	if (0 == (satp & BIT_MASK(31))) {
 		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
 	}
 
