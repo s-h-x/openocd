@@ -12,7 +12,7 @@
 #include "target/target_type.h"
 #include "helper/log.h"
 
-static sc_riscv32__Arch_constants const scr1_constants = {
+static sc_riscv32__Arch_constants const scr_constants = {
 	.use_ir_select_cache = true,
 	.use_dap_control_cache = true,
 	.use_verify_dap_control = false,
@@ -28,20 +28,20 @@ static sc_riscv32__Arch_constants const scr1_constants = {
 	.virt_to_phis = &sc_rv32__virt_to_phis_direct_map
 };
 
-static sc_riscv32__Arch const scr1_initial_arch = {
+static sc_riscv32__Arch const scr_initial_arch = {
 	.error_code = ERROR_OK,
 	.last_DAP_ctrl = DAP_CTRL_value_INVALID_CODE,
-	.constants = &scr1_constants
+	.constants = &scr_constants
 };
 
 static error_code
-scr1__init_target(command_context* cmd_ctx, target* const p_target)
+scr__init_target(command_context* cmd_ctx, target* const p_target)
 {
 	sc_riscv32__init_regs_cache(p_target);
 
 	sc_riscv32__Arch* p_arch_info = calloc(1, sizeof(sc_riscv32__Arch));
 	assert(p_arch_info);
-	*p_arch_info = scr1_initial_arch;
+	*p_arch_info = scr_initial_arch;
 
 	p_target->arch_info = p_arch_info;
 	return ERROR_OK;
@@ -97,7 +97,7 @@ target_type scr1_target = {
 
 	.examine = sc_riscv32__examine,
 
-	.init_target = scr1__init_target,
+	.init_target = scr__init_target,
 	.deinit_target = sc_riscv32__deinit_target,
 
 	.virt2phys = sc_riscv32__virt2phys,

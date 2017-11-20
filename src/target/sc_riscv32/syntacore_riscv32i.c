@@ -173,41 +173,6 @@ scrx_1_7__virt_to_phis(target* p_target, uint32_t address, uint32_t* p_physical,
 	return sc_error_code__get(p_target);
 }
 
-static sc_riscv32__Arch_constants const scrx_constants = {
-	.use_ir_select_cache = true,
-	.use_dap_control_cache = true,
-	.use_verify_dap_control = false,
-	.use_verify_hart_regtrans_write = false,
-	.use_verify_core_regtrans_write = false,
-	.use_queuing_for_dr_scans = true,
-	.use_separate_items = false,
-	.expected_dbg_id = 0x00800001u,
-	.debug_scratch_CSR = 0x788u,
-	.mstatus_FS_offset = 12u,
-	.opcode_FMV_D_2X = &sc_RISCV_opcode_S_FMV_D_2X,
-	.opcode_FMV_2X_D = &sc_RISCV_opcode_S_FMV_2X_D,
-	.virt_to_phis = &scrx_1_7__virt_to_phis
-};
-
-static sc_riscv32__Arch const scrx_initial_arch = {
-	.error_code = ERROR_OK,
-	.last_DAP_ctrl = DAP_CTRL_value_INVALID_CODE,
-	.constants = &scrx_constants
-};
-
-static error_code
-scrx__init_target(command_context* cmd_ctx, target* const p_target)
-{
-	sc_riscv32__init_regs_cache(p_target);
-
-	sc_riscv32__Arch* p_arch_info = calloc(1, sizeof(sc_riscv32__Arch));
-	assert(p_arch_info);
-	*p_arch_info = scrx_initial_arch;
-
-	p_target->arch_info = p_arch_info;
-	return ERROR_OK;
-}
-
 static error_code
 scrx_1_7__mmu(target* p_target, int* p_mmu_enabled)
 {
@@ -245,6 +210,41 @@ scrx_1_7__mmu(target* p_target, int* p_mmu_enabled)
 	}
 
 	return sc_error_code__get_and_clear(p_target);
+}
+
+static sc_riscv32__Arch_constants const scr_constants = {
+	.use_ir_select_cache = true,
+	.use_dap_control_cache = true,
+	.use_verify_dap_control = false,
+	.use_verify_hart_regtrans_write = false,
+	.use_verify_core_regtrans_write = false,
+	.use_queuing_for_dr_scans = true,
+	.use_separate_items = false,
+	.expected_dbg_id = 0x00800001u,
+	.debug_scratch_CSR = 0x788u,
+	.mstatus_FS_offset = 12u,
+	.opcode_FMV_D_2X = &sc_RISCV_opcode_S_FMV_D_2X,
+	.opcode_FMV_2X_D = &sc_RISCV_opcode_S_FMV_2X_D,
+	.virt_to_phis = &scrx_1_7__virt_to_phis
+};
+
+static sc_riscv32__Arch const scrx_initial_arch = {
+	.error_code = ERROR_OK,
+	.last_DAP_ctrl = DAP_CTRL_value_INVALID_CODE,
+	.constants = &scr_constants
+};
+
+static error_code
+scrx__init_target(command_context* cmd_ctx, target* const p_target)
+{
+	sc_riscv32__init_regs_cache(p_target);
+
+	sc_riscv32__Arch* p_arch_info = calloc(1, sizeof(sc_riscv32__Arch));
+	assert(p_arch_info);
+	*p_arch_info = scrx_initial_arch;
+
+	p_target->arch_info = p_arch_info;
+	return ERROR_OK;
 }
 
 /// @todo make const
