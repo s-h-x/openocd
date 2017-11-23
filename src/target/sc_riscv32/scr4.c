@@ -1,8 +1,8 @@
 ﻿/** @file
 
-	SCR5 target.
+	SCR4 target.
 
-	SCR5 is RISC-V compatible MCU core, designed by Syntacore.
+	SCR4 is RISC-V compatible MCU core, designed by Syntacore.
 
 	@copyright Syntacore 2016, 2017
 	@author sps (https://github.com/aka-sps)
@@ -25,7 +25,7 @@ static sc_riscv32__Arch_constants const scr_constants = {
 	.mstatus_FS_offset = 13u,
 	.opcode_FMV_D_2X = &sc_RISCV_opcode_D_FMV_D_2X,
 	.opcode_FMV_2X_D = &sc_RISCV_opcode_D_FMV_2X_D,
-	.virt_to_phis = &sc_rv32__virt_to_phis_direct_map
+	.virt_to_phis = &sc_rv32__virt_to_phis_1_9
 };
 
 static sc_riscv32__Arch const scr_initial_arch = {
