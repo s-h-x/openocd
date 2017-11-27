@@ -2429,9 +2429,14 @@ reg_FPU_S__get(reg* const p_reg)
 
 	if (0 == (p_arch->misa & BIT_MASK('F' - 'A'))) {
 		LOG_WARNING("F extention is unavailable");
-		buf_set_u32(p_reg->value, 0, p_reg->size, UINT32_C(0));
+
+		// Eclipse workaround
+		//@{
+		buf_set_u32(p_reg->value, 0, p_reg->size, UINT32_C(0xFEEDBEEF));
 		p_reg->valid = true;
 		p_reg->dirty = false;
+		//@}
+
 		return ECLIPSE_WORKAROUND(ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 	}
 
@@ -2579,9 +2584,14 @@ reg_FPU_D__get(reg* const p_reg)
 
 	if (0 == (p_arch->misa & BIT_MASK('d' - 'a'))) {
 		LOG_WARNING("D/F extentions are unavailable");
-		buf_set_u64(p_reg->value, 0, p_reg->size, UINT64_C(0));
+
+		// Eclipse workaround
+		//@{
+		buf_set_u64(p_reg->value, 0, p_reg->size, UINT64_C(0xBADC0DFEEDBEEF));
 		p_reg->valid = true;
 		p_reg->dirty = false;
+		//@}
+
 		return ECLIPSE_WORKAROUND(ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 	}
 
@@ -2821,6 +2831,13 @@ reg_csr__get(reg* const p_reg)
 		LOG_WARNING("CSR %s (#%d) is unavailable", p_reg->name, csr_number);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
+
+	// Eclipse workaround
+	//@{
+	buf_set_u32(p_reg->value, 0, p_reg->size, UINT32_C(0xFEEDBEEF));
+	p_reg->valid = true;
+	p_reg->dirty = false;
+	//@}
 
 	assert(reg__check(p_reg));
 	target* const p_target = p_reg->arch_info;
