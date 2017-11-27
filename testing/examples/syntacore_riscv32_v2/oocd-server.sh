@@ -17,7 +17,7 @@ if [ -z ${OOCD_ROOT} ] ; then
     exit 1
 fi
 
-OCD_TARGET=target/syntacore_riscv32i${TAP_SUFFIX}.cfg
+OCD_TARGET=target/syntacore_riscv32_v2${TAP_SUFFIX}.cfg
 
 echo -------------------------------------------------
 echo Target   : $OCD_TARGET
