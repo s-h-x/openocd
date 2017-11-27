@@ -109,8 +109,8 @@ extern struct target_type quark_d20xx_target;
 extern struct target_type riscv_target;
 #endif
 extern struct target_type syntacore_riscv32i_target;
-extern struct target_type scr1_target;
-extern struct target_type scr4_target;
+extern struct target_type syntacore_riscv32_v1_target;
+extern struct target_type syntacore_riscv32_v2_target;
 
 static struct target_type *target_types[] = {
 	&arm7tdmi_target,
@@ -149,8 +149,8 @@ static struct target_type *target_types[] = {
     &riscv_target,
 #endif
 	&syntacore_riscv32i_target,
-	&scr1_target,
-	&scr4_target,
+	&syntacore_riscv32_v1_target,
+	&syntacore_riscv32_v2_target,
 	NULL,
 };
 
