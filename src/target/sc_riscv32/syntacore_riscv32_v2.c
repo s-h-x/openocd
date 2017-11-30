@@ -104,7 +104,7 @@ target_type syntacore_riscv32_v2_target = {
 	.read_phys_memory = sc_riscv32__read_phys_memory,
 	.write_phys_memory = sc_riscv32__write_phys_memory,
 
-	.mmu = scrx_1_9__mmu,
+	.mmu = sc_rv32__mmu_1_9,
 	.check_reset = NULL,
 	.get_gdb_fileio_info = NULL,
 	.gdb_fileio_end = NULL,

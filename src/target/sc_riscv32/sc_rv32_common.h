@@ -48,11 +48,6 @@ enum {
 	DAP_CTRL_value_INVALID_CODE = 0xFFu,
 };
 
-enum
-{
-	CSR_mstatus = 0x300
-};
-
 struct sc_riscv32__Arch_constants
 {
 	/// Debug controller related parameters
@@ -96,30 +91,6 @@ struct sc_riscv32__Arch {
 	uint32_t misa;
 };
 typedef struct sc_riscv32__Arch sc_riscv32__Arch;
-
-/// Sub-operation error code handling methods
-///@{
-
-/// @brief Get operation code stored in the target context.
-error_code
-sc_error_code__get(target const* const p_target);
-
-/// @brief get stored target context operation code and reset stored code to ERROR_OK.
-error_code
-sc_error_code__get_and_clear(target const* const p_target);
-
-/** @brief Update error context.
-
-	Store first occurred code that is no equal to ERROR_OK into target context.
-
-	@return first not equal ERROR_OK code or else ERROR_OK
-*/
-error_code
-sc_error_code__update(target const* const p_target, error_code const a_error_code);
-/// @}
-
-error_code
-sc_riscv32__update_status(target* const p_target);
 
 error_code
 sc_riscv32__poll(target* const p_target);
@@ -175,9 +146,6 @@ sc_riscv32__read_phys_memory(target* const p_target, target_addr_t address, uint
 error_code
 sc_riscv32__write_phys_memory(target* const p_target, target_addr_t address, uint32_t const size, uint32_t count, uint8_t const* buffer);
 
-uint32_t
-sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number);
-
 void
 sc_riscv32__init_regs_cache(target* const p_target);
 
@@ -203,12 +171,18 @@ sc_RISCV_opcode_D_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type 
 /// @}
 
 error_code
+sc_rv32__mmu_1_7(target* p_target, int* p_mmu_enabled);
+
+error_code
+sc_rv32__mmu_1_9(target* p_target, int* p_mmu_enabled);
+
+error_code
 sc_rv32__virt_to_phis_direct_map(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
 
 error_code
-sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
+sc_rv32__virt_to_phis_1_7(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
 
 error_code
-scrx_1_9__mmu(target* p_target, int* p_mmu_enabled);
+sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
 
 #endif  // TARGET_SC_RV32_COMMON_H_
