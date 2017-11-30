@@ -4119,6 +4119,7 @@ sc_rv32__virt_to_phis_direct_map(target* p_target, uint32_t address, uint32_t* p
 	if (p_bound) {
 		*p_bound = UINT32_MAX;
 	}
+	LOG_DEBUG("Direct virt_to_phis address %08" PRIx32, address);
 	return sc_error_code__get(p_target);
 }
 
@@ -4344,7 +4345,7 @@ sc_rv32__mmu_1_9(target* p_target, int* p_mmu_enabled)
 	uint32_t const satp = sc_riscv32__csr_get_value(p_target, CSR_satp);
 
 	if (ERROR_OK == sc_error_code__get(p_target)) {
-		LOG_DEBUG("satp=%08x" PRIx32, satp);
+		LOG_DEBUG("satp=%08" PRIx32, satp);
 		*p_mmu_enabled = 0 != (satp & BIT_MASK(31));
 	}
 
@@ -4368,6 +4369,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 
 	invalidate_DAP_CTR_cache(p_target);
 	if (!RV_S) {
+		LOG_DEBUG("misa bit 'S' is 0");
 		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
 	}
 
@@ -4382,6 +4384,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 
 	uint32_t const current_mode = EXTRACT_FIELD(dbg_status, 6, 7);
 
+	LOG_DEBUG("current_mode=%" PRIu32, current_mode);
 	if (machine_mode == current_mode) {
 		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
 	}
@@ -4392,7 +4395,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 		return sc_error_code__get(p_target);
 	}
 
-	LOG_DEBUG("satp=%08x" PRIx32, satp);
+	LOG_DEBUG("satp=%08" PRIx32, satp);
 
 	if (0 == (satp & BIT_MASK(31))) {
 		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
@@ -4421,6 +4424,8 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 		uint32_t const pte_v = EXTRACT_FIELD(pte, 0, 0);
 		uint32_t const pte_r = EXTRACT_FIELD(pte, 1, 1);
 		uint32_t const pte_w = EXTRACT_FIELD(pte, 2, 2);
+		LOG_DEBUG("pte = 0x%08" PRIx32 "(v = 0x%08" PRIx32 " r = 0x%08" PRIx32 " w = 0x%08" PRIx32 ")", pte, pte_v, pte_r, pte_w);
+
 		if (0 == pte_v || (0 == pte_r && 0 != pte_w)) {
 			return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 		}
@@ -4433,6 +4438,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 			}
 			i = i - 1;
 			a = EXTRACT_FIELD(pte, 10, 31) * pagesize;
+			LOG_DEBUG("Intermediate a= 0x%08" PRIx32, a);
 		} else {
 			// 5
 			uint32_t const pte_u = EXTRACT_FIELD(pte, 4, 4);
@@ -4455,6 +4461,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 			unsigned const off_bits = i > 0 ? 22 : 12;
 			assert(p_physical);
 			*p_physical = (EXTRACT_FIELD(pte, off_bits - 2, 32) << off_bits) | EXTRACT_FIELD(va, 0, off_bits - 1);
+			LOG_DEBUG("Final a= 0x%08" PRIx32, *p_physical);
 			if (p_bound) {
 				*p_bound = UINT32_C(1) << off_bits;
 			}
