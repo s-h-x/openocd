@@ -4424,9 +4424,10 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 		uint32_t const pte_v = EXTRACT_FIELD(pte, 0, 0);
 		uint32_t const pte_r = EXTRACT_FIELD(pte, 1, 1);
 		uint32_t const pte_w = EXTRACT_FIELD(pte, 2, 2);
-		LOG_DEBUG("pte = 0x%08" PRIx32 "(v = 0x%08" PRIx32 " r = 0x%08" PRIx32 " w = 0x%08" PRIx32 ")", pte, pte_v, pte_r, pte_w);
+		LOG_DEBUG("pte = 0x%08" PRIx32 " (v = 0x%08" PRIx32 " r = 0x%08" PRIx32 " w = 0x%08" PRIx32 ")", pte, pte_v, pte_r, pte_w);
 
 		if (0 == pte_v || (0 == pte_r && 0 != pte_w)) {
+			LOG_ERROR("Address translation fault: pte = 0x%08" PRIx32 " (v = 0x%08" PRIx32 " r = 0x%08" PRIx32 " w = 0x%08" PRIx32 ")", pte, pte_v, pte_r, pte_w);
 			return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 		}
 
@@ -4434,6 +4435,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 		uint32_t const pte_x = EXTRACT_FIELD(pte, 3, 3);
 		if (!(0 != pte_r || 0 != pte_x)) {
 			if (i < 1) {
+				LOG_ERROR("Address translation fault: Bad level");
 				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 			}
 			i = i - 1;
@@ -4443,17 +4445,20 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 			// 5
 			uint32_t const pte_u = EXTRACT_FIELD(pte, 4, 4);
 			if ((user_mode == current_mode && 0 == pte_u) || (instruction_space && 0 == pte_x)) {
+				LOG_ERROR("Address translation fault: MMU disable access");
 				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 			}
 
 			// 6
 			if (i > 0 && 0 != EXTRACT_FIELD(pte, 10, 19)) {
+				LOG_ERROR("Address translation fault: pte_a[19..10] != 0");
 				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 			}
 
 			// 7
 			uint32_t const pte_a = EXTRACT_FIELD(pte, 6, 6);
 			if (0 == pte_a) {
+				LOG_ERROR("Address translation fault: pte_a[6] == 0");
 				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 			}
 
