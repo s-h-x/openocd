@@ -20,6 +20,11 @@
 //#define ECLIPSE_WORKAROUND(code) (code)
 #define ECLIPSE_WORKAROUND(code) (ERROR_OK)
 
+/// protection against desynchronizing due to external reset or config
+//@{
+//#define TAP_DESYNC_PROTECTION
+//@}
+
 /// Parameters of RISC-V core
 /// @{
 /// Size of RISC-V GP registers in bits
@@ -1771,9 +1776,11 @@ sc_rv32_CORE_clear_errors(target* const p_target)
 static inline error_code
 check_and_repair_debug_controller_errors(target* const p_target)
 {
+#ifdef TAP_DESYNC_PROTECTION
 	// protection against desynchronizing due to external reset
 	jtag_add_tlr();
-	invalidate_DAP_CTR_cache(p_target);
+#endif
+    invalidate_DAP_CTR_cache(p_target);
 	uint32_t IDCODE;
 	sc_rv32_IDCODE_get(p_target, &IDCODE);
 
