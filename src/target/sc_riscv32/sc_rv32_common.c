@@ -3176,6 +3176,7 @@ scrv32_sys_reset__set(target* const p_target, bool const active)
 	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
 	sc_error_code__update(p_target, jtag_execute_queue());
 	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, *field.out_value);
+	jtag_add_tlr();
 	sc_riscv32__update_status(p_target);
 	return sc_error_code__get(p_target);
 }
@@ -3585,10 +3586,13 @@ error_code
 sc_riscv32__deassert_reset(target* const p_target)
 {
 	LOG_DEBUG("Deassert reset");
+	jtag_add_tlr();
 	invalidate_DAP_CTR_cache(p_target);
 	if (ERROR_OK == scrv32_sys_reset__set(p_target, false) && p_target->reset_halt) {
+		jtag_add_tlr();
 		return sc_riscv32__soft_reset_halt(p_target);
 	}
+	jtag_add_tlr();
 	return sc_error_code__get_and_clear(p_target);
 }
 
