@@ -3570,7 +3570,13 @@ scrv32_sys_reset__set(target* const p_target, bool const active)
 	sc_error_code__update(p_target, jtag_execute_queue());
 	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, *field.out_value);
 	jtag_add_tlr();
-	p_target->state = active ? TARGET_RESET : TARGET_UNKNOWN;
+	if (active) {
+		p_target->state = TARGET_RESET;
+		target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
+	} else {
+		p_target->state = TARGET_UNKNOWN;
+		target_call_event_callbacks(p_target, TARGET_EVENT_RESET_DEASSERT_PRE);
+	}
 	return sc_error_code__get(p_target);
 }
 
