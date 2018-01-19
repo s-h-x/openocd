@@ -3163,24 +3163,6 @@ sc_rv32_core_reset__set(target* const p_target, bool const active)
 	return sc_error_code__get_and_clear(p_target);
 }
 
-static error_code
-scrv32_sys_reset__set(target* const p_target, bool const active)
-{
-	IR_select(p_target, TAP_instruction_SYS_CTRL);
-	uint8_t out = active ? 1 : 0;
-	scan_field const field = {
-		.num_bits = TAP_length_of_SYS_CTRL,
-		.out_value = &out,
-	};
-	assert(p_target->tap);
-	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
-	sc_error_code__update(p_target, jtag_execute_queue());
-	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, *field.out_value);
-	jtag_add_tlr();
-	sc_riscv32__update_status(p_target);
-	return sc_error_code__get(p_target);
-}
-
 static reg const def_GP_regs_array[] = {
 	// Hard-wired zero
 	{.name = "x0",.number = 0,.caller_save = false,.dirty = false,.valid = true,.exist = true,.size = XLEN,.type = &reg_x0_accessors,.feature = &feature_riscv_org,.reg_data_type = &GP_reg_data_type,.group = def_GP_regs_name},
@@ -3573,6 +3555,25 @@ sc_riscv32__soft_reset_halt(target* const p_target)
 	return sc_error_code__get_and_clear(p_target);
 }
 
+static error_code
+scrv32_sys_reset__set(target* const p_target, bool const active)
+{
+	jtag_add_tlr();
+	IR_select(p_target, TAP_instruction_SYS_CTRL);
+	uint8_t out = active ? 1 : 0;
+	scan_field const field = {
+		.num_bits = TAP_length_of_SYS_CTRL,
+		.out_value = &out,
+	};
+	assert(p_target->tap);
+	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
+	sc_error_code__update(p_target, jtag_execute_queue());
+	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, *field.out_value);
+	jtag_add_tlr();
+	p_target->state = active ? TARGET_RESET : TARGET_UNKNOWN;
+	return sc_error_code__get(p_target);
+}
+
 error_code
 sc_riscv32__assert_reset(target* const p_target)
 {
@@ -3586,13 +3587,11 @@ error_code
 sc_riscv32__deassert_reset(target* const p_target)
 {
 	LOG_DEBUG("Deassert reset");
-	jtag_add_tlr();
 	invalidate_DAP_CTR_cache(p_target);
 	if (ERROR_OK == scrv32_sys_reset__set(p_target, false) && p_target->reset_halt) {
-		jtag_add_tlr();
 		return sc_riscv32__soft_reset_halt(p_target);
 	}
-	jtag_add_tlr();
+	sc_riscv32__update_status(p_target);
 	return sc_error_code__get_and_clear(p_target);
 }
 
