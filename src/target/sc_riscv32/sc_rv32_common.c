@@ -3011,6 +3011,20 @@ set_DEMODE_ENBL(target* const p_target, uint32_t const set_value)
 	return sc_error_code__get(p_target);
 }
 
+static breakpoint*
+find_breakpoint_by_address(target* const p_target,
+						   target_addr_t const address)
+{
+	breakpoint *p_bkp = p_target->breakpoints;
+
+	for (; p_bkp; p_bkp = p_bkp->next) {
+		if (p_bkp->set && p_bkp->address == address) {
+			break;
+		}
+	}
+	return p_bkp;
+}
+
 static error_code
 resume_common(target* const p_target, uint32_t dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
 {
@@ -3038,23 +3052,15 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 			// Find breakpoint for current instruction
 			sc_error_code__update(p_target, reg_pc__get(p_pc));
 			assert(p_pc->value);
-			uint32_t const pc = buf_get_u32(p_pc->value, 0, XLEN);
-			breakpoint* p_next_bkp = p_target->breakpoints;
+			target_addr_t const pc = buf_get_u32(p_pc->value, 0, XLEN);
+			breakpoint *p_breakpoint_at_pc = find_breakpoint_by_address(p_target, pc);
 
-			for (; p_next_bkp; p_next_bkp = p_next_bkp->next) {
-				if (p_next_bkp->set && (p_next_bkp->address == pc)) {
-					break;
-				}
-			}
-
-			if (p_next_bkp) {
+			if (p_breakpoint_at_pc) {
 				// exec single step without breakpoint
 				sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 				assert(p_arch);
-				// save breakpoint
-				breakpoint next_bkp = *p_next_bkp;
 				// remove breakpoint
-				sc_error_code__update(p_target, target_remove_breakpoint(p_target, &next_bkp));
+				sc_error_code__update(p_target, target_remove_breakpoint(p_target, p_breakpoint_at_pc));
 				// prepare for single step
 				reg_cache__chain_invalidate(p_target->reg_cache);
 				// force single step
@@ -3063,7 +3069,7 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 				// resume for single step
 				sc_rv32_DAP_CMD_scan(p_target, DBG_CTRL_index, DBG_CTRL_bit_Resume | DBG_CTRL_bit_Sticky_Clr, NULL);
 				// restore breakpoint
-				sc_error_code__update(p_target, target_add_breakpoint(p_target, &next_bkp));
+				sc_error_code__update(p_target, target_add_breakpoint(p_target, p_breakpoint_at_pc));
 
 				// If resume/halt already done (by single step)
 				if (0 != (dmode_enabled & HART_DMODE_ENBL_bit_SStep)) {
@@ -4024,17 +4030,10 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 	return sc_error_code__get_and_clear(p_target);
 }
 
-error_code
-sc_riscv32__add_breakpoint(target* const p_target, breakpoint* const p_breakpoint)
+static inline error_code
+add_sw_breakpoint(target* const p_target,
+				  breakpoint* const p_breakpoint)
 {
-	invalidate_DAP_CTR_cache(p_target);
-	assert(p_breakpoint);
-
-	if (p_breakpoint->type != BKPT_SOFT) {
-		LOG_ERROR("Only software breakpoins available now");
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	}
-
 	if (ERROR_OK == sc_rv32_check_that_target_halted(p_target)) {
 		bool const RVC_enable = is_RVC_enable(p_target);
 
@@ -4070,20 +4069,67 @@ sc_riscv32__add_breakpoint(target* const p_target, breakpoint* const p_breakpoin
 	return sc_error_code__get_and_clear(p_target);
 }
 
+static inline error_code
+add_hw_breakpoint(target* const p_target,
+				  breakpoint* const p_breakpoint)
+{
+	// Eliminate warnings 'not used'
+	(void)p_target;
+	(void)p_breakpoint;
+	LOG_ERROR("Only software breakpoins available now");
+	return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+}
+
 error_code
-sc_riscv32__remove_breakpoint(target* const p_target, breakpoint* const p_breakpoint)
+sc_riscv32__add_breakpoint(target* const p_target,
+						   breakpoint* const p_breakpoint)
 {
 	invalidate_DAP_CTR_cache(p_target);
-	if (ERROR_OK == sc_rv32_check_that_target_halted(p_target)) {
-		assert(p_breakpoint);
-		assert(p_breakpoint->orig_instr);
+	assert(p_breakpoint);
 
-		if (ERROR_OK == write_memory_space(p_target, (uint32_t)p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true)) {
-			p_breakpoint->set = 0;
-		}
+	return
+		BKPT_SOFT == p_breakpoint->type ?
+		add_sw_breakpoint(p_target, p_breakpoint): 
+		add_hw_breakpoint(p_target, p_breakpoint);
+}
+
+static inline error_code
+remove_sw_breakpoint(target* const p_target,
+					 breakpoint* const p_breakpoint)
+{
+	assert(p_breakpoint->orig_instr);
+
+	if (ERROR_OK == write_memory_space(p_target, (uint32_t)p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true)) {
+		p_breakpoint->set = 0;
 	}
-
 	return sc_error_code__get_and_clear(p_target);
+}
+
+static inline error_code
+remove_hw_breakpoint(target* const p_target,
+					 breakpoint* const p_breakpoint)
+{
+	(void)p_breakpoint;
+	assert(p_breakpoint);
+	LOG_ERROR("Only software breakpoins available now");
+	sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+	return sc_error_code__get_and_clear(p_target);
+}
+
+error_code
+sc_riscv32__remove_breakpoint(target* const p_target,
+							  breakpoint* const p_breakpoint)
+{
+	invalidate_DAP_CTR_cache(p_target);
+	if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
+		return sc_error_code__get_and_clear(p_target);
+	}
+	assert(p_breakpoint);
+
+	return
+		BKPT_SOFT == p_breakpoint->type ?
+		remove_sw_breakpoint(p_target, p_breakpoint):
+		remove_hw_breakpoint(p_target, p_breakpoint);
 }
 
 /// gdb_server expects valid reg values and will use set method for updating reg values
