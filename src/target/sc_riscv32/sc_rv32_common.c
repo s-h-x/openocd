@@ -213,7 +213,7 @@ enum
 /// @}
 
 /** @brief DBG_STATUS bits
-	
+
 	Upper-level status register bits
 
 	@see TAP_instruction_DBG_STATUS
@@ -290,7 +290,7 @@ enum
 /// @}
 
 /** @brief HART[0] Debug Registers indexes
-	@pre HART unit, REGTRANS functional group registers 
+	@pre HART unit, REGTRANS functional group registers
 	@see DBGC_functional_group_HART_REGTRANS
 */
 enum HART_REGTRANS_indexes
@@ -330,7 +330,7 @@ typedef enum HART_REGTRANS_indexes HART_REGTRANS_indexes;
 enum HART_DBGCMD_indexes
 {
 	/** @brief DBG_CTRL (Debug Control Operation)
-	
+
 	Command for Debug Subsystem state change
 	(includes an important option for transition between Run-Mode and Debug-Mode)
 	*/
@@ -355,7 +355,7 @@ enum HART_DBGCMD_indexes
 	DBGDATA_WR_index = 0x2,
 
 	/** @brief UNLOCK
-		
+
 		Command unlocks DAP which has been previously locked due to error(s) during preceding operations.
 
 		@see HART_DBG_STS_bit_Lock_Stky
@@ -505,7 +505,7 @@ enum HART_DMODE_CAUSE_bits
 enum DBG_CTRL_bits
 {
 	/** @brief Halt
-	
+
 	Transits a corresponding hart from Run-Mode to Debug-Mode (halts the hart)
 
 	Write only
@@ -513,13 +513,13 @@ enum DBG_CTRL_bits
 	DBG_CTRL_bit_Halt = BIT_MASK(0),
 
 	/** @brief Resume
-	
+
 	Transits a corresponding hart from DebugMode to Run-Mode (restarts the hart).
 	*/
 	DBG_CTRL_bit_Resume = BIT_MASK(1),
 
 	/** @brief Sticky Clear.
-	
+
 	Clears sticky status bits for corresponding HART.
 	*/
 	DBG_CTRL_bit_Sticky_Clr = BIT_MASK(2),
@@ -530,7 +530,7 @@ enum DBG_CTRL_bits
 enum CORE_DBG_CTRL_bits
 {
 	/** @brief Hart[0] Reset.
-	
+
 		Reserved for future use
 	*/
 	CORE_DBG_CTRL_bit_HART0_Rst = BIT_MASK(0),
@@ -685,51 +685,51 @@ sc_error_code__prepend(target const* const p_target, error_code const older_err_
 /// @{
 
 #define RISCV_OPCODE_INSTR_R_TYPE(func7, rs2, rs1, func3, rd, opcode) (\
-	CHECK_OPCODE(opcode), \
-	CHECK_FUNC3(func3), \
-	CHECK_FUNC7(func7), \
-	CHECK_REG(rs2), \
-	CHECK_REG(rs1), \
-	CHECK_REG(rd), \
-	MAKE_TYPE_FIELD(rv_instruction32_type, (func7), 25, 31) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, (rs2), 20, 24) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, (rs1), 15, 19) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, (func3), 12, 14) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, (rd), 7, 11) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, (opcode), 0, 6) )
+        CHECK_OPCODE(opcode), \
+        CHECK_FUNC3(func3), \
+        CHECK_FUNC7(func7), \
+        CHECK_REG(rs2), \
+        CHECK_REG(rs1), \
+        CHECK_REG(rd), \
+        MAKE_TYPE_FIELD(rv_instruction32_type, (func7), 25, 31) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, (rs2), 20, 24) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, (rs1), 15, 19) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, (func3), 12, 14) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, (rd), 7, 11) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, (opcode), 0, 6) )
 
 #define RISCV_OPCODE_INSTR_I_TYPE(imm_11_00, rs1, func3, rd, opcode) ( \
-	CHECK_OPCODE(opcode), \
-	CHECK_FUNC3(func3), \
-	CHECK_REG(rd), \
-	CHECK_REG(rs1), \
-	CHECK_IMM_11_00(imm_11_00), \
-	MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD((imm_11_00), 0, 11), 20, 31) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, (rs1), 15, 19) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, (func3), 12, 14) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, (rd), 7, 11) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, (opcode), 0, 6) )
+        CHECK_OPCODE(opcode), \
+        CHECK_FUNC3(func3), \
+        CHECK_REG(rd), \
+        CHECK_REG(rs1), \
+        CHECK_IMM_11_00(imm_11_00), \
+        MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD((imm_11_00), 0, 11), 20, 31) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, (rs1), 15, 19) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, (func3), 12, 14) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, (rd), 7, 11) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, (opcode), 0, 6) )
 
 #define RISCV_OPCODE_INSTR_S_TYPE(imm_11_00, rs2, rs1, func3, opcode) ( \
-	CHECK_OPCODE(opcode), \
-	CHECK_FUNC3(func3), \
-	CHECK_IMM_11_00(imm_11_00), \
-	CHECK_REG(rs2), \
-	CHECK_REG(rs1), \
-	MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 5, 11), 25, 31) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, rs2, 20, 24) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 0, 4), 7, 11) | \
-	MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6) )
+        CHECK_OPCODE(opcode), \
+        CHECK_FUNC3(func3), \
+        CHECK_IMM_11_00(imm_11_00), \
+        CHECK_REG(rs2), \
+        CHECK_REG(rs1), \
+        MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 5, 11), 25, 31) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, rs2, 20, 24) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 0, 4), 7, 11) | \
+        MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6) )
 
 #define RV_INSTR_U_TYPE(imm_31_12, rd, opcode) ( \
-	CHECK_OPCODE(opcode), \
-	CHECK_REG(rd), \
-	CHECK_IMM_31_12(imm_31_12), \
-	MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_31_12, 12, 31), 12, 31) | \
-	MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) | \
-	MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6))
+        CHECK_OPCODE(opcode), \
+        CHECK_REG(rd), \
+        CHECK_IMM_31_12(imm_31_12), \
+        MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_31_12, 12, 31), 12, 31) | \
+        MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) | \
+        MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6))
 
 #define RISCV_OPCODE_ADD(rd, rs1, rs2) RISCV_OPCODE_INSTR_R_TYPE(0b0000000, (rs2), (rs1), 0u, (rd), 0b0110011u)
 #define RISCV_OPCODE_FMV_X_S(rd, rs1_fp) RISCV_OPCODE_INSTR_R_TYPE(0x70u, 0u, (rs1_fp), 0u, (rd), 0x53u)
@@ -936,6 +936,7 @@ sc_rv32_DBG_STATUS_get(target const* const p_target, uint32_t* p_value)
 	static uint32_t const good_result = DBG_STATUS_bit_Ready;
 
 	assert(p_value);
+
 	if ((*p_value & result_mask) != (good_result & result_mask)) {
 		LOG_WARNING("DBG_STATUS == 0x%08X", *p_value);
 	}
@@ -1093,6 +1094,7 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 		/// Restore previous error (if it was)
 		return sc_error_code__prepend(p_target, old_err_code);
 	}
+
 	/// Prepare DR scan for two fields.
 
 	/// Copy output payload to buffer.
@@ -1119,9 +1121,9 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 	sc_error_code__update(p_target, jtag_execute_queue());
 	/// Log DR scan debug information.
 	LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X ; # %08X %1X", p_target->cmd_name,
-				fields[0].num_bits, DAP_OPCODE_EXT,
-				fields[1].num_bits, DAP_OPCODE,
-				buf_get_u32(dbg_data, 0, TAP_length_of_DAP_CMD_OPCODE_EXT), DAP_OPSTATUS);
+			  fields[0].num_bits, DAP_OPCODE_EXT,
+			  fields[1].num_bits, DAP_OPCODE,
+			  buf_get_u32(dbg_data, 0, TAP_length_of_DAP_CMD_OPCODE_EXT), DAP_OPSTATUS);
 
 	if (ERROR_OK == sc_error_code__get(p_target)) {
 		if ((DAP_OPSTATUS & DAP_status_mask) != DAP_status_good) {
@@ -1143,7 +1145,7 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 @warning Clear previous error_code and set ERROR_TARGET_FAILURE if unlock was unsuccessful
 */
 static inline error_code
-sc_rv32_DC__unlock(target const* const p_target, uint32_t *p_lock_context)
+sc_rv32_DC__unlock(target const* const p_target, uint32_t* p_lock_context)
 {
 	LOG_WARNING("========= Try to unlock ==============");
 
@@ -1190,8 +1192,8 @@ sc_rv32_DC__unlock(target const* const p_target, uint32_t *p_lock_context)
 		};
 
 		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
-					dr_fields_UNLOCK[0].num_bits, buf_get_u32(dap_opcode_ext_UNLOCK, 0, TAP_length_of_DAP_CMD_OPCODE_EXT),
-					dr_fields_UNLOCK[1].num_bits, dap_opcode_UNLOCK);
+				  dr_fields_UNLOCK[0].num_bits, buf_get_u32(dap_opcode_ext_UNLOCK, 0, TAP_length_of_DAP_CMD_OPCODE_EXT),
+				  dr_fields_UNLOCK[1].num_bits, dap_opcode_UNLOCK);
 		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(dr_fields_UNLOCK), dr_fields_UNLOCK, TAP_IDLE);
 	}
 
@@ -1221,8 +1223,8 @@ sc_rv32_DC__unlock(target const* const p_target, uint32_t *p_lock_context)
 				  scan_status);
 		uint32_t const lock_context = buf_get_u32(lock_context_buf, 0, TAP_length_of_DAP_CMD_OPCODE_EXT);
 		LOG_DEBUG("%s context=0x%08X, status=0x%08X", ok ? "Unlock succsessful!" : "Unlock unsuccsessful!",
-				lock_context,
-				scan_status);
+				  lock_context,
+				  scan_status);
 		assert(p_lock_context);
 		*p_lock_context = lock_context;
 		return sc_error_code__get(p_target);
@@ -1289,12 +1291,14 @@ sc_rv32_DAP_CTRL_REG_set(target const* const p_target, type_dbgc_unit_id_e const
 
 	invalidate_DAP_CTR_cache(p_target);
 	error_code const old_err_code = sc_error_code__get_and_clear(p_target);
+
 	if (ERROR_OK != DAP_CTRL_REG_set_force(p_target, set_dap_unit_group)) {
 		return sc_error_code__prepend(p_target, old_err_code);
 	}
 
 	if (p_arch->constants->use_verify_dap_control) {
 		sc_error_code__get_and_clear(p_target);
+
 		if (ERROR_OK == DAP_CTRL_REG_verify(p_target, set_dap_unit_group)) {
 			update_DAP_CTRL_cache(p_target, set_dap_unit_group);
 		}
@@ -1320,6 +1324,7 @@ REGTRANS_write(target const* const p_target, type_dbgc_unit_id_e func_unit, uint
 		LOG_WARNING("DAP_CTRL_REG_set error");
 		return sc_error_code__get(p_target);
 	}
+
 	/// If no errors perform single DR scan with 4-bits field write bit/index bits and 32-bits data.
 	return sc_rv32_DAP_CMD_scan(p_target, REGTRANS_scan_type(true, index), data, NULL);
 }
@@ -1338,6 +1343,7 @@ REGTRANS_read(target const* const p_target, type_dbgc_unit_id_e const func_unit,
 	if (ERROR_OK != sc_rv32_DAP_CTRL_REG_set(p_target, func_unit, func_group)) {
 		return sc_error_code__get(p_target);
 	}
+
 	/// If no errors then perform first DR scan with 4-bits field register index bits (set to bit 'write' to zero)
 	/// and dummy (zero) 32-bits data.
 	/** Input data captured before TDI/TDO shifting and TAP register will update only after shifting,
@@ -1348,6 +1354,7 @@ REGTRANS_read(target const* const p_target, type_dbgc_unit_id_e const func_unit,
 	if (ERROR_OK != sc_rv32_DAP_CMD_scan(p_target, REGTRANS_scan_type(false, index), 0, NULL)) {
 		return sc_error_code__get(p_target);
 	}
+
 	/** If errors not detected, perform second same DR scan to really get requested data */
 	return sc_rv32_DAP_CMD_scan(p_target, REGTRANS_scan_type(false, index), 0, p_value);
 }
@@ -1427,6 +1434,7 @@ sc_rv32_HART_REGTRANS_write_and_check(target const* const p_target, HART_REGTRAN
 			}
 		}
 	}
+
 	return sc_error_code__get(p_target);
 }
 
@@ -1466,6 +1474,7 @@ sc_rv32_EXEC__setup(target const* const p_target)
 		/// @todo remove references to DBGC_unit_id_HART_1
 		sc_rv32_DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_unit_id_HART_0 : DBGC_unit_id_HART_1, DBGC_functional_group_HART_DBGCMD);
 	}
+
 	return sc_error_code__get(p_target);
 }
 
@@ -1478,6 +1487,7 @@ sc_rv32_EXEC__push_data_to_CSR(target const* const p_target, uint32_t const csr_
 		/// @note Skipped if error detected
 		sc_rv32_DAP_CMD_scan(p_target, DBGDATA_WR_index, csr_data, NULL);
 	}
+
 	return sc_error_code__get(p_target);
 }
 
@@ -1535,26 +1545,32 @@ static inline error_code
 read_debug_cause(target* const p_target, target_debug_reason* p_reason)
 {
 	uint32_t value;
+
 	if (ERROR_OK != sc_rv32_HART_REGTRANS_read(p_target, HART_DMODE_CAUSE_index, &value)) {
 		*p_reason = DBG_REASON_UNDEFINED;
 		return sc_error_code__get(p_target);
-	} 
+	}
+
 	if (value & HART_DMODE_CAUSE_bit_Enforce) {
 		*p_reason = DBG_REASON_DBGRQ;
 		return sc_error_code__get(p_target);
 	}
+
 	if (value & HART_DMODE_CAUSE_bit_SStep) {
 		*p_reason = DBG_REASON_SINGLESTEP;
 		return sc_error_code__get(p_target);
 	}
+
 	if (value & HART_DMODE_CAUSE_bit_Brkpt) {
 		*p_reason = DBG_REASON_BREAKPOINT;
 		return sc_error_code__get(p_target);
 	}
+
 	if (value & HART_DMODE_CAUSE_bit_Rst_Exit) {
 		*p_reason = DBG_REASON_DBGRQ;
 		return sc_error_code__get(p_target);
 	}
+
 	*p_reason = DBG_REASON_UNDEFINED;
 	return sc_error_code__get(p_target);
 }
@@ -1574,6 +1590,7 @@ update_debug_reason(target* const p_target)
 		"DBG_REASON_UNDEFINED",
 	};
 	target_debug_reason debug_reason;
+
 	if (ERROR_OK != read_debug_cause(p_target, &debug_reason)) {
 		return;
 	}
@@ -1600,6 +1617,7 @@ update_debug_status(target* const p_target)
 	if (new_state == old_state) {
 		return;
 	}
+
 	LOG_DEBUG("debug_status changed: old=%d, new=%d", old_state, new_state);
 
 	p_target->state = new_state;
@@ -1648,6 +1666,7 @@ try_to_get_ready(target* const p_target, uint32_t* p_core_status)
 
 	for (unsigned i = 2; i <= max_retries; ++i) {
 		sc_error_code__get_and_clear(p_target);
+
 		if (ERROR_OK != sc_rv32_DBG_STATUS_get(p_target, p_core_status)) {
 			continue;
 		}
@@ -1780,7 +1799,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 	// protection against desynchronizing due to external reset
 	jtag_add_tlr();
 #endif
-    invalidate_DAP_CTR_cache(p_target);
+	invalidate_DAP_CTR_cache(p_target);
 	uint32_t IDCODE;
 	sc_rv32_IDCODE_get(p_target, &IDCODE);
 
@@ -1791,8 +1810,10 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		LOG_ERROR("TAP controller/JTAG error! Try to re-examine!");
 		return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 	}
+
 	uint32_t core_status;
 	try_to_get_ready(p_target, &core_status);
+
 	if (DBG_STATUS_bit_Ready != (core_status & DBG_STATUS_bit_Ready)) {
 		/// If no DBG_STATUS_bit_Ready then any actions are disabled.
 		/// @todo replace by target_reset_examined;
@@ -1809,6 +1830,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		DBG_STATUS_bit_Err_HwCore |
 		DBG_STATUS_bit_Err |
 		DBG_STATUS_bit_HART0_Err;
+
 	if (DBG_STATUS_bit_Ready == (core_status & controlled_mask)) {
 		return sc_error_code__get(p_target);
 	}
@@ -1817,6 +1839,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 	if (DBG_STATUS_bit_Lock == (core_status & DBG_STATUS_bit_Lock)) {
 		LOG_ERROR("Lock detected: 0x%08X", core_status);
 		uint32_t lock_context;
+
 		if (ERROR_OK != sc_rv32_DC__unlock(p_target, &lock_context)) {
 			/// @todo replace by target_reset_examined;
 			p_target->examined = false;
@@ -1841,9 +1864,11 @@ check_and_repair_debug_controller_errors(target* const p_target)
 	if (0 != (core_status & hart0_err_bits)) {
 		LOG_WARNING("Hart errors detected: 0x%08X", core_status);
 	}
+
 	sc_rv32_HART0_clear_error(p_target);
 	sc_error_code__get_and_clear(p_target);
 	sc_rv32_DBG_STATUS_get(p_target, &core_status);
+
 	if (0 != (core_status & hart0_err_bits)) {
 		LOG_ERROR("Hart errors not fixed!: 0x%08X", core_status);
 	}
@@ -1867,6 +1892,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		LOG_ERROR("Core errors not fixed!: 0x%08X", core_status);
 		sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 	}
+
 	LOG_INFO("Core status: 0x%08X", core_status);
 	return sc_error_code__get(p_target);
 }
@@ -1939,6 +1965,7 @@ reg__set_new_cache_value(reg* const p_reg, uint8_t* const buf)
 	assert(p_reg);
 	assert(p_reg->exist);
 	assert(buf);
+
 	switch (p_reg->size) {
 	case 32:
 		LOG_DEBUG("Set register %s cache to 0x%08X", p_reg->name, buf_get_u32(buf, 0, p_reg->size));
@@ -1964,6 +1991,7 @@ static inline bool
 reg__check(reg const* const p_reg)
 {
 	assert(p_reg);
+
 	if (!p_reg->exist) {
 		LOG_ERROR("Register %s not exists", p_reg->name);
 		return false;
@@ -2010,6 +2038,7 @@ reg_x__operation_conditions_check(reg const* const p_reg)
 		LOG_WARNING("Bad GP register %s id=%d", p_reg->name, p_reg->number);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
+
 	if (p_reg->number < 16) {
 		return ERROR_OK;
 	}
@@ -2020,6 +2049,7 @@ reg_x__operation_conditions_check(reg const* const p_reg)
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	assert(!!(0 != (p_arch->misa & BIT_MASK('I' - 'A'))) ^ !!(0 != (p_arch->misa & BIT_MASK('E' - 'A'))));
+
 	if (0 == (p_arch->misa & BIT_MASK('I' - 'A'))) {
 		LOG_WARNING("Bad GP register %s id=%d for RV32E", p_reg->name, p_reg->number);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
@@ -2048,12 +2078,14 @@ static error_code
 reg_x__get(reg* const p_reg)
 {
 	error_code const check_result = reg_x__operation_conditions_check(p_reg);
+
 	if (ERROR_OK != check_result) {
 		return check_result;
 	}
 
 	target* p_target = p_reg->arch_info;
 	invalidate_DAP_CTR_cache(p_target);
+
 	if (ERROR_OK == sc_rv32_check_that_target_halted(p_target)) {
 		if (p_reg->valid) {
 			// register cache already valid
@@ -2065,11 +2097,13 @@ reg_x__get(reg* const p_reg)
 		}
 
 		uint32_t previous_pc;
+
 		if (ERROR_OK == sc_rv32_get_PC(p_target, &previous_pc)) {
 			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
 
 			uint32_t value;
+
 			if (
 				ERROR_OK == sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl) &&
 				ERROR_OK == sc_rv32_EXEC__setup(p_target) &&
@@ -2084,6 +2118,7 @@ reg_x__get(reg* const p_reg)
 
 			if (ERROR_OK != sc_error_code__get(p_target)) {
 				sc_riscv32__update_status(p_target);
+
 				if (!target_was_examined(p_target)) {
 					return sc_error_code__get_and_clear(p_target);
 				}
@@ -2107,6 +2142,7 @@ reg_x__store(reg* const p_reg)
 	target* p_target = p_reg->arch_info;
 	assert(p_target);
 	uint32_t pc_sample_1;
+
 	if (ERROR_OK != sc_rv32_get_PC(p_target, &pc_sample_1)) {
 		return sc_error_code__get_and_clear(p_target);
 	}
@@ -2147,6 +2183,7 @@ static error_code
 reg_x__set(reg* const p_reg, uint8_t* const buf)
 {
 	error_code const check_result = reg_x__operation_conditions_check(p_reg);
+
 	if (ERROR_OK != check_result) {
 		return check_result;
 	} else {
@@ -2250,6 +2287,7 @@ sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 		assert(p_wrk_reg);
 
 		uint32_t pc_sample_1;
+
 		if (ERROR_OK == sc_rv32_get_PC(p_target, &pc_sample_1)) {
 			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
@@ -2268,6 +2306,7 @@ sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 
 			if (ERROR_OK != sc_error_code__get(p_target)) {
 				sc_riscv32__update_status(p_target);
+
 				if (!target_was_examined(p_target)) {
 					return value;
 				}
@@ -2278,6 +2317,7 @@ sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
+
 			if (!target_was_examined(p_target)) {
 				return value;
 			}
@@ -2287,6 +2327,7 @@ sc_riscv32__csr_get_value(target* const p_target, uint32_t const csr_number)
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
+
 			if (!target_was_examined(p_target)) {
 				return value;
 			}
@@ -2317,6 +2358,7 @@ reg_pc__get(reg* const p_reg)
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	uint32_t pc_sample;
+
 	if (ERROR_OK == sc_rv32_HART_REGTRANS_read(p_target, HART_PC_SAMPLE_index, &pc_sample)) {
 		reg__set_valid_value_to_cache(p_reg, pc_sample);
 	} else {
@@ -2348,6 +2390,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 
 	target* const p_target = p_reg->arch_info;
 	invalidate_DAP_CTR_cache(p_target);
+
 	if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
 		return sc_error_code__get_and_clear(p_target);
 	}
@@ -2404,6 +2447,7 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
+
 		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
@@ -2470,6 +2514,7 @@ reg_FPU_S__get(reg* const p_reg)
 	assert(p_wrk_reg_1);
 
 	uint32_t pc_sample_1;
+
 	if (ERROR_OK == sc_rv32_get_PC(p_target, &pc_sample_1)) {
 		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl);
 
@@ -2484,6 +2529,7 @@ reg_FPU_S__get(reg* const p_reg)
 				if (ERROR_OK == sc_error_code__get(p_target)) {
 					/// Exec NOP instruction and get previous instruction CSR result.
 					uint32_t value;
+
 					if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value)) {
 						buf_set_u32(p_reg->value, 0, p_reg->size, value);
 						p_reg->valid = true;
@@ -2547,6 +2593,7 @@ reg_FPU_S__set(reg* const p_reg, uint8_t* const buf)
 	assert(p_wrk_reg);
 
 	uint32_t pc_sample_1;
+
 	if (ERROR_OK == sc_rv32_get_PC(p_target, &pc_sample_1)) {
 		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl);
 
@@ -2648,6 +2695,7 @@ reg_FPU_D__get(reg* const p_reg)
 	assert(p_wrk_reg_2);
 
 	uint32_t pc_sample_1;
+
 	if (ERROR_OK == sc_rv32_get_PC(p_target, &pc_sample_1)) {
 		sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl);
 
@@ -2659,6 +2707,7 @@ reg_FPU_D__get(reg* const p_reg)
 
 			uint32_t value_hi;
 			uint32_t value_lo;
+
 			if (
 				ERROR_OK == sc_rv32_EXEC__step(p_target, opcode_1, NULL) &&
 				/// and store temporary register to Debug scratch CSR.
@@ -2675,6 +2724,7 @@ reg_FPU_D__get(reg* const p_reg)
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
+
 			if (!target_was_examined(p_target)) {
 				return sc_error_code__get_and_clear(p_target);
 			}
@@ -2685,6 +2735,7 @@ reg_FPU_D__get(reg* const p_reg)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
+
 		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
@@ -2694,6 +2745,7 @@ reg_FPU_D__get(reg* const p_reg)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
+
 		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
@@ -2771,6 +2823,7 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 	assert(0 < p_wrk_reg_2->number && p_wrk_reg_2->number < RISCV_regnum_PC);
 
 	uint32_t pc_sample_1;
+
 	if (
 		ERROR_OK == sc_rv32_get_PC(p_target, &pc_sample_1) &&
 		ERROR_OK == sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl) &&
@@ -2801,6 +2854,7 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
+
 			if (!target_was_examined(p_target)) {
 				return sc_error_code__get_and_clear(p_target);
 			}
@@ -2811,6 +2865,7 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
+
 		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
@@ -2820,6 +2875,7 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
+
 		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
@@ -2871,6 +2927,7 @@ reg_csr__get(reg* const p_reg)
 	assert(reg__check(p_reg));
 	target* const p_target = p_reg->arch_info;
 	invalidate_DAP_CTR_cache(p_target);
+
 	uint32_t const value = sc_riscv32__csr_get_value(p_target, csr_number);
 
 	if (ERROR_OK == sc_error_code__get(p_target)) {
@@ -2905,6 +2962,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 	assert(p_wrk_reg);
 
 	uint32_t pc_sample_1;
+
 	if (ERROR_OK == sc_rv32_get_PC(p_target, &pc_sample_1)) {
 		sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 		assert(p_arch);
@@ -2922,6 +2980,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 			) {
 				assert(p_wrk_reg->dirty);
 				assert(p_wrk_reg->number < number_of_regs_X);
+
 				if (ERROR_OK == sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRW(p_reg->number - RISCV_regnum_CSR_first, p_wrk_reg->number), NULL)) {
 					assert(p_reg->valid);
 					assert(p_reg->dirty);
@@ -2933,6 +2992,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
+
 			if (!target_was_examined(p_target)) {
 				return sc_error_code__get_and_clear(p_target);
 			}
@@ -2943,6 +3003,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
+
 		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
@@ -2952,6 +3013,7 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
+
 		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
@@ -3015,13 +3077,14 @@ static breakpoint*
 find_breakpoint_by_address(target* const p_target,
 						   target_addr_t const address)
 {
-	breakpoint *p_bkp = p_target->breakpoints;
+	breakpoint* p_bkp = p_target->breakpoints;
 
 	for (; p_bkp; p_bkp = p_bkp->next) {
 		if (p_bkp->set && p_bkp->address == address) {
 			break;
 		}
 	}
+
 	return p_bkp;
 }
 
@@ -3053,7 +3116,7 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 			sc_error_code__update(p_target, reg_pc__get(p_pc));
 			assert(p_pc->value);
 			target_addr_t const pc = buf_get_u32(p_pc->value, 0, XLEN);
-			breakpoint *p_breakpoint_at_pc = find_breakpoint_by_address(p_target, pc);
+			breakpoint* p_breakpoint_at_pc = find_breakpoint_by_address(p_target, pc);
 
 			if (p_breakpoint_at_pc) {
 				// exec single step without breakpoint
@@ -3083,9 +3146,11 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 					set_DEMODE_ENBL(p_target, dmode_enabled);
 					// set debug reason
 					sc_riscv32__update_status(p_target);
+
 					if (!target_was_examined(p_target)) {
 						return sc_error_code__get_and_clear(p_target);
 					}
+
 					LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_SINGLESTEP);
 					p_target->debug_reason = DBG_REASON_SINGLESTEP;
 					// raise halt event
@@ -3099,6 +3164,7 @@ resume_common(target* const p_target, uint32_t dmode_enabled, int const current,
 
 	// prepare for execution continue
 	reg_cache__chain_invalidate(p_target->reg_cache);
+
 	// enable requested debug mode
 	if (ERROR_OK != set_DEMODE_ENBL(p_target, dmode_enabled)) {
 		return sc_error_code__get_and_clear(p_target);
@@ -3128,6 +3194,7 @@ static error_code
 sc_rv32_core_reset__set(target* const p_target, bool const active)
 {
 	uint32_t get_old_value1;
+
 	if (ERROR_OK == sc_rv32_core_REGTRANS_read(p_target, CORE_DBG_CTRL_index, &get_old_value1)) {
 		static uint32_t const bit_mask = CORE_DBG_CTRL_bit_HART0_Rst | CORE_DBG_CTRL_bit_Rst;
 		uint32_t const set_value = (get_old_value1 & ~bit_mask) | (active ? bit_mask : 0u);
@@ -3138,6 +3205,7 @@ sc_rv32_core_reset__set(target* const p_target, bool const active)
 
 			if (p_arch->constants->use_verify_core_regtrans_write) {
 				uint32_t get_new_value2;
+
 				if (ERROR_OK != sc_rv32_core_REGTRANS_read(p_target, CORE_DBG_CTRL_index, &get_new_value2)) {
 					return sc_error_code__get_and_clear(p_target);
 				}
@@ -3379,6 +3447,7 @@ adjust_target_registers_cache(target* const p_target)
 	assert(p_target->reg_cache && p_target->reg_cache->reg_list && 33 == p_target->reg_cache->num_regs);
 	{
 		reg* const p_regs = p_target->reg_cache->reg_list;
+
 		for (int i = 0; i < 32; ++i) {
 			p_regs[i].dirty = false;
 			p_regs[i].valid = false;
@@ -3389,6 +3458,7 @@ adjust_target_registers_cache(target* const p_target)
 		assert(RV_F);
 		assert(p_target->reg_cache && p_target->reg_cache->next && p_target->reg_cache->next->reg_list && 32 == p_target->reg_cache->next->num_regs);
 		reg* const p_regs = p_target->reg_cache->next->reg_list;
+
 		for (int i = 0; i < 32; ++i) {
 			reg* const p_reg = &p_regs[i];
 			p_reg->exist = true;
@@ -3396,10 +3466,12 @@ adjust_target_registers_cache(target* const p_target)
 			p_reg->type = &reg_FPU_D_accessors;
 			p_reg->reg_data_type = &FPU_D_reg_data_type;
 		}
+
 		LOG_INFO("Enable RVFD FPU registers");
 	} else if (RV_F) {
 		assert(p_target->reg_cache && p_target->reg_cache->next && p_target->reg_cache->next->reg_list && 32 == p_target->reg_cache->next->num_regs);
 		reg* const p_regs = p_target->reg_cache->next->reg_list;
+
 		for (int i = 0; i < 32; ++i) {
 			reg* const p_reg = &p_regs[i];
 			p_reg->exist = true;
@@ -3407,6 +3479,7 @@ adjust_target_registers_cache(target* const p_target)
 			p_reg->type = &reg_FPU_S_accessors;
 			p_reg->reg_data_type = &FPU_S_reg_data_type;
 		}
+
 		LOG_INFO("Enable RVF FPU registers");
 	}
 
@@ -3453,7 +3526,7 @@ sc_riscv32__examine(target* const p_target)
 
 				if (
 					ERROR_OK == get_ISA(p_target, &p_arch->misa) &&
-					ERROR_OK == set_DEMODE_ENBL(p_target, HART_DMODE_ENBL_bits_Normal) && 
+					ERROR_OK == set_DEMODE_ENBL(p_target, HART_DMODE_ENBL_bits_Normal) &&
 					ERROR_OK == adjust_target_registers_cache(p_target)
 				) {
 					LOG_DEBUG("Examined OK");
@@ -3576,6 +3649,7 @@ scrv32_sys_reset__set(target* const p_target, bool const active)
 	sc_error_code__update(p_target, jtag_execute_queue());
 	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, *field.out_value);
 	jtag_add_tlr();
+
 	if (active) {
 		p_target->state = TARGET_RESET;
 		target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
@@ -3583,6 +3657,7 @@ scrv32_sys_reset__set(target* const p_target, bool const active)
 		p_target->state = TARGET_UNKNOWN;
 		target_call_event_callbacks(p_target, TARGET_EVENT_RESET_DEASSERT_PRE);
 	}
+
 	return sc_error_code__get(p_target);
 }
 
@@ -3600,9 +3675,11 @@ sc_riscv32__deassert_reset(target* const p_target)
 {
 	LOG_DEBUG("Deassert reset");
 	invalidate_DAP_CTR_cache(p_target);
+
 	if (ERROR_OK == scrv32_sys_reset__set(p_target, false) && p_target->reset_halt) {
 		return sc_riscv32__soft_reset_halt(p_target);
 	}
+
 	sc_riscv32__update_status(p_target);
 	return sc_error_code__get_and_clear(p_target);
 }
@@ -3641,6 +3718,7 @@ read_memory_space(target* const p_target, uint32_t address, uint32_t const size,
 			count -= page_count;
 		}
 	}
+
 	return sc_error_code__get(p_target);
 }
 
@@ -3678,6 +3756,7 @@ write_memory_space(target* const p_target, uint32_t address, uint32_t const size
 			count -= page_count;
 		}
 	}
+
 	return sc_error_code__get(p_target);
 }
 
@@ -3704,6 +3783,7 @@ sc_riscv32__read_phys_memory(target* const p_target, target_addr_t _address, uin
 	LOG_DEBUG("Read_memory at 0x%08X, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
 
 	invalidate_DAP_CTR_cache(p_target);
+
 	/// Check for size
 	if (!(size == 1 || size == 2 || size == 4)) {
 		LOG_ERROR("Invalid item size %d", size);
@@ -3717,25 +3797,27 @@ sc_riscv32__read_phys_memory(target* const p_target, target_addr_t _address, uin
 		LOG_WARNING("Zero items count");
 		return sc_error_code__get_and_clear(p_target);
 	} else if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
-			return sc_error_code__get_and_clear(p_target);
+		return sc_error_code__get_and_clear(p_target);
 	} else {
 		/// Reserve work register
 		reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
 		assert(p_wrk_reg);
 
 		uint32_t pc_sample_1;
+
 		if (ERROR_OK == sc_rv32_get_PC(p_target, &pc_sample_1)) {
 			/// Define opcode function for load item to register
 			typedef rv_instruction32_type
 			(*load_func_type)(reg_num_type rd, reg_num_type rs1, riscv_short_signed_type imm);
 			load_func_type const load_OP =
-				size == 4 ?  &RISCV_opcode_LW :
-				size == 2 ?  &RISCV_opcode_LH :
+				size == 4 ? &RISCV_opcode_LW :
+				size == 2 ? &RISCV_opcode_LH :
 				/*size == 1*/&RISCV_opcode_LB;
 
 			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
 			sc_rv32_HART_REGTRANS_write_and_check(p_target, HART_DBG_CTRL_index, HART_DBG_CTRL_bit_PC_Advmt_Dsbl);
+
 			/// Setup exec operations mode
 			if (ERROR_OK == sc_rv32_EXEC__setup(p_target)) {
 				assert(buffer);
@@ -3762,6 +3844,7 @@ sc_riscv32__read_phys_memory(target* const p_target, target_addr_t _address, uin
 
 					/// Exec NOP instruction and get previous instruction CSR result.
 					uint32_t value;
+
 					if (ERROR_OK != sc_rv32_EXEC__step(p_target, RISCV_OPCODE_NOP(), &value)) {
 						break;
 					}
@@ -3780,6 +3863,7 @@ sc_riscv32__read_phys_memory(target* const p_target, target_addr_t _address, uin
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
+
 			if (!target_was_examined(p_target)) {
 				return sc_error_code__get_and_clear(p_target);
 			}
@@ -3789,10 +3873,12 @@ sc_riscv32__read_phys_memory(target* const p_target, target_addr_t _address, uin
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
+
 			if (!target_was_examined(p_target)) {
 				return sc_error_code__get_and_clear(p_target);
 			}
 		}
+
 		/// restore temporary register
 		error_code const old_err_code = sc_error_code__get_and_clear(p_target);
 		sc_error_code__update(p_target, reg_x__store(p_wrk_reg));
@@ -3810,6 +3896,7 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 	LOG_DEBUG("Write_memory at 0x%08X, %d items, each %d bytes, total %d bytes", address, count, size, count * size);
 
 	invalidate_DAP_CTR_cache(p_target);
+
 	/// Check for size
 	if (!(size == 1 || size == 2 || size == 4)) {
 		LOG_ERROR("Invalid item size %d", size);
@@ -3834,6 +3921,7 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 	}
 
 	uint32_t pc_sample_1;
+
 	if (ERROR_OK != sc_rv32_get_PC(p_target, &pc_sample_1)) {
 		return sc_error_code__get_and_clear(p_target);
 	}
@@ -3945,6 +4033,7 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 							instr_fields[1] = instr_scan_opcode_field;
 							jtag_add_dr_scan_check(p_target->tap, TAP_number_of_fields_DAP_CMD, instr_fields, TAP_IDLE);
 						}
+
 						{
 							uint8_t instr_buf[sizeof(uint32_t)];
 							buf_set_u32(instr_buf, 0, TAP_length_of_DAP_CMD_OPCODE_EXT, RISCV_OPCODE_ADD(p_addr_reg->number, p_addr_reg->number, p_data_reg->number));
@@ -3954,12 +4043,15 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 							instr_fields[1] = instr_scan_opcode_field;
 							jtag_add_dr_scan_check(p_target->tap, TAP_number_of_fields_DAP_CMD, instr_fields, TAP_IDLE);
 						}
+
 						offset -= 1 << 12;
 
 						LOG_DEBUG("Force jtag_execute_queue()");
+
 						if (ERROR_OK != sc_error_code__update(p_target, jtag_execute_queue())) {
 							break;
 						}
+
 						LOG_DEBUG("jtag_execute_queue() - OK");
 					}
 				} else {
@@ -3972,9 +4064,11 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 						) {
 							break;
 						}
+
 						offset += (riscv_short_signed_type)size;
 						buffer += size;
 						--count;
+
 						if (offset <= INT12_MAX) {
 							continue;
 						}
@@ -3985,6 +4079,7 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 						) {
 							break;
 						}
+
 						offset -= 1 << 12;
 					}
 				}
@@ -3993,6 +4088,7 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			sc_riscv32__update_status(p_target);
+
 			if (!target_was_examined(p_target)) {
 				return sc_error_code__get_and_clear(p_target);
 			}
@@ -4003,6 +4099,7 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
+
 		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
@@ -4012,6 +4109,7 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
+
 		if (!target_was_examined(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		}
@@ -4030,38 +4128,39 @@ sc_riscv32__write_phys_memory(target* const p_target, target_addr_t _address, ui
 	return sc_error_code__get_and_clear(p_target);
 }
 
+/**
+@pre target is halted
+*/
 static inline error_code
 add_sw_breakpoint(target* const p_target,
 				  breakpoint* const p_breakpoint)
 {
-	if (ERROR_OK == sc_rv32_check_that_target_halted(p_target)) {
-		bool const RVC_enable = is_RVC_enable(p_target);
+	bool const RVC_enable = is_RVC_enable(p_target);
 
-		if (!(p_breakpoint->length == NUM_BYTES_FOR_BITS(ILEN) || (RVC_enable && p_breakpoint->length == 2))) {
-			LOG_ERROR("Invalid breakpoint size: %d", p_breakpoint->length);
-			sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
-		} else if (p_breakpoint->address % (RVC_enable ? 2 : 4) != 0) {
-			LOG_ERROR("Unaligned breakpoint: 0x%08X", (uint32_t)p_breakpoint->address);
-			sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+	if (!(p_breakpoint->length == NUM_BYTES_FOR_BITS(ILEN) || (RVC_enable && p_breakpoint->length == 2))) {
+		LOG_ERROR("Invalid breakpoint size: %d", p_breakpoint->length);
+		sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+	} else if (p_breakpoint->address % (RVC_enable ? 2 : 4) != 0) {
+		LOG_ERROR("Unaligned breakpoint: 0x%08X", (uint32_t)p_breakpoint->address);
+		sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
+	} else {
+		if (ERROR_OK != read_memory_space(p_target, (uint32_t)p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true)) {
+			LOG_ERROR("Can't save original instruction");
 		} else {
-			if (ERROR_OK != read_memory_space(p_target, (uint32_t)p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true)) {
-				LOG_ERROR("Can't save original instruction");
+			uint8_t buffer[4];
+
+			if (p_breakpoint->length == 4) {
+				target_buffer_set_u32(p_target, buffer, RISCV_OPCODE_EBREAK());
+			} else if (p_breakpoint->length == 2) {
+				target_buffer_set_u16(p_target, buffer, RISCV_OPCODE_C_EBREAK());
 			} else {
-				uint8_t buffer[4];
+				assert(/*logic_error:Bad breakpoint size*/ 0);
+			}
 
-				if (p_breakpoint->length == 4) {
-					target_buffer_set_u32(p_target, buffer, RISCV_OPCODE_EBREAK());
-				} else if (p_breakpoint->length == 2) {
-					target_buffer_set_u16(p_target, buffer, RISCV_OPCODE_C_EBREAK());
-				} else {
-					assert(/*logic_error:Bad breakpoint size*/ 0);
-				}
-
-				if (ERROR_OK != write_memory_space(p_target, (uint32_t)p_breakpoint->address, 2, p_breakpoint->length / 2, buffer, true)) {
-					LOG_ERROR("Can't write EBREAK");
-				} else {
-					p_breakpoint->set = 1;
-				}
+			if (ERROR_OK != write_memory_space(p_target, (uint32_t)p_breakpoint->address, 2, p_breakpoint->length / 2, buffer, true)) {
+				LOG_ERROR("Can't write EBREAK");
+			} else {
+				p_breakpoint->set = 1;
 			}
 		}
 	}
@@ -4069,6 +4168,9 @@ add_sw_breakpoint(target* const p_target,
 	return sc_error_code__get_and_clear(p_target);
 }
 
+/**
+@pre target is halted
+*/
 static inline error_code
 add_hw_breakpoint(target* const p_target,
 				  breakpoint* const p_breakpoint)
@@ -4085,12 +4187,50 @@ sc_riscv32__add_breakpoint(target* const p_target,
 						   breakpoint* const p_breakpoint)
 {
 	invalidate_DAP_CTR_cache(p_target);
+
+	if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
+		return sc_error_code__get_and_clear(p_target);
+	}
+
 	assert(p_breakpoint);
 
-	return
-		BKPT_SOFT == p_breakpoint->type ?
-		add_sw_breakpoint(p_target, p_breakpoint): 
-		add_hw_breakpoint(p_target, p_breakpoint);
+	switch (p_breakpoint->type) {
+	case BKPT_SOFT:
+		return add_sw_breakpoint(p_target, p_breakpoint);
+
+	default:
+		LOG_ERROR("Unsupported breakpoint type");
+		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+	}
+
+	return sc_error_code__get_and_clear(p_target);
+}
+
+error_code
+sc_riscv32__add_breakpoint_v2(target* const p_target,
+							  breakpoint* const p_breakpoint)
+{
+	invalidate_DAP_CTR_cache(p_target);
+
+	if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
+		return sc_error_code__get_and_clear(p_target);
+	}
+
+	assert(p_breakpoint);
+
+	switch (p_breakpoint->type) {
+	case BKPT_SOFT:
+		return add_sw_breakpoint(p_target, p_breakpoint);
+
+	case BKPT_HARD:
+		return add_hw_breakpoint(p_target, p_breakpoint);
+
+	default:
+		LOG_ERROR("Ivalid breakpoint type");
+		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+	}
+
+	return sc_error_code__get_and_clear(p_target);
 }
 
 static inline error_code
@@ -4102,6 +4242,7 @@ remove_sw_breakpoint(target* const p_target,
 	if (ERROR_OK == write_memory_space(p_target, (uint32_t)p_breakpoint->address, 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true)) {
 		p_breakpoint->set = 0;
 	}
+
 	return sc_error_code__get_and_clear(p_target);
 }
 
@@ -4121,14 +4262,16 @@ sc_riscv32__remove_breakpoint(target* const p_target,
 							  breakpoint* const p_breakpoint)
 {
 	invalidate_DAP_CTR_cache(p_target);
+
 	if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
 		return sc_error_code__get_and_clear(p_target);
 	}
+
 	assert(p_breakpoint);
 
 	return
 		BKPT_SOFT == p_breakpoint->type ?
-		remove_sw_breakpoint(p_target, p_breakpoint):
+		remove_sw_breakpoint(p_target, p_breakpoint) :
 		remove_hw_breakpoint(p_target, p_breakpoint);
 }
 
@@ -4181,6 +4324,7 @@ sc_rv32__virt_to_phis_direct_map(target* p_target, uint32_t address, uint32_t* p
 	if (p_bound) {
 		*p_bound = UINT32_MAX;
 	}
+
 	LOG_DEBUG("Direct virt_to_phis address %08" PRIx32, address);
 	return sc_error_code__get(p_target);
 }
@@ -4319,6 +4463,7 @@ sc_rv32__virt_to_phis_1_7(target* p_target, uint32_t address, uint32_t* p_physic
 					if (p_bound) {
 						*p_bound = bound - address;
 					}
+
 					return sc_error_code__get(p_target);
 				}
 			}
@@ -4383,6 +4528,7 @@ sc_rv32__virt_to_phis_1_7(target* p_target, uint32_t address, uint32_t* p_physic
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		sc_riscv32__update_status(p_target);
 	}
+
 	return sc_error_code__get(p_target);
 }
 
@@ -4404,6 +4550,7 @@ sc_rv32__mmu_1_9(target* p_target, int* p_mmu_enabled)
 		*p_mmu_enabled = 0;
 		return ERROR_OK;
 	}
+
 	uint32_t const satp = sc_riscv32__csr_get_value(p_target, CSR_satp);
 
 	if (ERROR_OK == sc_error_code__get(p_target)) {
@@ -4430,12 +4577,14 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 	bool const RV_S = 0 != (p_arch->misa & BIT_MASK('S' - 'A'));
 
 	invalidate_DAP_CTR_cache(p_target);
+
 	if (!RV_S) {
 		LOG_DEBUG("misa bit 'S' is 0");
 		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
 	}
 
 	uint32_t dbg_status;
+
 	if (ERROR_OK != sc_rv32_DBG_STATUS_get(p_target, &dbg_status)) {
 		return sc_error_code__get(p_target);
 	}
@@ -4447,6 +4596,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 	uint32_t const current_mode = EXTRACT_FIELD(dbg_status, 6, 7);
 
 	LOG_DEBUG("current_mode=%" PRIu32, current_mode);
+
 	if (machine_mode == current_mode) {
 		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
 	}
@@ -4495,17 +4645,20 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 
 		// 4
 		uint32_t const pte_x = EXTRACT_FIELD(pte, 3, 3);
+
 		if (!(0 != pte_r || 0 != pte_x)) {
 			if (i < 1) {
 				LOG_ERROR("Address translation fault: Bad level");
 				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 			}
+
 			i = i - 1;
 			a = EXTRACT_FIELD(pte, 10, 31) * pagesize;
 			LOG_DEBUG("Intermediate a= 0x%08" PRIx32, a);
 		} else {
 			// 5
 			uint32_t const pte_u = EXTRACT_FIELD(pte, 4, 4);
+
 			if ((user_mode == current_mode && 0 == pte_u) || (instruction_space && 0 == pte_x)) {
 				LOG_ERROR("Address translation fault: MMU disable access");
 				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
@@ -4519,6 +4672,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 
 			// 7
 			uint32_t const pte_a = EXTRACT_FIELD(pte, 6, 6);
+
 			if (0 == pte_a) {
 				LOG_ERROR("Address translation fault: pte_a[6] == 0");
 				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
@@ -4529,9 +4683,11 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 			assert(p_physical);
 			*p_physical = (EXTRACT_FIELD(pte, off_bits - 2, 32) << off_bits) | EXTRACT_FIELD(va, 0, off_bits - 1);
 			LOG_DEBUG("Final a= 0x%08" PRIx32, *p_physical);
+
 			if (p_bound) {
 				*p_bound = UINT32_C(1) << off_bits;
 			}
+
 			return sc_error_code__get(p_target);
 		}
 	}

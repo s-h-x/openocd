@@ -129,6 +129,9 @@ error_code
 sc_riscv32__add_breakpoint(target* const p_target, breakpoint* const p_breakpoint);
 
 error_code
+sc_riscv32__add_breakpoint_v2(target* const p_target, breakpoint* const p_breakpoint);
+
+error_code
 sc_riscv32__remove_breakpoint(target* const p_target, breakpoint* const p_breakpoint);
 
 error_code

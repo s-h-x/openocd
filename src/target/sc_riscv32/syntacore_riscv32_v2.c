@@ -74,7 +74,7 @@ target_type syntacore_riscv32_v2_target = {
 	.checksum_memory = NULL,
 	.blank_check_memory = NULL,
 
-	.add_breakpoint = sc_riscv32__add_breakpoint,
+	.add_breakpoint = sc_riscv32__add_breakpoint_v2,
 	.add_context_breakpoint = NULL,
 	.add_hybrid_breakpoint = NULL,
 
