@@ -4291,20 +4291,21 @@ add_hw_breakpoint(target* const p_target,
 	// TODO: replace 12 bits of BPSELECT
 	for (uint32_t channel = 0; channel < BIT_MASK(12); ++channel) {
 
-		uint32_t value = 0;
+		uint32_t bpcontrol = 0;
+
 		if (ERROR_OK != BRKM_csr_set(p_target, BPSELECT, channel)) {
 			LOG_ERROR("Error in BRKM select channel #%" PRId32, channel);
 			break;
-		} else if (ERROR_OK != BRKM_csr_get(p_target, BPCONTROL, &value)) {
+		} else if (ERROR_OK != BRKM_csr_get(p_target, BPCONTROL, &bpcontrol)) {
 			LOG_ERROR("Error read BRKM BPCONTROL for channel #%" PRId32, channel);
 			break;
-		} else if (0 == (BIT_MASK(BPCONTROL_EXECSUP) & value)) {
+		} else if (0 == (BIT_MASK(BPCONTROL_EXECSUP) & bpcontrol)) {
 			LOG_WARNING("BRKM EXECSUP is not available for channel #%" PRId32, channel);
 			break;
-		} else if (0 == ((BIT_MASK(BPCONTROL_ASUP) | BIT_MASK(BPCONTROL_ARANGESUP)) & value)) {
+		} else if (0 == ((BIT_MASK(BPCONTROL_ASUP) | BIT_MASK(BPCONTROL_ARANGESUP)) & bpcontrol)) {
 			LOG_WARNING("ASUP and ARANGESUP are not supported by BRKM for channel #%" PRId32, channel);
 			break;
-		} else if (0 != (busy_mask & value)) {
+		} else if (0 != (busy_mask & bpcontrol)) {
 			// channel busy, find next
 			LOG_DEBUG("BRKM channel %" PRId32 " busy", channel);
 			continue;
@@ -4347,6 +4348,7 @@ add_hw_breakpoint(target* const p_target,
 			p_breakpoint->set = BIT_MASK(12) | channel;
 			return sc_error_code__get_and_clear(p_target);
 		}
+
 		break;
 	}
 
