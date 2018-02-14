@@ -4319,9 +4319,6 @@ add_hw_breakpoint(target* const p_target,
 		} else if (ERROR_OK != BRKM_csr_set(p_target, BPHIADDR, (uint32_t)p_breakpoint->address + p_breakpoint->length)) {
 			LOG_ERROR("Error: can't setup BPHIADDR");
 			break;
-		} else if (ERROR_OK != BRKM_csr_set(p_target, BPHIADDR, (uint32_t)p_breakpoint->address + p_breakpoint->length)) {
-			LOG_ERROR("Error: can't setup BPHIADDR");
-			break;
 		} else if (ERROR_OK != BRKM_csr_set(p_target, BPCTRLEXT, BIT_MASK(BPCTRLEXT_ARANGEEXT_EN))) {
 			LOG_ERROR("Error: can't setup BPCTRLEXT");
 			break;
@@ -4424,7 +4421,8 @@ static inline error_code
 remove_hw_breakpoint(target* const p_target,
 					 breakpoint* const p_breakpoint)
 {
-	// TODO: replace 12 bits of BPSELECT
+	// TODO: replace 12 by BPSELECT property
+	assert(0 != (p_breakpoint->set & BIT_MASK(12)));
 	uint32_t const channel = ~(~UINT32_C(0) << 12) & p_breakpoint->set;
 
 	if (ERROR_OK != BRKM_csr_set(p_target, BPSELECT, channel)) {
@@ -4433,6 +4431,7 @@ remove_hw_breakpoint(target* const p_target,
 		LOG_ERROR("Error clear BRKM BPCONTROL for channel %" PRId32, channel);
 	} else {
 		LOG_DEBUG("HW breakpoint #%" PRId32 " disabled", channel);
+		p_breakpoint->set = 0;
 	}
 
 	return sc_error_code__get_and_clear(p_target);
