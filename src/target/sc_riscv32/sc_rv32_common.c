@@ -3089,8 +3089,15 @@ find_breakpoint_by_address(target* const p_target,
 }
 
 static error_code
-resume_common(target* const p_target, uint32_t dmode_enabled, int const current, uint32_t const address, int const handle_breakpoints, int const debug_execution)
+resume_common(target* const p_target,
+			  uint32_t dmode_enabled,
+			  int const current,
+			  uint32_t const address,
+			  int const handle_breakpoints,
+			  int const debug_execution)
 {
+	LOG_DEBUG("Resume ");
+
 	if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
 		return sc_error_code__get_and_clear(p_target);
 	}
@@ -4168,18 +4175,183 @@ add_sw_breakpoint(target* const p_target,
 	return sc_error_code__get_and_clear(p_target);
 }
 
+enum BRKM_csrs_base
+{
+	BRKM_csr_base = 0x7C0
+};
+
+typedef enum BRKM_csr_indexes
+{
+	BPSELECT = 0,
+	BPCONTROL = 1,
+	BPLOADDR = 2,
+	BPHIADDR = 3,
+	BPLODATA = 4,
+	BPHIDATA = 5,
+	BPCTRLEXT = 6,
+	BRKMCTRL = 7,
+} BRKM_csr_indexes;
+
+typedef enum BPCONTROL_bits
+{
+	BPCONTROL_DMASKEN = 1,
+	BPCONTROL_DRANGEEN = 2,
+	BPCONTROL_DEN = 3,
+
+	BPCONTROL_AMASKEN = 5,
+	BPCONTROL_ARANGEEN = 6,
+	BPCONTROL_AEN = 7,
+
+	BPCONTROL_EXECEN = 8,
+	BPCONTROL_STOREEN = 9,
+	BPCONTROL_LOADEN = 10,
+
+	BPCONTROL_ACTION_LOW = 12,
+	BPCONTROL_ACTION_HIGH = 14,
+
+	BPCONTROL_MATCHED = 15,
+
+	BPCONTROL_DMASKSUP = 17,
+	BPCONTROL_DRANGESUP = 18,
+	BPCONTROL_DSUP = 29,
+
+	BPCONTROL_AMASKSUP = 21,
+	BPCONTROL_ARANGESUP = 22,
+	BPCONTROL_ASUP = 23,
+
+	BPCONTROL_EXECSUP = 24,
+	BPCONTROL_STORESUP = 25,
+	BPCONTROL_LOADSUP = 26,
+
+} BPCONTROL_bits;
+
+typedef enum BPCTRLEXT_bits
+{
+	BPCTRLEXT_AMASKEXT_EN = 14,
+	BPCTRLEXT_ARANGEEXT_EN = 15,
+} BPCTRLEXT_bits;
+
+static error_code
+BRKM_csr_set(target* const p_target,
+			 BRKM_csr_indexes const idx,
+			 uint32_t const value)
+{
+	assert(p_target);
+	assert(p_target->reg_cache && p_target->reg_cache->next && p_target->reg_cache->next->next && 4096 == p_target->reg_cache->next->next->num_regs && p_target->reg_cache->next->next->reg_list);
+	// TODO: define BRKM csr 0x7C0
+	reg* const p_bpselect = p_target->reg_cache->next->next->reg_list + 0x7C0 + idx;
+	p_bpselect->dirty = false;
+	p_bpselect->valid = false;
+	uint8_t buffer[XLEN / CHAR_BIT];
+	buf_set_u32(buffer, 0, XLEN, value);
+	return sc_error_code__update(p_target, reg_csr__set(p_bpselect, buffer));
+}
+
+static error_code
+BRKM_csr_get(target* const p_target,
+			 BRKM_csr_indexes const idx,
+			 uint32_t* p_value)
+{
+	assert(p_target);
+	assert(p_target->reg_cache && p_target->reg_cache->next && p_target->reg_cache->next->next && 4096 == p_target->reg_cache->next->next->num_regs && p_target->reg_cache->next->next->reg_list);
+	// TODO: define BRKM csr 0x7C0
+	reg* const p_bpselect = p_target->reg_cache->next->next->reg_list + 0x7C0 + idx;
+	p_bpselect->dirty = false;
+	p_bpselect->valid = false;
+	static_assert(XLEN <= CHAR_BIT * sizeof(uint32_t), "Unsupported XLEN");
+
+	if (ERROR_OK != sc_error_code__update(p_target, reg_csr__get(p_bpselect))) {
+		LOG_ERROR("Error read CSR");
+	} else {
+		assert(p_value);
+		*p_value = buf_get_u32(p_bpselect->value, 0, XLEN);
+	}
+
+	return sc_error_code__get(p_target);
+}
+
 /**
 @pre target is halted
 */
-static inline error_code
+static error_code
 add_hw_breakpoint(target* const p_target,
 				  breakpoint* const p_breakpoint)
 {
-	// Eliminate warnings 'not used'
-	(void)p_target;
-	(void)p_breakpoint;
-	LOG_ERROR("Only software breakpoins available now");
-	return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	static uint32_t const busy_mask =
+		BIT_MASK(BPCONTROL_DMASKEN) |
+		BIT_MASK(BPCONTROL_DRANGEEN) |
+		BIT_MASK(BPCONTROL_DEN) |
+		BIT_MASK(BPCONTROL_AMASKEN) |
+		BIT_MASK(BPCONTROL_ARANGEEN) |
+		BIT_MASK(BPCONTROL_AEN) |
+		BIT_MASK(BPCONTROL_EXECEN) |
+		BIT_MASK(BPCONTROL_STOREEN) |
+		BIT_MASK(BPCONTROL_LOADEN);
+
+	// TODO: replace 12 bits of BPSELECT
+	for (uint32_t channel = 0; channel < BIT_MASK(12); ++channel) {
+
+		uint32_t value = 0;
+		if (ERROR_OK != BRKM_csr_set(p_target, BPSELECT, channel)) {
+			LOG_ERROR("Error in BRKM select channel #%" PRId32, channel);
+			break;
+		} else if (ERROR_OK != BRKM_csr_get(p_target, BPCONTROL, &value)) {
+			LOG_ERROR("Error read BRKM BPCONTROL for channel #%" PRId32, channel);
+			break;
+		} else if (0 == (BIT_MASK(BPCONTROL_EXECSUP) & value)) {
+			LOG_WARNING("BRKM EXECSUP is not available for channel #%" PRId32, channel);
+			break;
+		} else if (0 == ((BIT_MASK(BPCONTROL_ASUP) | BIT_MASK(BPCONTROL_ARANGESUP)) & value)) {
+			LOG_WARNING("ASUP and ARANGESUP are not supported by BRKM for channel #%" PRId32, channel);
+			break;
+		} else if (0 != (busy_mask & value)) {
+			// channel busy, find next
+			LOG_DEBUG("BRKM channel %" PRId32 " busy", channel);
+			continue;
+		} else if (ERROR_OK != BRKM_csr_set(p_target, BRKMCTRL, BIT_MASK(15))) {
+			// TODO: BRKMCTRL, BIT_MASK(15)
+			LOG_ERROR("Error: can't init BRKMCTRL");
+			break;
+		} else if (ERROR_OK != BRKM_csr_set(p_target, BPLOADDR, (uint32_t)p_breakpoint->address)) {
+			LOG_ERROR("Error: can't setup BPLOADDR");
+			break;
+		} else if (ERROR_OK != BRKM_csr_set(p_target, BPHIADDR, (uint32_t)p_breakpoint->address + p_breakpoint->length)) {
+			LOG_ERROR("Error: can't setup BPHIADDR");
+			break;
+		} else if (ERROR_OK != BRKM_csr_set(p_target, BPHIADDR, (uint32_t)p_breakpoint->address + p_breakpoint->length)) {
+			LOG_ERROR("Error: can't setup BPHIADDR");
+			break;
+		} else if (ERROR_OK != BRKM_csr_set(p_target, BPCTRLEXT, BIT_MASK(BPCTRLEXT_ARANGEEXT_EN))) {
+			LOG_ERROR("Error: can't setup BPCTRLEXT");
+			break;
+		} else if (ERROR_OK != BRKM_csr_set(p_target, BPCONTROL, BIT_MASK(BPCONTROL_ARANGEEN) | BIT_MASK(BPCONTROL_AEN) | BIT_MASK(BPCONTROL_EXECEN) | (2 << BPCONTROL_ACTION_LOW))) {
+			// TODO: add definition for (2 << BPCONTROL_ACTION_LOW)
+			/**
+			From the EAS:
+
+			Action. Determines what happens when this breakpoint matches:
+
+			0: means nothing happens
+
+			1: means cause a debug exception
+
+			2: means enter Debug Mode
+
+			Other values are reserved for future use
+			*/
+			LOG_ERROR("Error: can't setup BPCTRLEXT");
+			break;
+		} else {
+			// OK
+			LOG_DEBUG("HW breakpoint #%" PRId32 " enabled for address %" PRIx32 " length %d", channel, (uint32_t)p_breakpoint->address, p_breakpoint->length);
+			p_breakpoint->set = BIT_MASK(12) | channel;
+			return sc_error_code__get_and_clear(p_target);
+		}
+		break;
+	}
+
+	sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+	return sc_error_code__get_and_clear(p_target);
 }
 
 error_code
@@ -4250,10 +4422,17 @@ static inline error_code
 remove_hw_breakpoint(target* const p_target,
 					 breakpoint* const p_breakpoint)
 {
-	(void)p_breakpoint;
-	assert(p_breakpoint);
-	LOG_ERROR("Only software breakpoins available now");
-	sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+	// TODO: replace 12 bits of BPSELECT
+	uint32_t const channel = ~(~UINT32_C(0) << 12) & p_breakpoint->set;
+
+	if (ERROR_OK != BRKM_csr_set(p_target, BPSELECT, channel)) {
+		LOG_ERROR("Error in BRKM select channel #%" PRId32, channel);
+	} else if (ERROR_OK != BRKM_csr_set(p_target, BPCONTROL, 0)) {
+		LOG_ERROR("Error clear BRKM BPCONTROL for channel %" PRId32, channel);
+	} else {
+		LOG_DEBUG("HW breakpoint #%" PRId32 " disabled", channel);
+	}
+
 	return sc_error_code__get_and_clear(p_target);
 }
 
@@ -4269,10 +4448,19 @@ sc_riscv32__remove_breakpoint(target* const p_target,
 
 	assert(p_breakpoint);
 
-	return
-		BKPT_SOFT == p_breakpoint->type ?
-		remove_sw_breakpoint(p_target, p_breakpoint) :
-		remove_hw_breakpoint(p_target, p_breakpoint);
+	switch (p_breakpoint->type) {
+	case BKPT_SOFT:
+		return remove_sw_breakpoint(p_target, p_breakpoint);
+
+	case BKPT_HARD:
+		return remove_hw_breakpoint(p_target, p_breakpoint);
+
+	default:
+		LOG_ERROR("Ivalid breakpoint type");
+		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+	}
+
+	return sc_error_code__get_and_clear(p_target);
 }
 
 /// gdb_server expects valid reg values and will use set method for updating reg values
