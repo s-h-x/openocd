@@ -80,10 +80,10 @@ target_type syntacore_riscv32_v2_target = {
 
 	.remove_breakpoint = sc_riscv32__remove_breakpoint,
 
-	.add_watchpoint = NULL,
-	.remove_watchpoint = NULL,
+	.add_watchpoint = sc_riscv32__add_watchpoint,
+	.remove_watchpoint = sc_riscv32__remove_watchpoint,
 
-	.hit_watchpoint = NULL,
+	.hit_watchpoint = sc_riscv32__hit_watchpoint,
 
 	.run_algorithm = NULL,
 	.start_algorithm = NULL,

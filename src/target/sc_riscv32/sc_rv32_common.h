@@ -35,6 +35,7 @@
 typedef struct target target;
 typedef struct reg reg;
 typedef struct breakpoint breakpoint;
+typedef struct watchpoint watchpoint;
 typedef struct command_context command_context;
 typedef struct target_type target_type;
 typedef uint8_t reg_num_type;
@@ -133,6 +134,15 @@ sc_riscv32__add_breakpoint_v2(target* const p_target, breakpoint* const p_breakp
 
 error_code
 sc_riscv32__remove_breakpoint(target* const p_target, breakpoint* const p_breakpoint);
+
+error_code
+sc_riscv32__add_watchpoint(target* const p_target, watchpoint *const p_watchpoint);
+
+error_code
+sc_riscv32__remove_watchpoint(target* const p_target, watchpoint *const p_watchpoint);
+
+error_code
+sc_riscv32__hit_watchpoint(target *const p_target, watchpoint **const pp_hit_watchpoint);
 
 error_code
 sc_riscv32__target_create(target* const p_target, Jim_Interp* interp);
