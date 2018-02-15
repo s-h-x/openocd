@@ -1550,35 +1550,19 @@ read_debug_cause(target* const p_target, target_debug_reason* p_reason)
 
 	if (ERROR_OK != sc_rv32_HART_REGTRANS_read(p_target, HART_DMODE_CAUSE_index, &value)) {
 		*p_reason = DBG_REASON_UNDEFINED;
-		return sc_error_code__get(p_target);
-	}
-
-	if (value & HART_DMODE_CAUSE_bit_Enforce) {
+	} else if (value & HART_DMODE_CAUSE_bit_Enforce) {
 		*p_reason = DBG_REASON_DBGRQ;
-		return sc_error_code__get(p_target);
-	}
-
-	if (value & HART_DMODE_CAUSE_bit_SStep) {
+	} else if (value & HART_DMODE_CAUSE_bit_SStep) {
 		*p_reason = DBG_REASON_SINGLESTEP;
-		return sc_error_code__get(p_target);
-	}
-
-	if (value & HART_DMODE_CAUSE_bit_Brkpt) {
+	} else if (value & HART_DMODE_CAUSE_bit_Brkpt) {
 		*p_reason = DBG_REASON_BREAKPOINT;
-		return sc_error_code__get(p_target);
-	}
-
-	if (value & HART_DMODE_CAUSE_bit_Hw_Brkpt) {
+	} else if (value & HART_DMODE_CAUSE_bit_Hw_Brkpt) {
 		*p_reason = BRKM_reason_get(p_target);
-		return sc_error_code__get(p_target);
-	}
-
-	if (value & HART_DMODE_CAUSE_bit_Rst_Exit) {
+	} else if (value & HART_DMODE_CAUSE_bit_Rst_Exit) {
 		*p_reason = DBG_REASON_DBGRQ;
-		return sc_error_code__get(p_target);
+	} else {
+		*p_reason = DBG_REASON_UNDEFINED;
 	}
-
-	*p_reason = DBG_REASON_UNDEFINED;
 	return sc_error_code__get(p_target);
 }
 
@@ -1596,6 +1580,7 @@ update_debug_reason(target* const p_target)
 		"DBG_REASON_EXIT",
 		"DBG_REASON_UNDEFINED",
 	};
+	static_assert(DBG_REASON_UNDEFINED + 1 == sizeof reasons_names / sizeof reasons_names[0], "Invalid number of reasons_names");
 	target_debug_reason debug_reason;
 
 	if (ERROR_OK != read_debug_cause(p_target, &debug_reason)) {
