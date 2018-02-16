@@ -35,6 +35,11 @@
 #define ILEN (32u)
 /// @}
 
+typedef uint32_t rv_x_type;
+
+static_assert(XLEN == CHAR_BIT * sizeof(rv_x_type), "rv_x_type bits number is not XLEN");
+static_assert(XLEN == CHAR_BIT * sizeof(rv32_address_type), "rv32_address_type bits number is not XLEN");
+
 /// Number of array 'arr' elements
 #define ARRAY_LEN(arr) (sizeof (arr) / sizeof (arr)[0])
 
@@ -3085,7 +3090,7 @@ set_DEMODE_ENBL(target* const p_target, uint32_t const set_value)
 
 static breakpoint*
 find_breakpoint_by_address(target* const p_target,
-						   uint32_t const address)
+						   rv32_address_type const address)
 {
 	breakpoint* p_bkp = p_target->breakpoints;
 
@@ -3102,7 +3107,7 @@ static error_code
 resume_common(target* const p_target,
 			  uint32_t dmode_enabled,
 			  int const current,
-			  uint32_t const address,
+			  rv32_address_type const address,
 			  int const handle_breakpoints,
 			  int const debug_execution)
 {
@@ -3744,7 +3749,7 @@ read_memory_space(target* const p_target,
 		return sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 	} else {
 		while (0 != count) {
-			uint32_t physical;
+			target_addr_t physical;
 			uint32_t bound;
 			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
@@ -3787,7 +3792,7 @@ write_memory_space(target* const p_target,
 		return sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 	} else {
 		while (0 != count) {
-			uint32_t physical;
+			target_addr_t physical;
 			uint32_t bound;
 			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 			assert(p_arch);
@@ -4902,7 +4907,11 @@ sc_riscv32__virt2phys(target* p_target,
 }
 
 error_code
-sc_rv32__virt_to_phis_direct_map(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
+sc_rv32__virt_to_phis_direct_map(target* p_target,
+								 rv32_address_type address,
+								 target_addr_t* p_physical,
+								 uint32_t* p_bound,
+								 bool const instruction_space)
 {
 	assert(p_physical);
 	*p_physical = address;
@@ -5007,7 +5016,11 @@ sc_rv32__mmu_1_7(target* p_target, int* p_mmu_enabled)
 }
 
 error_code
-sc_rv32__virt_to_phis_1_7(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
+sc_rv32__virt_to_phis_1_7(target* p_target,
+						  rv32_address_type address,
+						  target_addr_t* p_physical,
+						  uint32_t* p_bound,
+						  bool const instruction_space)
 {
 	invalidate_DAP_CTR_cache(p_target);
 	uint32_t const mstatus = sc_riscv32__csr_get_value(p_target, CSR_mstatus);
@@ -5126,7 +5139,8 @@ enum
 };
 
 error_code
-sc_rv32__mmu_1_9(target* p_target, int* p_mmu_enabled)
+sc_rv32__mmu_1_9(target* p_target,
+				 int* p_mmu_enabled)
 {
 	assert(p_target);
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
@@ -5150,7 +5164,11 @@ sc_rv32__mmu_1_9(target* p_target, int* p_mmu_enabled)
 }
 
 error_code
-sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space)
+sc_rv32__virt_to_phis_1_9(target* p_target,
+						  rv32_address_type va,
+						  target_addr_t* p_physical,
+						  uint32_t* p_bound,
+						  bool const instruction_space)
 {
 	enum
 	{
@@ -5270,7 +5288,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t va, uint32_t* p_physical, u
 			unsigned const off_bits = i > 0 ? 22 : 12;
 			assert(p_physical);
 			*p_physical = (EXTRACT_FIELD(pte, off_bits - 2, 32) << off_bits) | EXTRACT_FIELD(va, 0, off_bits - 1);
-			LOG_DEBUG("Final a= 0x%08" PRIx32, *p_physical);
+			LOG_DEBUG("Final a= 0x%08" TARGET_PRIxADDR, *p_physical);
 
 			if (p_bound) {
 				*p_bound = UINT32_C(1) << off_bits;

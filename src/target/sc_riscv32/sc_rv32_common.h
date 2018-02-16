@@ -43,6 +43,7 @@ typedef uint16_t csr_num_type;
 typedef enum target_register_class target_register_class;
 typedef int error_code;
 typedef uint32_t rv_instruction32_type;
+typedef uint32_t rv32_address_type;
 
 enum {
 	/// Marker of invalid value of Debug Access Port multiplexer control
@@ -68,7 +69,7 @@ struct sc_riscv32__Arch_constants
 
 	/// Privileged ISA version-specific virtual to physical address translation virtual method
 	error_code
-	(*virt_to_phis)(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
+	(*virt_to_phis)(target* p_target, rv32_address_type address, target_addr_t* p_physical, uint32_t* p_bound, bool const instruction_space);
 
 	/// Syntacore architecture extensions
 	/// @{
@@ -190,12 +191,12 @@ error_code
 sc_rv32__mmu_1_9(target* p_target, int* p_mmu_enabled);
 
 error_code
-sc_rv32__virt_to_phis_direct_map(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
+sc_rv32__virt_to_phis_direct_map(target* p_target, rv32_address_type address, target_addr_t* p_physical, uint32_t* p_bound, bool const instruction_space);
 
 error_code
-sc_rv32__virt_to_phis_1_7(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
+sc_rv32__virt_to_phis_1_7(target* p_target, rv32_address_type address, target_addr_t* p_physical, uint32_t* p_bound, bool const instruction_space);
 
 error_code
-sc_rv32__virt_to_phis_1_9(target* p_target, uint32_t address, uint32_t* p_physical, uint32_t* p_bound, bool const instruction_space);
+sc_rv32__virt_to_phis_1_9(target* p_target, rv32_address_type address, target_addr_t* p_physical, uint32_t* p_bound, bool const instruction_space);
 
 #endif  // TARGET_SC_RV32_COMMON_H_
