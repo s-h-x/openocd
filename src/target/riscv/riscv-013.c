@@ -1358,8 +1358,8 @@ static int read_memory(struct target *target, target_addr_t address,
 	LOG_DEBUG("reading until final address 0x%" PRIx64, fin_addr);
 	while (count > 1 && !this_is_last_read) {
 		cur_addr = riscv_read_debug_buffer_x(target, d_addr);
-		LOG_DEBUG("transferring burst starting at address 0x%" TARGET_PRIxADDR
-				" (previous burst was 0x%" TARGET_PRIxADDR ")", cur_addr,
+		LOG_DEBUG("transferring burst starting at address 0x%" PRIx64
+				" (previous burst was 0x%" PRIx64 ")", cur_addr,
 				prev_addr);
 		assert(first || prev_addr < cur_addr);
 		first = false;
