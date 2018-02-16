@@ -4514,7 +4514,7 @@ add_hw_breakpoint(target* const p_target,
 		LOG_ERROR("Error: can't setup BPCTRLEXT");
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPCONTROL, BIT_MASK(BPCONTROL_ARANGEEN) | BIT_MASK(BPCONTROL_AEN) | BIT_MASK(BPCONTROL_EXECEN) | (2 << BPCONTROL_ACTION_LOW))) {
 		// TODO: add definition for (2 << BPCONTROL_ACTION_LOW)
-		LOG_ERROR("Error: can't setup BPCTRLEXT");
+		LOG_ERROR("Error: can't setup BPCONTROL");
 	} else {
 		// OK
 		LOG_DEBUG("HW breakpoint"
@@ -4741,7 +4741,7 @@ sc_riscv32__add_watchpoint(target* const p_target,
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPCTRLEXT, BIT_MASK(BPCTRLEXT_ARANGEEXT_EN))) {
 		LOG_ERROR("Error: can't setup BPCTRLEXT");
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPCONTROL, control_bits)) {
-		LOG_ERROR("Error: can't setup BPCTRLEXT");
+		LOG_ERROR("Error: can't setup BPCONTROL");
 	} else {
 		// OK
 		LOG_INFO("Watchpoint enabled "
@@ -4840,6 +4840,13 @@ sc_riscv32__hit_watchpoint(target* const p_target,
 		}
 
 		if (0 != (BIT_MASK(BPCONTROL_MATCHED) & bpcontrol)) {
+			if (ERROR_OK != BRKM_csr_set(p_target, BPCONTROL, ~BIT_MASK(BPCONTROL_MATCHED) & bpcontrol)) {
+				LOG_ERROR("Error reset MATCH bit of BRKM BPCONTROL for"
+						  " channel #%" PRId32,
+						  channel);
+				break;
+			}
+
 			*pp_hit_watchpoint = p_watchpoint;
 			LOG_INFO("Watchpoint hit"
 					 " channel=%" PRIu32
