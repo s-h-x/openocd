@@ -4249,7 +4249,7 @@ typedef enum BPCONTROL_bits
 
 	BPCONTROL_DMASKSUP = 17,
 	BPCONTROL_DRANGESUP = 18,
-	BPCONTROL_DSUP = 29,
+	BPCONTROL_DSUP = 19,
 
 	BPCONTROL_AMASKSUP = 21,
 	BPCONTROL_ARANGESUP = 22,
@@ -4592,7 +4592,14 @@ sc_riscv32__add_watchpoint(target* const p_target,
 		2 << BPCONTROL_ACTION_LOW;
 
 	if ((required_capabilities & bpcontrol) != required_capabilities) {
-		LOG_WARNING("BRKM watchpoint mode is not supported by BRKM for channel #%" PRId32 ": bpcontrol=%08" PRIx32, channel, bpcontrol);
+		LOG_WARNING("BRKM watchpoint mode is not supported by BRKM for channel #%" PRId32 
+					": bpcontrol=%08" PRIx32 
+					" but required %08" PRIx32
+					" difference=%08" PRIx32, 
+					channel, 
+					bpcontrol, 
+					required_capabilities, 
+					(required_capabilities ^ bpcontrol) & required_capabilities);
 		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BRKMCTRL, BIT_MASK(15)/* TODO: BRKMCTRL, BIT_MASK(15) */)) {
 		LOG_ERROR("Error: can't init BRKMCTRL");
