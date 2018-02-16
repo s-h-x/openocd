@@ -4642,15 +4642,19 @@ sc_riscv32__add_watchpoint(target* const p_target,
 {
 	assert(p_watchpoint);
 
-	LOG_INFO("Add watchpoint request:"
+	LOG_DEBUG("Add watchpoint request:"
 			 " address=%08" TARGET_PRIxADDR
-			 " length %" PRIu32
-			 " value %08" PRIx32
-			 " mask %08" PRIx32,
+			 " length=%" PRIu32
+			 " rw=%d"
+			 " value=%08" PRIx32
+			 " mask=%08" PRIx32
+			 " unique_id=%d",
 			 p_watchpoint->address,
 			 p_watchpoint->length,
+			 p_watchpoint->rw,
 			 p_watchpoint->value,
-			 p_watchpoint->mask);
+			 p_watchpoint->mask,
+			 p_watchpoint->unique_id);
 
 	if (0 == p_watchpoint->mask && 0 != p_watchpoint->value) {
 		LOG_ERROR("Bad mask/value combination:"
@@ -4709,7 +4713,7 @@ sc_riscv32__add_watchpoint(target* const p_target,
 		2 << BPCONTROL_ACTION_LOW;
 
 	if ((required_capabilities & bpcontrol) != required_capabilities) {
-		LOG_WARNING("BRKM watchpoint mode is not supported by BRKM for channel"
+		LOG_ERROR("BRKM watchpoint mode is not supported by BRKM for channel"
 					" #%" PRIu32
 					": bpcontrol=%08" PRIx32
 					" but required %08" PRIx32
@@ -4735,17 +4739,23 @@ sc_riscv32__add_watchpoint(target* const p_target,
 		LOG_ERROR("Error: can't setup BPCTRLEXT");
 	} else {
 		// OK
-		LOG_INFO("Watchpoint"
-				 " #%" PRId32 " enabled for"
-				 " address %08" TARGET_PRIxADDR
-				 " length %" PRIu32
-				 " value %08" PRIx32
-				 " mask %08" PRIx32,
+		LOG_INFO("Watchpoint enabled "
+				 " channel=%" PRId32
+				 " address=%08" TARGET_PRIxADDR
+				 " length=%" PRIu32
+				 " rw=%d"
+				 " value=%08" PRIx32
+				 " mask=%08" PRIx32
+				 " unique_id=%d"
+				 " BPCONTROL=%08" PRIx32,
 				 channel,
 				 p_watchpoint->address,
 				 p_watchpoint->length,
+				 p_watchpoint->rw,
 				 p_watchpoint->value,
-				 p_watchpoint->mask);
+				 p_watchpoint->mask,
+				 p_watchpoint->unique_id,
+				 control_bits);
 		p_watchpoint->set = BIT_MASK(12) | channel;
 	}
 
@@ -4767,6 +4777,21 @@ sc_riscv32__remove_watchpoint(target* const p_target,
 	uint32_t const channel = ~(~UINT32_C(0) << 12) & p_watchpoint->set;
 
 	if (ERROR_OK == BRKM_disable_channel(p_target, channel)) {
+		LOG_INFO("Watchpoint disabled "
+				 " channel=%" PRId32
+				 " address=%08" TARGET_PRIxADDR
+				 " length=%" PRIu32
+				 " rw=%d"
+				 " value=%08" PRIx32
+				 " mask=%08" PRIx32
+				 " unique_id=%d",
+				 channel,
+				 p_watchpoint->address,
+				 p_watchpoint->length,
+				 p_watchpoint->rw,
+				 p_watchpoint->value,
+				 p_watchpoint->mask,
+				 p_watchpoint->unique_id);
 		p_watchpoint->set = 0;
 	}
 
@@ -4811,17 +4836,21 @@ sc_riscv32__hit_watchpoint(target* const p_target,
 
 		if (0 != (BIT_MASK(BPCONTROL_MATCHED) & bpcontrol)) {
 			*pp_hit_watchpoint = p_watchpoint;
-			LOG_DEBUG("Hit watchpoint at BRKM"
-					  " channel %" PRIu32
-					  " address=%08" TARGET_PRIxADDR
-					  " length=%" PRId32
-					  " value=%08" PRIx32
-					  " mask=%08" PRIx32,
-					  channel,
-					  p_watchpoint->address,
-					  p_watchpoint->length,
-					  p_watchpoint->value,
-					  p_watchpoint->mask);
+			LOG_INFO("Watchpoint hit"
+					 " channel=%" PRIu32
+					 " address=%08" TARGET_PRIxADDR
+					 " length=%" PRIu32
+					 " rw=%d"
+					 " value=%08" PRIx32
+					 " mask=%08" PRIx32
+					 " unique_id=%d",
+					 channel,
+					 p_watchpoint->address,
+					 p_watchpoint->length,
+					 p_watchpoint->rw,
+					 p_watchpoint->value,
+					 p_watchpoint->mask,
+					 p_watchpoint->unique_id);
 			break;
 		}
 	}
