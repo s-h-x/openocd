@@ -28,6 +28,8 @@
 #include <helper/command.h>
 #include "target.h"
 
+// [GNU MCU Eclipse]
+// #define USE_ORIGINAL_SEMIHOSTING
 
 /**
  * @file
@@ -137,6 +139,8 @@ struct arm {
 	/** Flag reporting armv6m based core. */
 	bool is_armv6m;
 
+// [GNU MCU Eclipse]
+#if defined(USE_ORIGINAL_SEMIHOSTING)
 	/** Flag reporting whether semihosting is active. */
 	bool is_semihosting;
 
@@ -154,6 +158,10 @@ struct arm {
 
 	/** Value to be returned by semihosting SYS_ERRNO request. */
 	int semihosting_errno;
+
+    /** Semihosting command line. */
+    char *semihosting_cmdline;
+#endif /* USE_ORIGINAL_SEMIHOSTING */
 
 	int (*setup_semihosting)(struct target *target, int enable);
 

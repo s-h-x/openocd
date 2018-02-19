@@ -33,6 +33,9 @@
 
 #include <helper/list.h>
 
+// [GNU MCU Eclipse]
+#include "semihosting_common.h"
+
 struct reg;
 struct trace;
 struct command_context;
@@ -204,6 +207,10 @@ struct target {
 
 	/* file-I/O information for host to do syscall */
 	struct gdb_fileio_info *fileio_info;
+    
+    // [GNU MCU Eclipse]
+    /* The semihosting information, extracted from the ARM target */
+    struct semihosting *semihosting;
 };
 
 struct target_list {
@@ -253,10 +260,6 @@ enum target_event {
 	TARGET_EVENT_RESET_ASSERT_POST,
 	TARGET_EVENT_RESET_DEASSERT_PRE,
 	TARGET_EVENT_RESET_DEASSERT_POST,
-	TARGET_EVENT_RESET_HALT_PRE,
-	TARGET_EVENT_RESET_HALT_POST,
-	TARGET_EVENT_RESET_WAIT_PRE,
-	TARGET_EVENT_RESET_WAIT_POST,
 	TARGET_EVENT_RESET_INIT,
 	TARGET_EVENT_RESET_END,
 

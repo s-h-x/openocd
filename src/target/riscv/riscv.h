@@ -13,6 +13,9 @@ struct riscv_program;
 #define RISCV_MAX_TRIGGERS 32
 #define RISCV_MAX_HWBPS 16
 
+#define DEFAULT_COMMAND_TIMEOUT_SEC		2
+#define DEFAULT_RESET_TIMEOUT_SEC		30
+
 extern struct target_type riscv011_target;
 extern struct target_type riscv013_target;
 
@@ -27,6 +30,7 @@ enum riscv_halt_reason {
 	RISCV_HALT_INTERRUPT,
 	RISCV_HALT_BREAKPOINT,
 	RISCV_HALT_SINGLESTEP,
+	RISCV_HALT_UNKNOWN
 };
 
 typedef struct {
@@ -56,7 +60,11 @@ typedef struct {
 
 	/* The register cache points into here. */
 	uint64_t reg_cache_values[RISCV_MAX_REGISTERS];
-	
+
+	/* Single buffer that contains all register names, instead of calling
+	 * malloc for each register. Needs to be freed when reg_list is freed. */
+	char *reg_names;
+
 	/* It's possible that each core has a different supported ISA set. */
 	int xlen[RISCV_MAX_HARTS];
 
@@ -64,11 +72,10 @@ typedef struct {
 	unsigned trigger_count[RISCV_MAX_HARTS];
 
 	/* For each physical trigger, contains -1 if the hwbp is available, or the
-	 * unique_id of the breakpoint/watchpoint that is using it. */
+	 * unique_id of the breakpoint/watchpoint that is using it.
+	 * Note that in RTOS mode the triggers are the same across all harts the
+	 * target controls, while otherwise only a single hart is controlled. */
 	int trigger_unique_id[RISCV_MAX_HWBPS];
-
-	/* The address of the debug RAM buffer. */
-	riscv_addr_t debug_buffer_addr[RISCV_MAX_HARTS];
 
 	/* The number of entries in the debug buffer. */
 	int debug_buffer_size[RISCV_MAX_HARTS];
@@ -76,23 +83,24 @@ typedef struct {
 	/* This avoids invalidating the register cache too often. */
 	bool registers_initialized;
 
+	/* This hart contains an implicit ebreak at the end of the program buffer. */
+	bool impebreak;
+
 	/* Helper functions that target the various RISC-V debug spec
 	 * implementations. */
 	riscv_reg_t (*get_register)(struct target *, int hartid, int regid);
-	void (*set_register)(struct target *, int hartid, int regid,
+	int (*set_register)(struct target *, int hartid, int regid,
 			uint64_t value);
 	void (*select_current_hart)(struct target *);
 	bool (*is_halted)(struct target *target);
-	void (*halt_current_hart)(struct target *);
-	void (*resume_current_hart)(struct target *target);
-	void (*step_current_hart)(struct target *target);
+	int (*halt_current_hart)(struct target *);
+	int (*resume_current_hart)(struct target *target);
+	int (*step_current_hart)(struct target *target);
 	void (*on_halt)(struct target *target);
 	void (*on_resume)(struct target *target);
 	void (*on_step)(struct target *target);
 	enum riscv_halt_reason (*halt_reason)(struct target *target);
-	void (*debug_buffer_enter)(struct target *target, struct riscv_program *program);
-	void (*debug_buffer_leave)(struct target *target, struct riscv_program *program);
-	void (*write_debug_buffer)(struct target *target, unsigned index,
+	int (*write_debug_buffer)(struct target *target, unsigned index,
 			riscv_insn_t d);
 	riscv_insn_t (*read_debug_buffer)(struct target *target, unsigned index);
 	int (*execute_debug_buffer)(struct target *target);
@@ -100,8 +108,16 @@ typedef struct {
 	void (*fill_dmi_write_u64)(struct target *target, char *buf, int a, uint64_t d);
 	void (*fill_dmi_read_u64)(struct target *target, char *buf, int a);
 	void (*fill_dmi_nop_u64)(struct target *target, char *buf);
-	void (*reset_current_hart)(struct target *target);
 } riscv_info_t;
+
+/* Wall-clock timeout for a command/access. Settable via RISC-V Target commands.*/
+extern int riscv_command_timeout_sec;
+
+/* Wall-clock timeout after reset. Settable via RISC-V Target commands.*/
+extern int riscv_reset_timeout_sec;
+
+extern bool riscv_use_scratch_ram;
+extern uint64_t riscv_scratch_ram_address;
 
 /* Everything needs the RISC-V specific info structure, so here's a nice macro
  * that provides that. */
@@ -126,7 +142,7 @@ int riscv_openocd_resume(
 	struct target *target,
 	int current,
 	target_addr_t address,
-	int handle_breakpoints, 
+	int handle_breakpoints,
 	int debug_execution
 );
 
@@ -152,12 +168,12 @@ int riscv_halt_all_harts(struct target *target);
 int riscv_halt_one_hart(struct target *target, int hartid);
 int riscv_resume_all_harts(struct target *target);
 int riscv_resume_one_hart(struct target *target, int hartid);
-int riscv_reset_all_harts(struct target *target);
-int riscv_reset_one_hart(struct target *target, int hartid);
 
 /* Steps the hart that's currently selected in the RTOS, or if there is no RTOS
  * then the only hart. */
 int riscv_step_rtos_hart(struct target *target);
+
+bool riscv_supports_extension(struct target *target, char letter);
 
 /* Returns XLEN for the given (or current) hart. */
 int riscv_xlen(const struct target *target);
@@ -187,8 +203,8 @@ bool riscv_has_register(struct target *target, int hartid, int regid);
 
 /* Returns the value of the given register on the given hart.  32-bit registers
  * are zero extended to 64 bits.  */
-void riscv_set_register(struct target *target, enum gdb_regno i, riscv_reg_t v);
-void riscv_set_register_on_hart(struct target *target, int hid, enum gdb_regno rid, uint64_t v);
+int riscv_set_register(struct target *target, enum gdb_regno i, riscv_reg_t v);
+int riscv_set_register_on_hart(struct target *target, int hid, enum gdb_regno rid, uint64_t v);
 riscv_reg_t riscv_get_register(struct target *target, enum gdb_regno i);
 riscv_reg_t riscv_get_register_on_hart(struct target *target, int hid, enum gdb_regno rid);
 
@@ -205,15 +221,9 @@ int riscv_count_triggers_of_hart(struct target *target, int hartid);
 /* These helper functions let the generic program interface get target-specific
  * information. */
 size_t riscv_debug_buffer_size(struct target *target);
-riscv_addr_t riscv_debug_buffer_addr(struct target *target);
-
-int riscv_debug_buffer_enter(struct target *target, struct riscv_program *program);
-int riscv_debug_buffer_leave(struct target *target, struct riscv_program *program);
 
 riscv_insn_t riscv_read_debug_buffer(struct target *target, int index);
-riscv_addr_t riscv_read_debug_buffer_x(struct target *target, int index);
 int riscv_write_debug_buffer(struct target *target, int index, riscv_insn_t insn);
-int riscv_write_debug_buffer_x(struct target *target, int index, riscv_addr_t data);
 int riscv_execute_debug_buffer(struct target *target);
 
 void riscv_fill_dmi_nop_u64(struct target *target, char *buf);
@@ -235,5 +245,11 @@ int riscv_remove_breakpoint(struct target *target,
 int riscv_add_watchpoint(struct target *target, struct watchpoint *watchpoint);
 int riscv_remove_watchpoint(struct target *target,
 		struct watchpoint *watchpoint);
+
+int riscv_init_registers(struct target *target);
+
+// [GNU MCU Eclipse]
+void riscv_semihosting_init(struct target *target);
+int riscv_semihosting(struct target *target, int *retval);
 
 #endif

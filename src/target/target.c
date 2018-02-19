@@ -105,6 +105,7 @@ extern struct target_type nds32_v3m_target;
 extern struct target_type or1k_target;
 extern struct target_type quark_x10xx_target;
 extern struct target_type quark_d20xx_target;
+extern struct target_type stm8_target;
 #if BUILD_RISCV == 1
 extern struct target_type riscv_target;
 #endif
@@ -142,11 +143,12 @@ static struct target_type *target_types[] = {
 	&or1k_target,
 	&quark_x10xx_target,
 	&quark_d20xx_target,
+	&stm8_target,
+#if BUILD_RISCV == 1
+	&riscv_target,
+#endif
 #if BUILD_TARGET64
     &aarch64_target,
-#endif
-#if BUILD_RISCV == 1
-    &riscv_target,
 #endif
 	&syntacore_riscv32i_target,
 	&syntacore_riscv32_v1_target,
@@ -214,10 +216,6 @@ static const Jim_Nvp nvp_target_event[] = {
 	{ .value = TARGET_EVENT_RESET_ASSERT_POST,   .name = "reset-assert-post" },
 	{ .value = TARGET_EVENT_RESET_DEASSERT_PRE,  .name = "reset-deassert-pre" },
 	{ .value = TARGET_EVENT_RESET_DEASSERT_POST, .name = "reset-deassert-post" },
-	{ .value = TARGET_EVENT_RESET_HALT_PRE,      .name = "reset-halt-pre" },
-	{ .value = TARGET_EVENT_RESET_HALT_POST,     .name = "reset-halt-post" },
-	{ .value = TARGET_EVENT_RESET_WAIT_PRE,      .name = "reset-wait-pre" },
-	{ .value = TARGET_EVENT_RESET_WAIT_POST,     .name = "reset-wait-post" },
 	{ .value = TARGET_EVENT_RESET_INIT,          .name = "reset-init" },
 	{ .value = TARGET_EVENT_RESET_END,           .name = "reset-end" },
 
@@ -1181,7 +1179,6 @@ int target_hit_watchpoint(struct target *target,
 #else
 		LOG_WARNING("target %s is not halted", target->cmd_name);
 #endif
-        
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
@@ -2010,12 +2007,7 @@ int target_arch_state(struct target *target)
 {
 	int retval;
 	if (target == NULL) {
-#if BUILD_RISCV == 1
-        LOG_USER("No target has been configured");
-#else
 		LOG_WARNING("No target has been configured");
-#endif
-        
 		return ERROR_OK;
 	}
 
@@ -2778,7 +2770,7 @@ COMMAND_HANDLER(handle_reg_command)
 #if BUILD_RISCV == 1
     int retval;
 #endif
-
+	
 	LOG_DEBUG("-");
 
 	target = get_current_target(CMD_CTX);
@@ -2797,21 +2789,23 @@ COMMAND_HANDLER(handle_reg_command)
 					i < cache->num_regs;
 					i++, reg++, count++) {
 				/* only print cached values if they are valid */
-				if (reg->valid) {
-					value = buf_to_str(reg->value,
-							reg->size, 16);
-					command_print(CMD_CTX,
-							"(%i) %s (/%" PRIu32 "): 0x%s%s",
-							count, reg->name,
-							reg->size, value,
-							reg->dirty
+				if (reg->exist) {
+					if (reg->valid) {
+						value = buf_to_str(reg->value,
+								reg->size, 16);
+						command_print(CMD_CTX,
+								"(%i) %s (/%" PRIu32 "): 0x%s%s",
+								count, reg->name,
+								reg->size, value,
+								reg->dirty
 								? " (dirty)"
 								: "");
-					free(value);
-				} else {
-					command_print(CMD_CTX, "(%i) %s (/%" PRIu32 ")",
-							  count, reg->name,
-							  reg->size) ;
+						free(value);
+					} else {
+						command_print(CMD_CTX, "(%i) %s (/%" PRIu32 ")",
+								count, reg->name,
+								reg->size) ;
+					}
 				}
 			}
 			cache = cache->next;
@@ -3761,7 +3755,7 @@ COMMAND_HANDLER(handle_bp_command)
 				addr = 0;
 				return handle_bp_command_set(CMD_CTX, addr, asid, length, hw);
 			}
-
+			/* fallthrough */
 		case 4:
 			hw = BKPT_HARD;
             COMMAND_PARSE_ADDRESS(CMD_ARGV[0], addr);
@@ -4864,22 +4858,11 @@ static int jim_target_configure(Jim_Interp *interp, int argc, Jim_Obj * const *a
 
 	Jim_GetOpt_Setup(&goi, interp, argc - 1, argv + 1);
 	goi.isconfigure = !strcmp(Jim_GetString(argv[0], NULL), "configure");
-#if BUILD_RISCV == 1
-    int need_args = 1 + goi.isconfigure;
-    if (goi.argc < need_args) {
-        Jim_WrongNumArgs(goi.interp, goi.argc, goi.argv,
-                         goi.isconfigure
-                         ? "missing: -option VALUE ..."
-                         : "missing: -option ...");
-            return JIM_ERR;
-        }
-#else
 	if (goi.argc < 1) {
 		Jim_WrongNumArgs(goi.interp, goi.argc, goi.argv,
 				 "missing: -option ...");
 		return JIM_ERR;
 	}
-#endif
 	struct target *target = Jim_CmdPrivData(goi.interp);
 	return target_configure(&goi, target);
 }

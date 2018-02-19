@@ -23,8 +23,8 @@ struct riscv_batch {
 
 	size_t idle_count;
 
-	char *data_out;
-	char *data_in;
+	uint8_t *data_out;
+	uint8_t *data_in;
 	struct scan_field *fields;
 
 	/* In JTAG we scan out the previous value's output when performing a
@@ -48,7 +48,7 @@ void riscv_batch_free(struct riscv_batch *batch);
 bool riscv_batch_full(struct riscv_batch *batch);
 
 /* Executes this scan batch. */
-void riscv_batch_run(struct riscv_batch *batch);
+int riscv_batch_run(struct riscv_batch *batch);
 
 /* Adds a DMI write to this batch. */
 void riscv_batch_add_dmi_write(struct riscv_batch *batch, unsigned address, uint64_t data);

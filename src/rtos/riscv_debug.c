@@ -9,11 +9,10 @@
 
 #if BUILD_RISCV == 1
 
-// int riscv_update_threads(struct rtos *rtos);
 static int riscv_gdb_thread_packet(struct connection *connection, const char *packet, int packet_size);
 static int riscv_gdb_v_packet(struct connection *connection, const char *packet, int packet_size);
 
-static int riscv_detect_rtos(struct target *target)
+static bool riscv_detect_rtos(struct target *target)
 {
 	LOG_ERROR("riscv_detect_rtos() unimplemented");
 	return -1;
@@ -33,7 +32,6 @@ static int riscv_create_rtos(struct target *target)
 
 	target->rtos->current_threadid = 1;
 	target->rtos->current_thread = 1;
-	riscv_update_threads(target->rtos);
 
 	target->rtos->gdb_thread_packet = riscv_gdb_thread_packet;
 	target->rtos->gdb_v_packet = riscv_gdb_v_packet;
@@ -44,6 +42,8 @@ static int riscv_create_rtos(struct target *target)
 int riscv_update_threads(struct rtos *rtos)
 {
 	LOG_DEBUG("Updating the RISC-V Hart List");
+
+	struct target *target = rtos->target;
 
 	/* Figures out how many harts there are on the system. */
 	int hart_count = riscv_count_harts(rtos->target);
@@ -57,7 +57,8 @@ int riscv_update_threads(struct rtos *rtos)
 			rtos->thread_details[i].exists = true;
 			if (asprintf(&rtos->thread_details[i].thread_name_str, "Hart %d", i) < 0)
 				LOG_ERROR("riscv_update_threads() failed asprintf");
-			if (asprintf(&rtos->thread_details[i].extra_info_str, "RV64") < 0)
+			if (asprintf(&rtos->thread_details[i].extra_info_str, "RV%d",
+						riscv_xlen_of_hart(target, i)) < 0)
 				LOG_ERROR("riscv_update_threads() failed asprintf");
 		}
 	}
@@ -306,8 +307,7 @@ static int riscv_get_symbol_list_to_lookup(symbol_table_elem_t *symbol_list[])
 	return JIM_OK;
 }
 
-const struct rtos_type riscv_rtos =
-{
+const struct rtos_type riscv_rtos = {
 	.name = "riscv",
 	.detect_rtos = riscv_detect_rtos,
 	.create = riscv_create_rtos,

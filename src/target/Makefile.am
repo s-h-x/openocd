@@ -19,6 +19,7 @@ noinst_LTLIBRARIES += %D%/libtarget.la
 	$(AVR32_SRC) \
 	$(MIPS32_SRC) \
 	$(NDS32_SRC) \
+	$(STM8_SRC) \
 	$(INTEL_IA32_SRC) \
 	$(RISCV_SRC) \
 	%D%/avrt.c \
@@ -39,7 +40,8 @@ TARGET_CORE_SRC = \
 	%D%/target.c \
 	%D%/target_request.c \
 	%D%/testee.c \
-	%D%/smp.c
+	%D%/smp.c \
+    %D%/semihosting_common.c
 
 ARMV4_5_SRC = \
 	%D%/armv4_5.c \
@@ -125,6 +127,9 @@ NDS32_SRC = \
 	%D%/nds32_v3m.c \
 	%D%/nds32_aice.c
 
+STM8_SRC = \
+	%D%/stm8.c
+
 INTEL_IA32_SRC = \
 	%D%/quark_x10xx.c \
 	%D%/quark_d20xx.c \
@@ -136,7 +141,8 @@ RISCV_SRC = \
 	%D%/riscv/riscv-013.c \
 	%D%/riscv/riscv.c \
 	%D%/riscv/program.c \
-	%D%/riscv/batch.c
+	%D%/riscv/batch.c \
+    %D%/riscv/riscv_semihosting.c
 
 %C%_libtarget_la_SOURCES += \
 	%D%/algorithm.h \
@@ -213,6 +219,7 @@ RISCV_SRC = \
 	%D%/nds32_v3.h \
 	%D%/nds32_v3m.h \
 	%D%/nds32_aice.h \
+	%D%/stm8.h \
 	%D%/lakemont.h \
 	%D%/x86_32_common.h \
 	%D%/arm_cti.h

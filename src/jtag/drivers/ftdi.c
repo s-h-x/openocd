@@ -430,44 +430,10 @@ static void ftdi_execute_pathmove(struct jtag_command *cmd)
 	tap_set_end_state(tap_get_state());
 }
 
-#if BUILD_RISCV == 1
-#ifdef _DEBUG_JTAG_IO_
-static void debug_jtag_io_value(const char *prefix, const uint8_t *value,
-		unsigned int num_bits)
-{
-	if (!value) {
-		return;
-	}
-
-	char buf[33];
-	char *bufp = buf;
-	unsigned int chars = (num_bits + 3) / 4;
-	for (unsigned int i = 0; i < chars; i++) {
-		if (i && (i % 32) == 0) {
-			DEBUG_JTAG_IO("  %s%s", prefix, buf);
-			bufp = buf;
-		}
-		int start_bit = 4 * (chars - i - 1);
-		sprintf(bufp, "%01x", buf_get_u32(value, start_bit, 4));
-		bufp++;
-	}
-	if (bufp != buf) {
-		DEBUG_JTAG_IO("  %s%s", prefix, buf);
-	}
-}
-#endif
-#endif
-
 static void ftdi_execute_scan(struct jtag_command *cmd)
 {
 	DEBUG_JTAG_IO("%s type:%d", cmd->cmd.scan->ir_scan ? "IRSCAN" : "DRSCAN",
 		jtag_scan_type(cmd->cmd.scan));
-#if BUILD_RISCV == 1
-#ifdef _DEBUG_JTAG_IO_
-	debug_jtag_io_value("  out=", cmd->cmd.scan->fields->out_value,
-			cmd->cmd.scan->fields->num_bits);
-#endif
-#endif
 
 	/* Make sure there are no trailing fields with num_bits == 0, or the logic below will fail. */
 	while (cmd->cmd.scan->num_fields > 0
@@ -549,13 +515,6 @@ static void ftdi_execute_scan(struct jtag_command *cmd)
 	DEBUG_JTAG_IO("%s scan, %i bits, end in %s",
 		(cmd->cmd.scan->ir_scan) ? "IR" : "DR", scan_size,
 		tap_state_name(tap_get_end_state()));
-
-#if BUILD_RISCV == 1
-#ifdef _DEBUG_JTAG_IO_
-	debug_jtag_io_value("   in=", cmd->cmd.scan->fields->in_value,
-			cmd->cmd.scan->fields->num_bits);
-#endif
-#endif
 }
 
 static void ftdi_execute_reset(struct jtag_command *cmd)
@@ -896,6 +855,7 @@ COMMAND_HANDLER(ftdi_handle_set_signal_command)
 			ftdi_set_signal(sig, *CMD_ARGV[1]);
 			break;
 		}
+		/* fallthrough */
 	default:
 		LOG_ERROR("unknown signal level '%s', use 0, 1 or z", CMD_ARGV[1]);
 		return ERROR_COMMAND_SYNTAX_ERROR;
@@ -1257,14 +1217,17 @@ static int ftdi_swd_switch_seq(enum swd_special_seq seq)
 	switch (seq) {
 	case LINE_RESET:
 		LOG_DEBUG("SWD line reset");
+		ftdi_swd_swdio_en(true);
 		mpsse_clock_data_out(mpsse_ctx, swd_seq_line_reset, 0, swd_seq_line_reset_len, SWD_MODE);
 		break;
 	case JTAG_TO_SWD:
 		LOG_DEBUG("JTAG-to-SWD");
+		ftdi_swd_swdio_en(true);
 		mpsse_clock_data_out(mpsse_ctx, swd_seq_jtag_to_swd, 0, swd_seq_jtag_to_swd_len, SWD_MODE);
 		break;
 	case SWD_TO_JTAG:
 		LOG_DEBUG("SWD-to-JTAG");
+		ftdi_swd_swdio_en(true);
 		mpsse_clock_data_out(mpsse_ctx, swd_seq_swd_to_jtag, 0, swd_seq_swd_to_jtag_len, SWD_MODE);
 		break;
 	default:

@@ -42,13 +42,19 @@ bool riscv_batch_full(struct riscv_batch *batch)
 	return batch->used_scans > (batch->allocated_scans - 4);
 }
 
-void riscv_batch_run(struct riscv_batch *batch)
+int riscv_batch_run(struct riscv_batch *batch)
 {
+	if (batch->used_scans == 0) {
+		LOG_DEBUG("Ignoring empty batch.");
+		return ERROR_OK;
+	}
+
+	keep_alive();
+
 	LOG_DEBUG("running a batch of %ld scans", (long)batch->used_scans);
 	riscv_batch_add_nop(batch);
 
 	for (size_t i = 0; i < batch->used_scans; ++i) {
-		dump_field(batch->fields + i);
 		jtag_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
 		if (batch->idle_count > 0)
 			jtag_add_runtest(batch->idle_count, TAP_IDLE);
@@ -57,11 +63,13 @@ void riscv_batch_run(struct riscv_batch *batch)
 	LOG_DEBUG("executing queue");
 	if (jtag_execute_queue() != ERROR_OK) {
 		LOG_ERROR("Unable to execute JTAG queue");
-		abort();
+		return ERROR_FAIL;
 	}
 
 	for (size_t i = 0; i < batch->used_scans; ++i)
 		dump_field(batch->fields + i);
+
+	return ERROR_OK;
 }
 
 void riscv_batch_add_dmi_write(struct riscv_batch *batch, unsigned address, uint64_t data)
@@ -96,7 +104,7 @@ size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address)
 	batch->read_keys[batch->read_keys_used] = batch->used_scans - 1;
 	LOG_DEBUG("read key %u for batch 0x%p is %u (0x%p)",
 			(unsigned) batch->read_keys_used, batch, (unsigned) (batch->used_scans - 1),
-			(uint64_t*)batch->data_in + (batch->used_scans + 1));
+			batch->data_in + sizeof(uint64_t) * (batch->used_scans + 1));
 	return batch->read_keys_used++;
 }
 
@@ -105,8 +113,15 @@ uint64_t riscv_batch_get_dmi_read(struct riscv_batch *batch, size_t key)
 	assert(key < batch->read_keys_used);
 	size_t index = batch->read_keys[key];
 	assert(index <= batch->used_scans);
-	uint64_t *addr = ((uint64_t *)(batch->data_in) + index);
-	return *addr;
+	uint8_t *base = batch->data_in + 8 * index;
+	return base[0] |
+		((uint64_t) base[1]) << 8 |
+		((uint64_t) base[2]) << 16 |
+		((uint64_t) base[3]) << 24 |
+		((uint64_t) base[4]) << 32 |
+		((uint64_t) base[5]) << 40 |
+		((uint64_t) base[6]) << 48 |
+		((uint64_t) base[7]) << 56;
 }
 
 void riscv_batch_add_nop(struct riscv_batch *batch)
@@ -125,8 +140,8 @@ void riscv_batch_add_nop(struct riscv_batch *batch)
 
 void dump_field(const struct scan_field *field)
 {
-	static const char *op_string[] = {"-", "r", "w", "?"};
-	static const char *status_string[] = {"+", "?", "F", "b"};
+	static const char * const op_string[] = {"-", "r", "w", "?"};
+	static const char * const status_string[] = {"+", "?", "F", "b"};
 
 	if (debug_level < LOG_LVL_DEBUG)
 		return;
