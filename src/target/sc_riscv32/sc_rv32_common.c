@@ -4538,7 +4538,7 @@ sc_riscv32__add_breakpoint_v2(target* const p_target,
 	assert(p_breakpoint);
 
 	if (!(
-		(BKPT_SOFT == p_breakpoint->type && (RVC_enable ? 2 : 4) == p_breakpoint->length) ||
+		(BKPT_SOFT == p_breakpoint->type && (4 == p_breakpoint->length || (RVC_enable && 2 == p_breakpoint->length))) ||
 		(BKPT_HARD == p_breakpoint->type && p_breakpoint->length >= 0 && 0 == p_breakpoint->length % (RVC_enable ? 2 : 4))
 		)) {
 		LOG_ERROR("Invalid breakpoint size: %d", p_breakpoint->length);
