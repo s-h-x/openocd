@@ -2039,12 +2039,12 @@ static error_code
 reg_x__operation_conditions_check(reg const* const p_reg)
 {
 	if (!reg__check(p_reg)) {
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+		return ERROR_TARGET_INVALID;
 	}
 
 	if (p_reg->number >= number_of_regs_X) {
 		LOG_WARNING("Bad GP register %s id=%d", p_reg->name, p_reg->number);
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+		return ERROR_TARGET_INVALID;
 	}
 
 	if (p_reg->number < 16) {
@@ -2088,7 +2088,18 @@ reg_x__get(reg* const p_reg)
 	error_code const check_result = reg_x__operation_conditions_check(p_reg);
 
 	if (ERROR_OK != check_result) {
-		return check_result;
+		if (ERROR_TARGET_RESOURCE_NOT_AVAILABLE != check_result) {
+			return check_result;
+		} else {
+			// Eclipse workaround
+			//@{
+			buf_set_u32(p_reg->value, 0, p_reg->size, UINT32_C(0xFEEDBEEF));
+			p_reg->valid = true;
+			p_reg->dirty = false;
+			//@}
+
+			return ECLIPSE_WORKAROUND(ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
+		}
 	}
 
 	target* p_target = p_reg->arch_info;
