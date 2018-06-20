@@ -2248,7 +2248,7 @@ reg_x0__set(reg* const p_reg, uint8_t* const buf)
 static reg_arch_type const reg_x0_accessors = {.get = reg_x0__get,.set = reg_x0__set,};
 
 static reg*
-prepare_temporary_GP_register(target const* const p_target, int const after_reg)
+prepare_temporary_GP_register(target const* const p_target, uint32_t const after_reg)
 {
 	assert(p_target);
 	assert(p_target->reg_cache);
@@ -2258,23 +2258,35 @@ prepare_temporary_GP_register(target const* const p_target, int const after_reg)
 	reg* p_valid = NULL;
 	reg* p_dirty = NULL;
 
-	for (size_t i = after_reg + 1; i < number_of_regs_X; ++i) {
+	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
+	assert(p_arch);
+	bool const is_ext_I = 0 != (p_arch->misa & BIT_MASK('I' - 'A'));
+	bool const is_ext_E = 0 != (p_arch->misa & BIT_MASK('E' - 'A'));
+	assert(!!is_ext_I ^ !!is_ext_E);
+
+    uint32_t const current_number_of_regs_X = is_ext_E ? 16u : number_of_regs_X;
+	assert(after_reg + 1u < current_number_of_regs_X);
+
+	for (size_t i = after_reg + 1; i < current_number_of_regs_X; ++i) {
 		assert(reg__check(&p_reg_list[i]));
 
-		if (p_reg_list[i].valid) {
-			if (p_reg_list[i].dirty) {
-				p_dirty = &p_reg_list[i];
-				p_valid = p_dirty;
-				break;
-			} else if (!p_valid) {
-				p_valid = &p_reg_list[i];
-			}
+		if (!p_reg_list[i].valid) {
+			continue;
+		}
+
+		if (p_reg_list[i].dirty) {
+			p_dirty = &p_reg_list[i];
+			p_valid = p_dirty;
+			break;
+		} 
+		
+		if (!p_valid) {
+			p_valid = &p_reg_list[i];
 		}
 	}
 
 	if (!p_dirty) {
 		if (!p_valid) {
-			assert(after_reg + 1 < number_of_regs_X);
 			p_valid = &p_reg_list[after_reg + 1];
 
 			if (ERROR_OK != sc_error_code__update(p_target, reg_x__get(p_valid))) {
@@ -2580,7 +2592,7 @@ reg_FPU_S__set(reg* const p_reg, uint8_t* const buf)
 {
 	assert(p_reg);
 	assert(p_reg->size == 32);
-	assert(RISCV_regnum_FP_first <= p_reg->number && p_reg->number < RISCV_regnum_FP_last);
+	assert(RISCV_regnum_FP_first <= p_reg->number && p_reg->number <= RISCV_regnum_FP_last);
 
 	if (!p_reg->exist) {
 		LOG_WARNING("Register %s is unavailable", p_reg->name);
@@ -2791,7 +2803,7 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 {
 	assert(p_reg);
 	assert(p_reg->size == 64);
-	assert(RISCV_regnum_FP_first <= p_reg->number && p_reg->number < RISCV_regnum_FP_last);
+	assert(RISCV_regnum_FP_first <= p_reg->number && p_reg->number <= RISCV_regnum_FP_last);
 
 	if (!p_reg->exist) {
 		LOG_WARNING("Register %s is unavailable", p_reg->name);
