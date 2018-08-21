@@ -14,6 +14,8 @@
 #include <limits.h>
 #include <memory.h>
 
+#define CHECK_ID_CODE 0
+
 /// Queuing operations before force jtag operations
 #define WRITE_BUFFER_THRESHOLD (1u << 18)
 
@@ -1811,7 +1813,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 	uint32_t IDCODE;
 	sc_rv32_IDCODE_get(p_target, &IDCODE);
 
-	if (!sc_rv32__is_IDCODE_valid(p_target, IDCODE)) {
+	if (CHECK_ID_CODE && !sc_rv32__is_IDCODE_valid(p_target, IDCODE)) {
 		/// If IDCODE is invalid, then its is serious error: reset target examined flag
 		/// @todo replace by target_reset_examined;
 		p_target->examined = false;
@@ -3555,7 +3557,7 @@ sc_riscv32__examine(target* const p_target)
 		uint32_t IDCODE;
 		sc_rv32_IDCODE_get(p_target, &IDCODE);
 
-		if (!sc_rv32__is_IDCODE_valid(p_target, IDCODE)) {
+		if (CHECK_ID_CODE && !sc_rv32__is_IDCODE_valid(p_target, IDCODE)) {
 			LOG_ERROR("Invalid IDCODE=0x%08" PRIX32 "!", IDCODE);
 			sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 		} else {
