@@ -692,51 +692,51 @@ sc_error_code__prepend(target const* const p_target, error_code const older_err_
 /// @{
 
 #define RISCV_OPCODE_INSTR_R_TYPE(func7, rs2, rs1, func3, rd, opcode) (\
-        CHECK_OPCODE(opcode), \
-        CHECK_FUNC3(func3), \
-        CHECK_FUNC7(func7), \
-        CHECK_REG(rs2), \
-        CHECK_REG(rs1), \
-        CHECK_REG(rd), \
-        MAKE_TYPE_FIELD(rv_instruction32_type, (func7), 25, 31) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, (rs2), 20, 24) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, (rs1), 15, 19) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, (func3), 12, 14) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, (rd), 7, 11) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, (opcode), 0, 6) )
+		CHECK_OPCODE(opcode), \
+		CHECK_FUNC3(func3), \
+		CHECK_FUNC7(func7), \
+		CHECK_REG(rs2), \
+		CHECK_REG(rs1), \
+		CHECK_REG(rd), \
+		MAKE_TYPE_FIELD(rv_instruction32_type, (func7), 25, 31) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, (rs2), 20, 24) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, (rs1), 15, 19) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, (func3), 12, 14) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, (rd), 7, 11) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, (opcode), 0, 6) )
 
 #define RISCV_OPCODE_INSTR_I_TYPE(imm_11_00, rs1, func3, rd, opcode) ( \
-        CHECK_OPCODE(opcode), \
-        CHECK_FUNC3(func3), \
-        CHECK_REG(rd), \
-        CHECK_REG(rs1), \
-        CHECK_IMM_11_00(imm_11_00), \
-        MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD((imm_11_00), 0, 11), 20, 31) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, (rs1), 15, 19) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, (func3), 12, 14) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, (rd), 7, 11) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, (opcode), 0, 6) )
+		CHECK_OPCODE(opcode), \
+		CHECK_FUNC3(func3), \
+		CHECK_REG(rd), \
+		CHECK_REG(rs1), \
+		CHECK_IMM_11_00(imm_11_00), \
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD((imm_11_00), 0, 11), 20, 31) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, (rs1), 15, 19) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, (func3), 12, 14) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, (rd), 7, 11) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, (opcode), 0, 6) )
 
 #define RISCV_OPCODE_INSTR_S_TYPE(imm_11_00, rs2, rs1, func3, opcode) ( \
-        CHECK_OPCODE(opcode), \
-        CHECK_FUNC3(func3), \
-        CHECK_IMM_11_00(imm_11_00), \
-        CHECK_REG(rs2), \
-        CHECK_REG(rs1), \
-        MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 5, 11), 25, 31) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, rs2, 20, 24) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 0, 4), 7, 11) | \
-        MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6) )
+		CHECK_OPCODE(opcode), \
+		CHECK_FUNC3(func3), \
+		CHECK_IMM_11_00(imm_11_00), \
+		CHECK_REG(rs2), \
+		CHECK_REG(rs1), \
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 5, 11), 25, 31) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, rs2, 20, 24) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, rs1, 15, 19) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, func3, 12, 14) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, EXTRACT_FIELD(imm_11_00, 0, 4), 7, 11) | \
+		MAKE_TYPE_FIELD(rv_instruction32_type, opcode, 0, 6) )
 
 #define RV_INSTR_U_TYPE(imm_31_12, rd, opcode) ( \
-        CHECK_OPCODE(opcode), \
-        CHECK_REG(rd), \
-        CHECK_IMM_31_12(imm_31_12), \
-        MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_31_12, 12, 31), 12, 31) | \
-        MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) | \
-        MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6))
+		CHECK_OPCODE(opcode), \
+		CHECK_REG(rd), \
+		CHECK_IMM_31_12(imm_31_12), \
+		MAKE_TYPE_FIELD(uint32_t, EXTRACT_FIELD(imm_31_12, 12, 31), 12, 31) | \
+		MAKE_TYPE_FIELD(uint32_t, rd, 7, 11) | \
+		MAKE_TYPE_FIELD(uint32_t, opcode, 0, 6))
 
 #define RISCV_OPCODE_ADD(rd, rs1, rs2) RISCV_OPCODE_INSTR_R_TYPE(0b0000000, (rs2), (rs1), 0u, (rd), 0b0110011u)
 #define RISCV_OPCODE_FMV_X_S(rd, rs1_fp) RISCV_OPCODE_INSTR_R_TYPE(0x70u, 0u, (rs1_fp), 0u, (rd), 0x53u)
@@ -2266,7 +2266,7 @@ prepare_temporary_GP_register(target const* const p_target, uint32_t const after
 	bool const is_ext_E = 0 != (p_arch->misa & BIT_MASK('E' - 'A'));
 	assert(!!is_ext_I ^ !!is_ext_E);
 
-    uint32_t const current_number_of_regs_X = is_ext_E ? 16u : number_of_regs_X;
+	uint32_t const current_number_of_regs_X = is_ext_E ? 16u : number_of_regs_X;
 	assert(after_reg + 1u < current_number_of_regs_X);
 
 	for (size_t i = after_reg + 1; i < current_number_of_regs_X; ++i) {
