@@ -592,7 +592,7 @@ static bool
 sc_rv32__is_IDCODE_valid(target* const p_target, uint32_t const IDCODE)
 {
 	assert(p_target);
-	assert(p_target->tap);
+	assert(p_target->tap && p_target->tap->enabled);
 	return p_target->tap->hasidcode && IDCODE == p_target->tap->idcode;
 }
 
@@ -826,6 +826,10 @@ IR_select_force(target const* const p_target, TAP_IR_e const new_instr)
 {
 	assert(p_target);
 	assert(p_target->tap);
+	if (!p_target->tap->enabled) {
+		sc_error_code__update(p_target, ERROR_JTAG_STATE_INVALID);
+		return;
+	}
 	assert(p_target->tap->ir_length == TAP_length_of_IR);
 	uint8_t out_buffer[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {};
 	buf_set_u32(out_buffer, 0, TAP_length_of_IR, new_instr);
@@ -876,7 +880,7 @@ read_only_32_bits_regs(target const* const p_target, TAP_IR_e ir, uint32_t* p_va
 			.num_bits = TAP_length_of_RO_32,
 			.in_value = result_buffer,
 		};
-		assert(p_target->tap);
+		assert(p_target->tap && p_target->tap->enabled);
 		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
 
 		// enforce jtag_execute_queue() to obtain result
@@ -1121,7 +1125,7 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 	};
 
 	/// Add DR scan to queue.
-	assert(p_target->tap);
+	assert(p_target->tap && p_target->tap->enabled);
 	jtag_add_dr_scan_check(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
 
 	/// Enforse jtag_execute_queue() to get values
@@ -1157,7 +1161,7 @@ sc_rv32_DC__unlock(target const* const p_target, uint32_t* p_lock_context)
 	LOG_WARNING("========= Try to unlock ==============");
 
 	assert(p_target);
-	assert(p_target->tap);
+	assert(p_target->tap && p_target->tap->enabled);
 	assert(p_target->tap->ir_length == TAP_length_of_IR);
 
 	{
@@ -1700,7 +1704,7 @@ sc_rv32_HART0_clear_error(target* const p_target)
 	assert(p_target);
 	sc_riscv32__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	assert(p_target->tap);
+	assert(p_target->tap && p_target->tap->enabled);
 	assert(p_target->tap->ir_length == TAP_length_of_IR);
 
 	{
@@ -1757,7 +1761,7 @@ sc_rv32_CORE_clear_errors(target* const p_target)
 	assert(p_target);
 	sc_riscv32__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	assert(p_target->tap);
+	assert(p_target->tap && p_target->tap->enabled);
 	assert(p_target->tap->ir_length == TAP_length_of_IR);
 
 	{
@@ -3711,18 +3715,16 @@ sc_riscv32__soft_reset_halt(target* const p_target)
 static error_code
 scrv32_sys_reset__set(target* const p_target, bool const active)
 {
-	jtag_add_tlr();
 	IR_select(p_target, TAP_instruction_SYS_CTRL);
 	uint8_t out = active ? 1 : 0;
 	scan_field const field = {
 		.num_bits = TAP_length_of_SYS_CTRL,
 		.out_value = &out,
 	};
-	assert(p_target->tap);
+	assert(p_target->tap && p_target->tap->enabled);
 	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
 	sc_error_code__update(p_target, jtag_execute_queue());
 	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, *field.out_value);
-	jtag_add_tlr();
 
 	if (active) {
 		p_target->state = TARGET_RESET;
@@ -4104,7 +4106,7 @@ sc_riscv32__write_phys_memory(target* const p_target,
 					data_scan_fields[0].out_value = buffer;
 
 					while (ERROR_OK == sc_error_code__get(p_target) && 0 < count) {
-						assert(p_target->tap);
+						assert(p_target->tap && p_target->tap->enabled);
 						data_scan_fields[0].out_value = buffer;
 						jtag_add_dr_scan_check(p_target->tap, ARRAY_LEN(data_scan_fields), data_scan_fields, TAP_IDLE);
 
