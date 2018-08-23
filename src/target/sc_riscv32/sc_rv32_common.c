@@ -14,8 +14,6 @@
 #include <limits.h>
 #include <memory.h>
 
-#define CHECK_ID_CODE 0
-
 /// Queuing operations before force jtag operations
 #define WRITE_BUFFER_THRESHOLD (1u << 18)
 
@@ -591,9 +589,10 @@ static char const def_GP_regs_name[] = "general";
 static bool
 sc_rv32__is_IDCODE_valid(target* const p_target, uint32_t const IDCODE)
 {
-	assert(p_target);
-	assert(p_target->tap && p_target->tap->enabled);
-	return p_target->tap->hasidcode && IDCODE == p_target->tap->idcode;
+	assert(p_target && p_target->tap);
+	return
+		p_target->tap->enabled && 
+		(!p_target->tap->hasidcode || IDCODE == p_target->tap->idcode);
 }
 
 /** @brief Check Debug controller version for compatibility
@@ -666,7 +665,7 @@ sc_error_code__update(target const* const p_target, error_code const a_error_cod
 	if (ERROR_OK != old_code || ERROR_OK == a_error_code) {
 		return old_code;
 	} else {
-		LOG_DEBUG("Set new error code: %d", a_error_code);
+		LOG_DEBUG("Target %s: Set new error code: %d", p_target->cmd_name, a_error_code);
 		return sc_error_code__set(p_target, a_error_code);
 	}
 }
@@ -681,7 +680,7 @@ sc_error_code__prepend(target const* const p_target, error_code const older_err_
 	if (ERROR_OK == older_err_code) {
 		return sc_error_code__get(p_target);
 	} else {
-		LOG_DEBUG("Reset error code to previous state: %d", older_err_code);
+		LOG_DEBUG("Target %s: Reset error code to previous state: %d", p_target->cmd_name, older_err_code);
 		return sc_error_code__set(p_target, older_err_code);
 	}
 }
@@ -835,7 +834,7 @@ IR_select_force(target const* const p_target, TAP_IR_e const new_instr)
 	buf_set_u32(out_buffer, 0, TAP_length_of_IR, new_instr);
 	scan_field field = {.num_bits = p_target->tap->ir_length,.out_value = out_buffer};
 	jtag_add_ir_scan(p_target->tap, &field, TAP_IDLE);
-	LOG_DEBUG("irscan %s %d", p_target->cmd_name, new_instr);
+	LOG_DEBUG("irscan %s %d", p_target->tap->dotted_name, new_instr);
 }
 
 /** @brief Cached version of instruction register selection
@@ -885,11 +884,11 @@ read_only_32_bits_regs(target const* const p_target, TAP_IR_e ir, uint32_t* p_va
 
 		// enforce jtag_execute_queue() to obtain result
 		sc_error_code__update(p_target, jtag_execute_queue());
-		LOG_DEBUG("drscan %s %d 0 ; # %08X", p_target->cmd_name, field.num_bits, buf_get_u32(result_buffer, 0, TAP_length_of_RO_32));
+		LOG_DEBUG("drscan %s %d 0 ; # %08X", p_target->tap->dotted_name, field.num_bits, buf_get_u32(result_buffer, 0, TAP_length_of_RO_32));
 
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			/// Error state can be updated in DR scan
-			LOG_ERROR("JTAG error %d", sc_error_code__get(p_target));
+			LOG_ERROR("JTAG TAP %s: error %d", p_target->tap->dotted_name, sc_error_code__get(p_target));
 		} else {
 			assert(p_value);
 			*p_value = buf_get_u32(result_buffer, 0, TAP_length_of_RO_32);
@@ -949,7 +948,7 @@ sc_rv32_DBG_STATUS_get(target const* const p_target, uint32_t* p_value)
 	assert(p_value);
 
 	if ((*p_value & result_mask) != (good_result & result_mask)) {
-		LOG_WARNING("DBG_STATUS == 0x%08X", *p_value);
+		LOG_WARNING("Target %s: DBG_STATUS == 0x%08X", p_target->cmd_name, *p_value);
 	}
 
 	return sc_error_code__get(p_target);
@@ -1006,11 +1005,12 @@ DAP_CTRL_REG_set_force(target const* const p_target, uint8_t const set_dap_unit_
 			.check_mask = &obj_DAP_status_MASK,
 		};
 
+		assert(p_target->tap && p_target->tap->enabled);
 		jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
 
 		/// Enforce jtag_execute_queue() to get status.
 		error_code const jtag_status = jtag_execute_queue();
-		LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, set_dap_unit_group, status);
+		LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->tap->dotted_name, field.num_bits, set_dap_unit_group, status);
 
 		if (ERROR_OK == jtag_status) {
 			/// Update DAP_CTRL cache if no errors
@@ -1025,10 +1025,10 @@ DAP_CTRL_REG_set_force(target const* const p_target, uint8_t const set_dap_unit_
 				DBG_STATUS_bit_Ready;
 
 			if ((dbg_status & dbg_status_mask) != (dbg_status_check_value & dbg_status_mask)) {
-				LOG_ERROR("JTAG error %d, operation_status=0x%1X, dbg_status=0x%08" PRIX32, jtag_status, (unsigned)(status), dbg_status);
+				LOG_ERROR("JTAG TAP %s error %d, operation_status=0x%1X, dbg_status=0x%08" PRIX32, p_target->tap->dotted_name, jtag_status, (unsigned)(status), dbg_status);
 				sc_error_code__update(p_target, jtag_status);
 			} else {
-				LOG_WARNING("JTAG error %d, operation_status=0x%1X, but dbg_status=0x%08" PRIX32, jtag_status, (unsigned)(status), dbg_status);
+				LOG_WARNING("JTAG TAP %s error %d, operation_status=0x%1X, but dbg_status=0x%08" PRIX32, p_target->tap->dotted_name, jtag_status, (unsigned)(status), dbg_status);
 			}
 		}
 	}
@@ -1064,11 +1064,12 @@ DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_gro
 		.check_value = &set_dap_unit_group,
 		.check_mask = &set_dap_unit_group_mask,
 	};
+	assert(p_target->tap && p_target->tap->enabled);
 	jtag_add_dr_scan_check(p_target->tap, 1, &field, TAP_IDLE);
 
 	/// Enforce jtag_execute_queue() to get get_dap_unit_group.
 	sc_error_code__update(p_target, jtag_execute_queue());
-	LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->cmd_name, field.num_bits, 0, get_dap_unit_group);
+	LOG_DEBUG("drscan %s %d 0x%1X ; # %1X", p_target->tap->dotted_name, field.num_bits, 0, get_dap_unit_group);
 
 	if (ERROR_OK == sc_error_code__get(p_target)) {
 		/// If no errors
@@ -1077,7 +1078,7 @@ DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_gro
 			update_DAP_CTRL_cache(p_target, get_dap_unit_group);
 		} else {
 			/// else report error.
-			LOG_ERROR("Unit/Group verification error: set 0x%1X, but get 0x%1X!", set_dap_unit_group, get_dap_unit_group);
+			LOG_ERROR("Target %s Unit/Group verification error: set 0x%1X, but get 0x%1X!", p_target->cmd_name, set_dap_unit_group, get_dap_unit_group);
 			sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 		}
 	}
@@ -1131,7 +1132,7 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 	/// Enforse jtag_execute_queue() to get values
 	sc_error_code__update(p_target, jtag_execute_queue());
 	/// Log DR scan debug information.
-	LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X ; # %08X %1X", p_target->cmd_name,
+	LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X ; # %08X %1X", p_target->tap->dotted_name,
 			  fields[0].num_bits, DAP_OPCODE_EXT,
 			  fields[1].num_bits, DAP_OPCODE,
 			  buf_get_u32(dbg_data, 0, TAP_length_of_DAP_CMD_OPCODE_EXT), DAP_OPSTATUS);
@@ -1139,7 +1140,7 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 	if (ERROR_OK == sc_error_code__get(p_target)) {
 		if ((DAP_OPSTATUS & DAP_status_mask) != DAP_status_good) {
 			/// Check and report if error was detected.
-			LOG_ERROR("DAP_OPSTATUS == 0x%1X", (unsigned)(DAP_OPSTATUS));
+			LOG_ERROR("Target %s DAP_OPSTATUS == 0x%1X", p_target->cmd_name, (unsigned)(DAP_OPSTATUS));
 			sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 		} else if (p_result) {
 			/// or copy result bits to output if 'p_result' pointer is not NULL.
@@ -1158,18 +1159,16 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 static inline error_code
 sc_rv32_DC__unlock(target const* const p_target, uint32_t* p_lock_context)
 {
-	LOG_WARNING("========= Try to unlock ==============");
+	LOG_WARNING("========= Try to unlock target %s ==============", p_target->cmd_name);
 
-	assert(p_target);
-	assert(p_target->tap && p_target->tap->enabled);
-	assert(p_target->tap->ir_length == TAP_length_of_IR);
+	assert(p_target && p_target->tap && p_target->tap->enabled && p_target->tap->ir_length == TAP_length_of_IR);
 
 	{
 		/// Enqueue selection of DAP_CTRL IR.
 		static uint8_t const ir_out_buffer_DAP_CTRL[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {TAP_instruction_DAP_CTRL};
 		/// @todo jtag_add_ir_scan need non-const scan_field
 		static scan_field ir_field_DAP_CTRL = {.num_bits = TAP_length_of_IR,.out_value = ir_out_buffer_DAP_CTRL};
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CTRL);
+		LOG_DEBUG("irscan %s %d", p_target->tap->dotted_name, TAP_instruction_DAP_CTRL);
 		jtag_add_ir_scan(p_target->tap, &ir_field_DAP_CTRL, TAP_IDLE);
 	}
 
@@ -1179,7 +1178,7 @@ sc_rv32_DC__unlock(target const* const p_target, uint32_t* p_lock_context)
 		static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof set_dap_unit_group, "Bad size");
 		static scan_field const dr_field_DAP_CTRL = {.num_bits = TAP_length_of_DAP_CTRL,.out_value = &set_dap_unit_group};
 		invalidate_DAP_CTR_cache(p_target);
-		LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name,
+		LOG_DEBUG("drscan %s %d 0x%1X", p_target->tap->dotted_name,
 				  dr_field_DAP_CTRL.num_bits, set_dap_unit_group);
 		jtag_add_dr_scan(p_target->tap, 1, &dr_field_DAP_CTRL, TAP_IDLE);
 	}
@@ -1188,7 +1187,7 @@ sc_rv32_DC__unlock(target const* const p_target, uint32_t* p_lock_context)
 		/// Enqueue selection of DAP_CMD IR.
 		static uint8_t const ir_out_buffer_DAP_CMD[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {TAP_instruction_DAP_CMD};
 		static scan_field ir_field_DAP_CMD = {.num_bits = TAP_length_of_IR,.out_value = ir_out_buffer_DAP_CMD};
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CMD);
+		LOG_DEBUG("irscan %s %d", p_target->tap->dotted_name, TAP_instruction_DAP_CMD);
 		jtag_add_ir_scan(p_target->tap, &ir_field_DAP_CMD, TAP_IDLE);
 	}
 
@@ -1202,7 +1201,7 @@ sc_rv32_DC__unlock(target const* const p_target, uint32_t* p_lock_context)
 			{.num_bits = TAP_length_of_DAP_CMD_OPCODE,.out_value = &dap_opcode_UNLOCK}
 		};
 
-		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
+		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->tap->dotted_name,
 				  dr_fields_UNLOCK[0].num_bits, buf_get_u32(dap_opcode_ext_UNLOCK, 0, TAP_length_of_DAP_CMD_OPCODE_EXT),
 				  dr_fields_UNLOCK[1].num_bits, dap_opcode_UNLOCK);
 		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(dr_fields_UNLOCK), dr_fields_UNLOCK, TAP_IDLE);
@@ -1212,7 +1211,7 @@ sc_rv32_DC__unlock(target const* const p_target, uint32_t* p_lock_context)
 		/// Enqueue DBG_STATUS IR selection.
 		static uint8_t const ir_out_buffer_DBG_STATUS[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {TAP_instruction_DBG_STATUS};
 		static scan_field ir_field_DBG_STATUS = {.num_bits = TAP_length_of_IR,.out_value = ir_out_buffer_DBG_STATUS};
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DBG_STATUS);
+		LOG_DEBUG("irscan %s %d", p_target->tap->dotted_name, TAP_instruction_DBG_STATUS);
 		jtag_add_ir_scan(p_target->tap, &ir_field_DBG_STATUS, TAP_IDLE);
 	}
 
@@ -1229,11 +1228,11 @@ sc_rv32_DC__unlock(target const* const p_target, uint32_t* p_lock_context)
 			ERROR_OK == status &&
 			/// and if status is OK, check that LOCK bit is zero now.
 			0 == (scan_status & DBG_STATUS_bit_Lock);
-		LOG_DEBUG("drscan %s %d 0x%08X ; # 0x%08X", p_target->cmd_name,
+		LOG_DEBUG("drscan %s %d 0x%08X ; # 0x%08X", p_target->tap->dotted_name,
 				  dr_field_DBG_STATUS.num_bits, 0,
 				  scan_status);
 		uint32_t const lock_context = buf_get_u32(lock_context_buf, 0, TAP_length_of_DAP_CMD_OPCODE_EXT);
-		LOG_DEBUG("%s context=0x%08X, status=0x%08X", ok ? "Unlock succsessful!" : "Unlock unsuccsessful!",
+		LOG_DEBUG("Target %s: %s context=0x%08X, status=0x%08X", p_target->cmd_name, ok ? "Unlock succsessful!" : "Unlock unsuccsessful!",
 				  lock_context,
 				  scan_status);
 		assert(p_lock_context);
@@ -1332,7 +1331,7 @@ REGTRANS_write(target const* const p_target, type_dbgc_unit_id_e func_unit, uint
 	if (ERROR_OK != sc_rv32_DAP_CTRL_REG_set(p_target, func_unit, func_group)) {
 		/// On error report and do not scan.
 		/// @todo LOG_ERROR?
-		LOG_WARNING("DAP_CTRL_REG_set error");
+		LOG_WARNING("Target %s DAP_CTRL_REG_set error", p_target->cmd_name);
 		return sc_error_code__get(p_target);
 	}
 
@@ -1440,10 +1439,11 @@ sc_rv32_HART_REGTRANS_write_and_check(target const* const p_target, HART_REGTRAN
 			sc_rv32_HART_REGTRANS_read(p_target, index, &get_value);
 
 			if (get_value != set_value) {
-				LOG_ERROR("Write HART_REGTRANS"
+				LOG_ERROR("Target %s: write HART_REGTRANS"
 						  " #%u"
 						  " with value 0x%08" PRIX32
 						  ", but re-read value is 0x%08" PRIX32,
+						  p_target->cmd_name,
 						  (unsigned)(index),
 						  set_value,
 						  get_value);
@@ -1606,9 +1606,10 @@ update_debug_reason(target* const p_target)
 	}
 
 	if (debug_reason != p_target->debug_reason) {
-		LOG_DEBUG("New debug reason:"
+		LOG_DEBUG("Target %s New debug reason:"
 				  " 0x%d"
 				  " (%s)",
+				  p_target->cmd_name,
 				  (unsigned)(debug_reason),
 				  debug_reason >= ARRAY_LEN(reasons_names) ? "unknown" : reasons_names[debug_reason]);
 		p_target->debug_reason = debug_reason;
@@ -1632,33 +1633,33 @@ update_debug_status(target* const p_target)
 		return;
 	}
 
-	LOG_DEBUG("debug_status changed: old=%d, new=%d", old_state, new_state);
+	LOG_DEBUG("Target %s: Debug_status changed: old=%d, new=%d", p_target->cmd_name, old_state, new_state);
 
 	p_target->state = new_state;
 
 	switch (new_state) {
 	case TARGET_HALTED:
 		update_debug_reason(p_target);
-		LOG_DEBUG("TARGET_EVENT_HALTED");
+		LOG_DEBUG("Target %s: TARGET_EVENT_HALTED", p_target->cmd_name);
 		target_call_event_callbacks(p_target, TARGET_EVENT_HALTED);
 		break;
 
 	case TARGET_RESET:
 		update_debug_reason(p_target);
-		LOG_DEBUG("TARGET_EVENT_RESET_ASSERT");
+		LOG_DEBUG("Target %s: TARGET_EVENT_RESET_ASSERT", p_target->cmd_name);
 		target_call_event_callbacks(p_target, TARGET_EVENT_RESET_ASSERT);
 		break;
 
 	case TARGET_RUNNING:
-		LOG_DEBUG("New debug reason: 0x%08X (DBG_REASON_NOTHALTED)", DBG_REASON_NOTHALTED);
+		LOG_DEBUG("Target %s: New debug reason: 0x%08X (DBG_REASON_NOTHALTED)", p_target->cmd_name, DBG_REASON_NOTHALTED);
 		p_target->debug_reason = DBG_REASON_NOTHALTED;
-		LOG_DEBUG("TARGET_EVENT_RESUMED");
+		LOG_DEBUG("Target %s: TARGET_EVENT_RESUMED", p_target->cmd_name);
 		target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
 		break;
 
 	case TARGET_UNKNOWN:
 	default:
-		LOG_WARNING("TARGET_UNKNOWN %d", new_state);
+		LOG_WARNING("Target %s: TARGET_UNKNOWN %d", p_target->cmd_name, new_state);
 		break;
 	}
 }
@@ -1686,12 +1687,12 @@ try_to_get_ready(target* const p_target, uint32_t* p_core_status)
 		}
 
 		if (0 != (*p_core_status & DBG_STATUS_bit_Ready)) {
-			LOG_DEBUG("Ready: 0x%08X after %d requests", *p_core_status, i);
+			LOG_DEBUG("Target %s: Ready: 0x%08X after %d requests", p_target->cmd_name, *p_core_status, i);
 			return sc_error_code__get(p_target);
 		}
 	}
 
-	LOG_ERROR("Not ready: 0x%08X after %d requests", *p_core_status, max_retries);
+	LOG_ERROR("Target %s: Not ready: 0x%08X after %d requests", p_target->cmd_name, *p_core_status, max_retries);
 	return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 }
 
@@ -1700,12 +1701,11 @@ try_to_get_ready(target* const p_target, uint32_t* p_core_status)
 static inline void
 sc_rv32_HART0_clear_error(target* const p_target)
 {
-	LOG_DEBUG("========= Try to clear HART0 errors ============");
 	assert(p_target);
+	LOG_DEBUG("========= Target %s: Try to clear HART0 errors ============", p_target->cmd_name);
 	sc_riscv32__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	assert(p_target->tap && p_target->tap->enabled);
-	assert(p_target->tap->ir_length == TAP_length_of_IR);
+	assert(p_target->tap && p_target->tap->enabled && p_target->tap->ir_length == TAP_length_of_IR);
 
 	{
 		/// Enqueue irscan to select DAP_CTRL IR.
@@ -1713,7 +1713,7 @@ sc_rv32_HART0_clear_error(target* const p_target)
 		buf_set_u32(ir_dap_ctrl_out_buffer, 0, TAP_length_of_IR, TAP_instruction_DAP_CTRL);
 		scan_field ir_dap_ctrl_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_ctrl_out_buffer};
 		jtag_add_ir_scan(p_target->tap, &ir_dap_ctrl_field, TAP_IDLE);
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CTRL);
+		LOG_DEBUG("irscan %s %d", p_target->tap->dotted_name, TAP_instruction_DAP_CTRL);
 	}
 
 	{
@@ -1722,7 +1722,7 @@ sc_rv32_HART0_clear_error(target* const p_target)
 		/// Enqueue DR scan to set DAP_CTRL HART_DBGCMD group and HART_0 unit (0x1u)
 		uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_unit_id_HART_0, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_functional_group_HART_DBGCMD, 0, 1);
 		scan_field const dr_dap_ctrl_field = {.num_bits = TAP_length_of_DAP_CTRL,.out_value = &set_dap_unit_group};
-		LOG_DEBUG("drscan %s 0x%1X 0x%1X ; ", p_target->cmd_name, dr_dap_ctrl_field.num_bits, set_dap_unit_group);
+		LOG_DEBUG("drscan %s 0x%1X 0x%1X ; ", p_target->tap->dotted_name, dr_dap_ctrl_field.num_bits, set_dap_unit_group);
 		jtag_add_dr_scan(p_target->tap, 1, &dr_dap_ctrl_field, TAP_IDLE);
 	}
 
@@ -1731,7 +1731,7 @@ sc_rv32_HART0_clear_error(target* const p_target)
 		uint8_t ir_dap_cmd_out_buffer[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {};
 		buf_set_u32(ir_dap_cmd_out_buffer, 0, TAP_length_of_IR, TAP_instruction_DAP_CMD);
 		scan_field ir_dap_cmd_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_cmd_out_buffer};
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CMD);
+		LOG_DEBUG("irscan %s %d", p_target->tap->dotted_name, TAP_instruction_DAP_CMD);
 		jtag_add_ir_scan(p_target->tap, &ir_dap_cmd_field, TAP_IDLE);
 	}
 
@@ -1745,7 +1745,7 @@ sc_rv32_HART0_clear_error(target* const p_target)
 			{.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext},
 			{.num_bits = TAP_length_of_DAP_CMD_OPCODE,.out_value = &dap_opcode}
 		};
-		LOG_DEBUG("drscan %s 0x%1X 0x%08X 0x%1X 0x%08X ; ", p_target->cmd_name,
+		LOG_DEBUG("drscan %s 0x%1X 0x%08X 0x%1X 0x%08X ; ", p_target->tap->dotted_name,
 				  fields[0].num_bits, opcode_ext,
 				  fields[1].num_bits, DBG_CTRL_index);
 		jtag_add_dr_scan(p_target->tap, ARRAY_LEN(fields), fields, TAP_IDLE);
@@ -1757,19 +1757,18 @@ sc_rv32_HART0_clear_error(target* const p_target)
 static inline void
 sc_rv32_CORE_clear_errors(target* const p_target)
 {
-	LOG_DEBUG("========= Try to clear core errors ============");
+	LOG_DEBUG("========= Target %s: Try to clear core errors ============", p_target->cmd_name);
 	assert(p_target);
 	sc_riscv32__Arch* const p_arch = p_target->arch_info;
 	assert(p_arch);
-	assert(p_target->tap && p_target->tap->enabled);
-	assert(p_target->tap->ir_length == TAP_length_of_IR);
+	assert(p_target->tap && p_target->tap->enabled && p_target->tap->ir_length == TAP_length_of_IR);
 
 	{
 		uint8_t ir_dap_ctrl_out_buffer[NUM_BYTES_FOR_BITS(TAP_length_of_IR)] = {};
 		buf_set_u32(ir_dap_ctrl_out_buffer, 0, TAP_length_of_IR, TAP_instruction_DAP_CTRL);
 		scan_field ir_dap_ctrl_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_ctrl_out_buffer};
 		jtag_add_ir_scan(p_target->tap, &ir_dap_ctrl_field, TAP_IDLE);
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CTRL);
+		LOG_DEBUG("irscan %s %d", p_target->tap->dotted_name, TAP_instruction_DAP_CTRL);
 	}
 
 	{
@@ -1778,7 +1777,7 @@ sc_rv32_CORE_clear_errors(target* const p_target)
 
 		uint8_t const set_dap_unit_group = MAKE_TYPE_FIELD(uint8_t, DBGC_unit_id_CORE, 2, 3) | MAKE_TYPE_FIELD(uint8_t, DBGC_functional_group_CORE_REGTRANS, 0, 1);
 		scan_field const field = {.num_bits = TAP_length_of_DAP_CTRL,.out_value = &set_dap_unit_group};
-		LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, set_dap_unit_group);
+		LOG_DEBUG("drscan %s %d 0x%1X", p_target->tap->dotted_name, field.num_bits, set_dap_unit_group);
 		jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
 	}
 
@@ -1787,7 +1786,7 @@ sc_rv32_CORE_clear_errors(target* const p_target)
 		buf_set_u32(ir_dap_cmd_out_buffer, 0, TAP_length_of_IR, TAP_instruction_DAP_CMD);
 		scan_field ir_dap_cmd_field = {.num_bits = p_target->tap->ir_length,.out_value = ir_dap_cmd_out_buffer};
 		jtag_add_ir_scan(p_target->tap, &ir_dap_cmd_field, TAP_IDLE);
-		LOG_DEBUG("irscan %s %d", p_target->cmd_name, TAP_instruction_DAP_CMD);
+		LOG_DEBUG("irscan %s %d", p_target->tap->dotted_name, TAP_instruction_DAP_CMD);
 	}
 
 	{
@@ -1798,7 +1797,7 @@ sc_rv32_CORE_clear_errors(target* const p_target)
 			{.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext},
 			{.num_bits = TAP_length_of_DAP_CMD_OPCODE,.out_value = &dap_opcode},
 		};
-		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->cmd_name,
+		LOG_DEBUG("drscan %s %d 0x%08X %d 0x%1X", p_target->tap->dotted_name,
 				  fields[0].num_bits,
 				  buf_get_u32(dap_opcode_ext, 0, 32),
 				  fields[1].num_bits, dap_opcode);
@@ -1814,16 +1813,20 @@ check_and_repair_debug_controller_errors(target* const p_target)
 	jtag_add_tlr();
 #endif
 	invalidate_DAP_CTR_cache(p_target);
-	uint32_t IDCODE;
-	sc_rv32_IDCODE_get(p_target, &IDCODE);
+#if 0
+	{
+		uint32_t IDCODE;
+		sc_rv32_IDCODE_get(p_target, &IDCODE);
 
-	if (CHECK_ID_CODE && !sc_rv32__is_IDCODE_valid(p_target, IDCODE)) {
-		/// If IDCODE is invalid, then its is serious error: reset target examined flag
-		/// @todo replace by target_reset_examined;
-		p_target->examined = false;
-		LOG_ERROR("TAP controller/JTAG error! Try to re-examine!");
-		return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
+		if (!sc_rv32__is_IDCODE_valid(p_target, IDCODE)) {
+			/// If IDCODE is invalid, then its is serious error: reset target examined flag
+			/// @todo replace by target_reset_examined;
+			p_target->examined = false;
+			LOG_ERROR("TAP %s controller/JTAG error! Try to re-examine!", p_target->tap->dotted_name);
+			return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
+		}
 	}
+#endif
 
 	uint32_t core_status;
 	try_to_get_ready(p_target, &core_status);
@@ -1832,7 +1835,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		/// If no DBG_STATUS_bit_Ready then any actions are disabled.
 		/// @todo replace by target_reset_examined;
 		p_target->examined = false;
-		LOG_ERROR("Debug controller unrecoverable error!");
+		LOG_ERROR("Target %s: Debug controller unrecoverable error!", p_target->cmd_name);
 		return sc_error_code__get(p_target);
 	}
 
@@ -1851,23 +1854,23 @@ check_and_repair_debug_controller_errors(target* const p_target)
 
 	/// First of all, try to unlock before any following actions
 	if (DBG_STATUS_bit_Lock == (core_status & DBG_STATUS_bit_Lock)) {
-		LOG_ERROR("Lock detected: 0x%08X", core_status);
+		LOG_ERROR("Target %s: Lock detected: 0x%08X", p_target->cmd_name, core_status);
 		uint32_t lock_context;
 
 		if (ERROR_OK != sc_rv32_DC__unlock(p_target, &lock_context)) {
 			/// @todo replace by target_reset_examined;
 			p_target->examined = false;
 			/// return with error_code != ERROR_OK if unlock was unsuccsesful
-			LOG_ERROR("Unlock unsucsessful with lock_context=0x%8X, unrecoverable error", lock_context);
+			LOG_ERROR("Target %s: Unlock unsucsessful with lock_context=0x%8X, unrecoverable error", p_target->cmd_name, lock_context);
 			return sc_error_code__get(p_target);
 		}
 
 		sc_rv32_DBG_STATUS_get(p_target, &core_status);
-		LOG_INFO("Lock with lock_context=0x%08X repaired: 0x%08X", lock_context, core_status);
+		LOG_INFO("Target %s: Lock with lock_context=0x%08X repaired: 0x%08X", p_target->cmd_name, lock_context, core_status);
 	}
 
 	if (DBG_STATUS_bit_Ready != (core_status & (DBG_STATUS_bit_Lock | DBG_STATUS_bit_Ready))) {
-		LOG_ERROR("Core_status should be ready and unlocked!: 0x%08X", core_status);
+		LOG_ERROR("Target %s: Core_status should be ready and unlocked!: 0x%08X", p_target->cmd_name, core_status);
 		/// @todo replace by target_reset_examined;
 		p_target->examined = false;
 		return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
@@ -1876,7 +1879,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 	static uint32_t const hart0_err_bits = DBG_STATUS_bit_HART0_Err /* | DBG_STATUS_bit_HART0_Err_Stky*/;
 
 	if (0 != (core_status & hart0_err_bits)) {
-		LOG_WARNING("Hart errors detected: 0x%08X", core_status);
+		LOG_WARNING("Target %s: Hart errors detected: 0x%08X", p_target->cmd_name, core_status);
 	}
 
 	sc_rv32_HART0_clear_error(p_target);
@@ -1884,7 +1887,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 	sc_rv32_DBG_STATUS_get(p_target, &core_status);
 
 	if (0 != (core_status & hart0_err_bits)) {
-		LOG_ERROR("Hart errors not fixed!: 0x%08X", core_status);
+		LOG_ERROR("Target %s: Hart errors not fixed!: 0x%08X", p_target->cmd_name, core_status);
 	}
 
 	static uint32_t const cdsr_err_bits =
@@ -1894,7 +1897,7 @@ check_and_repair_debug_controller_errors(target* const p_target)
 		DBG_STATUS_bit_Err_DAP_Opcode;
 
 	if (0 != (core_status & cdsr_err_bits)) {
-		LOG_WARNING("Core errors detected: 0x%08X", core_status);
+		LOG_WARNING("Target %s: Core errors detected: 0x%08X", p_target->cmd_name, core_status);
 	}
 
 	sc_error_code__get_and_clear(p_target);
@@ -1903,18 +1906,19 @@ check_and_repair_debug_controller_errors(target* const p_target)
 	sc_rv32_DBG_STATUS_get(p_target, &core_status);
 
 	if (0 != (core_status & cdsr_err_bits)) {
-		LOG_ERROR("Core errors not fixed!: 0x%08X", core_status);
+		LOG_ERROR("Target %s: Core errors not fixed!: 0x%08X", p_target->cmd_name, core_status);
 		sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 	}
 
-	LOG_INFO("Core status: 0x%08X", core_status);
+	LOG_INFO("Target %s: Core status: 0x%08X", p_target->cmd_name, core_status);
 	return sc_error_code__get(p_target);
 }
 
 static error_code
 sc_riscv32__update_status(target* const p_target)
 {
-	LOG_DEBUG("update_status");
+	assert(p_target);
+	LOG_DEBUG("Target %s: update_status", p_target->cmd_name);
 	error_code const old_err_code = sc_error_code__get_and_clear(p_target);
 
 	if (ERROR_OK == check_and_repair_debug_controller_errors(p_target)) {
@@ -1929,7 +1933,7 @@ sc_rv32_check_that_target_halted(target* const p_target)
 {
 	if (ERROR_OK == sc_riscv32__update_status(p_target)) {
 		if (p_target->state != TARGET_HALTED) {
-			LOG_ERROR("Target not halted");
+			LOG_ERROR("Target %s not halted", p_target->cmd_name);
 			return sc_error_code__update(p_target, ERROR_TARGET_NOT_HALTED);
 		}
 	}
@@ -1947,8 +1951,9 @@ reg__invalidate(reg* const p_reg)
 	if (p_reg->exist) {
 		if (p_reg->dirty) {
 			/// Log error if invalidate dirty (not updated) register
-			LOG_ERROR("Invalidate dirty register: %s", p_reg->name);
 			target* const p_target = p_reg->arch_info;
+			assert(p_target);
+			LOG_ERROR("Target %s: Invalidate dirty register: %s", p_target->cmd_name, p_reg->name);
 			sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 		}
 
@@ -1963,7 +1968,9 @@ reg__set_valid_value_to_cache(reg* const p_reg, uint32_t const value)
 	assert(p_reg);
 	assert(p_reg->size <= CHAR_BIT * sizeof value);
 
-	LOG_DEBUG("Updating cache from register %s to 0x%08X", p_reg->name, value);
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
+	LOG_DEBUG("Target %s: Updating cache from register %s to 0x%08X", p_target->cmd_name, p_reg->name, value);
 
 	assert(p_reg->exist);
 	assert(p_reg->value);
@@ -1980,13 +1987,16 @@ reg__set_new_cache_value(reg* const p_reg, uint8_t* const buf)
 	assert(p_reg->exist);
 	assert(buf);
 
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
+
 	switch (p_reg->size) {
 	case 32:
-		LOG_DEBUG("Set register %s cache to 0x%08" PRIX32, p_reg->name, buf_get_u32(buf, 0, p_reg->size));
+		LOG_DEBUG("Target %s: Set register %s cache to 0x%08" PRIX32, p_target->cmd_name, p_reg->name, buf_get_u32(buf, 0, p_reg->size));
 		break;
 
 	case 64:
-		LOG_DEBUG("Set register %s cache to 0x%016" PRIX64, p_reg->name, buf_get_u64(buf, 0, p_reg->size));
+		LOG_DEBUG("Target %s: Set register %s cache to 0x%016" PRIX64, p_target->cmd_name, p_reg->name, buf_get_u64(buf, 0, p_reg->size));
 		break;
 
 	default:
@@ -2005,12 +2015,14 @@ static inline bool
 reg__check(reg const* const p_reg)
 {
 	assert(p_reg);
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
 
 	if (!p_reg->exist) {
-		LOG_ERROR("Register %s not exists", p_reg->name);
+		LOG_ERROR("Target %s: Register %s not exists", p_target->cmd_name, p_reg->name);
 		return false;
 	} else if (p_reg->dirty && !p_reg->valid) {
-		LOG_ERROR("Register %s dirty but not valid", p_reg->name);
+		LOG_ERROR("Target %s: Register %s dirty but not valid", p_target->cmd_name, p_reg->name);
 		return false;
 	} else {
 		return true;
@@ -2048,8 +2060,11 @@ reg_x__operation_conditions_check(reg const* const p_reg)
 		return ERROR_TARGET_INVALID;
 	}
 
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
+
 	if (p_reg->number >= number_of_regs_X) {
-		LOG_WARNING("Bad GP register %s id=%d", p_reg->name, p_reg->number);
+		LOG_WARNING("Target %s: Bad GP register %s id=%d", p_target->cmd_name, p_reg->name, p_reg->number);
 		return ERROR_TARGET_INVALID;
 	}
 
@@ -2057,15 +2072,12 @@ reg_x__operation_conditions_check(reg const* const p_reg)
 		return ERROR_OK;
 	}
 
-	target* const p_target = p_reg->arch_info;
-	assert(p_target);
-
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 	assert(!!(0 != (p_arch->misa & BIT_MASK('I' - 'A'))) ^ !!(0 != (p_arch->misa & BIT_MASK('E' - 'A'))));
 
 	if (0 == (p_arch->misa & BIT_MASK('I' - 'A'))) {
-		LOG_WARNING("Bad GP register %s id=%d for RV32E", p_reg->name, p_reg->number);
+		LOG_WARNING("Target %s: Bad GP register %s id=%d for RV32E", p_target->cmd_name, p_reg->name, p_reg->number);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
@@ -2083,7 +2095,7 @@ sc_rv32_check_PC_value(target const* const p_target, uint32_t const previous_pc)
 	sc_rv32_get_PC(p_target, &current_pc);
 
 	if (current_pc != previous_pc) {
-		LOG_ERROR("pc changed from 0x%08X to 0x%08X", previous_pc, current_pc);
+		LOG_ERROR("Target %s: pc changed from 0x%08X to 0x%08X", p_target->cmd_name, previous_pc, current_pc);
 		sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 	}
 }
@@ -2115,9 +2127,9 @@ reg_x__get(reg* const p_reg)
 		if (p_reg->valid) {
 			// register cache already valid
 			if (p_reg->dirty) {
-				LOG_WARNING("Try re-read dirty cache register %s", p_reg->name);
+				LOG_WARNING("Target %s: Try re-read dirty cache register %s", p_target->cmd_name, p_reg->name);
 			} else {
-				LOG_DEBUG("Try re-read cache register %s", p_reg->name);
+				LOG_DEBUG("Target %s: Try re-read cache register %s", p_target->cmd_name, p_reg->name);
 			}
 		}
 
@@ -2190,7 +2202,7 @@ reg_x__store(reg* const p_reg)
 	sc_rv32_EXEC__step(p_target, RISCV_OPCODE_CSRR(p_reg->number, p_arch->constants->debug_scratch_CSR), NULL);
 	p_reg->dirty = false;
 
-	LOG_DEBUG("Store register value 0x%08" PRIX32 " from cache to register %s", buf_get_u32(p_reg->value, 0, p_reg->size), p_reg->name);
+	LOG_DEBUG("Target %s: Store register value 0x%08" PRIX32 " from cache to register %s", p_target->cmd_name, buf_get_u32(p_reg->value, 0, p_reg->size), p_reg->name);
 
 	if (ERROR_OK != sc_error_code__get(p_target)) {
 		return sc_error_code__get_and_clear(p_target);
@@ -2245,7 +2257,9 @@ reg_x0__set(reg* const p_reg, uint8_t* const buf)
 {
 	assert(p_reg);
 	assert(buf);
-	LOG_ERROR("Try to write to read-only register");
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
+	LOG_ERROR("Target %s: Try to write to read-only register", p_target->cmd_name);
 	assert(p_reg->number == 0u);
 	reg__set_valid_value_to_cache(p_reg, 0u);
 	return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
@@ -2303,7 +2317,7 @@ prepare_temporary_GP_register(target const* const p_target, uint32_t const after
 		assert(p_valid);
 		assert(p_valid->valid);
 		p_valid->dirty = true;
-		LOG_DEBUG("Mark temporary register %s dirty", p_valid->name);
+		LOG_DEBUG("Target %s: Mark temporary register %s dirty", p_target->cmd_name, p_valid->name);
 		p_dirty = p_valid;
 	}
 
@@ -2420,12 +2434,13 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 	assert(p_reg);
 	assert(p_reg->number == RISCV_regnum_PC);
 	assert(reg__check(p_reg));
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
 
 	if (!p_reg->valid) {
-		LOG_DEBUG("force rewriting of pc register before read");
+		LOG_DEBUG("Target %s: force rewriting of pc register before read", p_target->cmd_name);
 	}
 
-	target* const p_target = p_reg->arch_info;
 	invalidate_DAP_CTR_cache(p_target);
 
 	if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
@@ -2441,14 +2456,13 @@ reg_pc__set(reg* const p_reg, uint8_t* const buf)
 		if (ERROR_OK != sc_error_code__get(p_target)) {
 			return sc_error_code__get_and_clear(p_target);
 		} else if (!RVC_enable) {
-			LOG_ERROR("Unaligned PC: 0x%08" PRIX32, new_pc);
+			LOG_ERROR("Target %s: Unaligned PC: 0x%08" PRIX32, p_target->cmd_name, new_pc);
 			sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 			return sc_error_code__get_and_clear(p_target);
 		}
 	}
 
 	reg* const p_wrk_reg = prepare_temporary_GP_register(p_target, 0);
-
 	assert(p_wrk_reg);
 
 	reg__set_new_cache_value(p_reg, buf);
@@ -2513,23 +2527,23 @@ reg_FPU_S__get(reg* const p_reg)
 	assert(p_reg);
 	assert(p_reg->size == 32);
 	assert(RISCV_regnum_FP_first <= p_reg->number && p_reg->number <= RISCV_regnum_FP_last);
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
 
 	if (!p_reg->exist) {
-		LOG_WARNING("FP register %s (#%d) is unavailable", p_reg->name, p_reg->number - RISCV_regnum_FP_first);
+		LOG_WARNING("Target %s: FP register %s (#%d) is unavailable", p_target->cmd_name, p_reg->name, p_reg->number - RISCV_regnum_FP_first);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
 	assert(reg__check(p_reg));
 
-	target* const p_target = p_reg->arch_info;
-	assert(p_target);
 	invalidate_DAP_CTR_cache(p_target);
 
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 
 	if (0 == (p_arch->misa & BIT_MASK('F' - 'A'))) {
-		LOG_WARNING("F extention is unavailable");
+		LOG_WARNING("Target %s: F extention is unavailable", p_target->cmd_name);
 
 		// Eclipse workaround
 		//@{
@@ -2599,16 +2613,15 @@ reg_FPU_S__set(reg* const p_reg, uint8_t* const buf)
 	assert(p_reg);
 	assert(p_reg->size == 32);
 	assert(RISCV_regnum_FP_first <= p_reg->number && p_reg->number <= RISCV_regnum_FP_last);
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
 
 	if (!p_reg->exist) {
-		LOG_WARNING("Register %s is unavailable", p_reg->name);
+		LOG_WARNING("Target %s: Register %s is unavailable", p_target->cmd_name, p_reg->name);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
 	assert(reg__check(p_reg));
-
-	target* const p_target = p_reg->arch_info;
-	assert(p_target);
 
 	invalidate_DAP_CTR_cache(p_target);
 
@@ -2616,7 +2629,7 @@ reg_FPU_S__set(reg* const p_reg, uint8_t* const buf)
 	assert(p_arch);
 
 	if (0 == (p_arch->misa & BIT_MASK('F' - 'A'))) {
-		LOG_WARNING("F extention is unavailable");
+		LOG_WARNING("Target %s: F extention is unavailable", p_target->cmd_name);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
@@ -2647,7 +2660,7 @@ reg_FPU_S__set(reg* const p_reg, uint8_t* const buf)
 						assert(p_reg->valid);
 						assert(p_reg->dirty);
 						p_reg->dirty = false;
-						LOG_DEBUG("Store register value 0x%08" PRIX32 " from cache to register %s", buf_get_u32(p_reg->value, 0, p_reg->size), p_reg->name);
+						LOG_DEBUG("Target %s: Store register value 0x%08" PRIX32 " from cache to register %s", p_target->cmd_name, buf_get_u32(p_reg->value, 0, p_reg->size), p_reg->name);
 					}
 				}
 			}
@@ -2681,7 +2694,9 @@ reg_FPU_D__get(reg* const p_reg)
 	assert(RISCV_regnum_FP_first <= p_reg->number && p_reg->number <= RISCV_regnum_FP_last);
 
 	if (!p_reg->exist) {
-		LOG_WARNING("FP register %s (#%d) is unavailable", p_reg->name, p_reg->number - RISCV_regnum_FP_first);
+		target* const p_target = p_reg->arch_info;
+		assert(p_target);
+		LOG_WARNING("Target %s: FP register %s (#%d) is unavailable", p_target->cmd_name, p_reg->name, p_reg->number - RISCV_regnum_FP_first);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
@@ -2695,7 +2710,7 @@ reg_FPU_D__get(reg* const p_reg)
 	assert(p_arch);
 
 	if (0 == (p_arch->misa & BIT_MASK('d' - 'a'))) {
-		LOG_WARNING("D/F extentions are unavailable");
+		LOG_WARNING("Target %s: D/F extentions are unavailable", p_target->cmd_name);
 
 		// Eclipse workaround
 		//@{
@@ -2718,7 +2733,7 @@ reg_FPU_D__get(reg* const p_reg)
 	}
 
 	if (0 == ((mstatus >> p_arch->constants->mstatus_FS_offset) & 3)) {
-		LOG_ERROR("FPU is disabled");
+		LOG_ERROR("Target %s: FPU is disabled", p_target->cmd_name);
 		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return sc_error_code__get_and_clear(p_target);
 	}
@@ -2810,23 +2825,22 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 	assert(p_reg);
 	assert(p_reg->size == 64);
 	assert(RISCV_regnum_FP_first <= p_reg->number && p_reg->number <= RISCV_regnum_FP_last);
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
 
 	if (!p_reg->exist) {
-		LOG_WARNING("Register %s is unavailable", p_reg->name);
+		LOG_WARNING("Target %s: Register %s is unavailable", p_target->cmd_name, p_reg->name);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
 	assert(reg__check(p_reg));
-
-	target* const p_target = p_reg->arch_info;
-	assert(p_target);
 
 	invalidate_DAP_CTR_cache(p_target);
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
 	assert(p_arch);
 
 	if (0 == (p_arch->misa & BIT_MASK('d' - 'a'))) {
-		LOG_WARNING("D/F extentions are unavailable");
+		LOG_WARNING("Target %s: D/F extentions are unavailable", p_target->cmd_name);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
@@ -2841,7 +2855,7 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 	}
 
 	if (0 == ((mstatus >> p_arch->constants->mstatus_FS_offset) & 3)) {
-		LOG_ERROR("FPU is disabled");
+		LOG_ERROR("Target %s: FPU is disabled", p_target->cmd_name);
 		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		return sc_error_code__get_and_clear(p_target);
 	}
@@ -2885,9 +2899,10 @@ reg_FPU_D__set(reg* const p_reg, uint8_t* const buf)
 				assert(p_reg->valid);
 				assert(p_reg->dirty);
 				p_reg->dirty = false;
-				LOG_DEBUG("Store"
+				LOG_DEBUG("Target %s: Store"
 						  " register value 0x%016" PRIX64
 						  " from cache to register %s",
+						  p_target->cmd_name,
 						  buf_get_u64(p_reg->value, 0, p_reg->size),
 						  p_reg->name);
 			}
@@ -2952,9 +2967,11 @@ reg_csr__get(reg* const p_reg)
 	assert(RISCV_regnum_CSR_first <= p_reg->number && p_reg->number <= RISCV_rtegnum_CSR_last);
 	uint32_t const csr_number = p_reg->number - RISCV_regnum_CSR_first;
 	assert(csr_number < 4096u);
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
 
 	if (!p_reg->exist) {
-		LOG_WARNING("CSR %s (#%d) is unavailable", p_reg->name, csr_number);
+		LOG_WARNING("Target %s: CSR %s (#%d) is unavailable", p_target->cmd_name, p_reg->name, csr_number);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
@@ -2966,7 +2983,6 @@ reg_csr__get(reg* const p_reg)
 	//@}
 
 	assert(reg__check(p_reg));
-	target* const p_target = p_reg->arch_info;
 	invalidate_DAP_CTR_cache(p_target);
 
 	uint32_t const value = sc_riscv32__csr_get_value(p_target, csr_number);
@@ -2984,14 +3000,16 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 	assert(p_reg);
 	assert(RISCV_regnum_CSR_first <= p_reg->number && p_reg->number <= RISCV_rtegnum_CSR_last);
 
+	target* const p_target = p_reg->arch_info;
+	assert(p_target);
+
 	if (!p_reg->exist) {
-		LOG_WARNING("Register %s is unavailable", p_reg->name);
+		LOG_WARNING("Target %s: Register %s is unavailable", p_target->cmd_name, p_reg->name);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
 	assert(reg__check(p_reg));
 
-	target* const p_target = p_reg->arch_info;
 	invalidate_DAP_CTR_cache(p_target);
 
 	if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
@@ -3026,8 +3044,9 @@ reg_csr__set(reg* const p_reg, uint8_t* const buf)
 					assert(p_reg->valid);
 					assert(p_reg->dirty);
 					p_reg->dirty = false;
-					LOG_DEBUG("Store register value 0x%08" PRIX32
-							  " from cache to register %s",
+					LOG_DEBUG("Target %s: Store register value 0x%08" PRIX32
+							  " from cache to register %s", 
+							  p_target->cmd_name,
 							  buf_get_u32(p_reg->value, 0, p_reg->size),
 							  p_reg->name);
 				}
@@ -3140,7 +3159,7 @@ resume_common(target* const p_target,
 			  int const handle_breakpoints,
 			  int const debug_execution)
 {
-	LOG_DEBUG("Resume ");
+	LOG_DEBUG("Target %s: Resume", p_target->cmd_name);
 
 	if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
 		return sc_error_code__get_and_clear(p_target);
@@ -3202,7 +3221,7 @@ resume_common(target* const p_target,
 						return sc_error_code__get_and_clear(p_target);
 					}
 
-					LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_SINGLESTEP);
+					LOG_DEBUG("Target %s: New debug reason: 0x%08X", p_target->cmd_name, DBG_REASON_SINGLESTEP);
 					p_target->debug_reason = DBG_REASON_SINGLESTEP;
 					// raise halt event
 					target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_HALTED : TARGET_EVENT_HALTED);
@@ -3223,7 +3242,7 @@ resume_common(target* const p_target,
 
 	// resume exec
 	if (ERROR_OK != sc_rv32_DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_unit_id_HART_0 : DBGC_unit_id_HART_1, DBGC_functional_group_HART_DBGCMD)) {
-		LOG_WARNING("DAP_CTRL_REG_set error");
+		LOG_WARNING("Target %s: DAP_CTRL_REG_set error", p_target->cmd_name);
 		return sc_error_code__get_and_clear(p_target);
 	}
 
@@ -3232,7 +3251,7 @@ resume_common(target* const p_target,
 	}
 
 	// Mark "not halted", set state, raise event
-	LOG_DEBUG("New debug reason: 0x%08X", DBG_REASON_NOTHALTED);
+	LOG_DEBUG("Target %s: New debug reason: 0x%08X", p_target->cmd_name, DBG_REASON_NOTHALTED);
 	p_target->debug_reason = DBG_REASON_NOTHALTED;
 	p_target->state = debug_execution ? TARGET_DEBUG_RUNNING : TARGET_RUNNING;
 	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
@@ -3262,9 +3281,10 @@ sc_rv32_core_reset__set(target* const p_target, bool const active)
 				}
 
 				if ((get_new_value2 & bit_mask) != (set_value & bit_mask)) {
-					LOG_ERROR("Fail to verify write:"
+					LOG_ERROR("Target %s: Fail to verify write:"
 							  " set 0x%08" PRIX32
-							  ", but get 0x%08" PRIX32,
+							  ", but get 0x%08" PRIX32, 
+							  p_target->cmd_name,
 							  set_value,
 							  get_new_value2);
 					sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
@@ -3276,12 +3296,12 @@ sc_rv32_core_reset__set(target* const p_target, bool const active)
 				if (active) {
 					if (p_target->state != TARGET_RESET) {
 						/// issue error if we are still running
-						LOG_ERROR("Target is not resetting after reset assert");
+						LOG_ERROR("Target %s: is not resetting after reset assert", p_target->cmd_name);
 						sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 					}
 				} else {
 					if (p_target->state == TARGET_RESET) {
-						LOG_ERROR("Target is still in reset after reset deassert");
+						LOG_ERROR("Target %s: is still in reset after reset deassert", p_target->cmd_name);
 						sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 					}
 				}
@@ -3522,7 +3542,7 @@ adjust_target_registers_cache(target* const p_target)
 			p_reg->reg_data_type = &FPU_D_reg_data_type;
 		}
 
-		LOG_INFO("Enable RVFD FPU registers");
+		LOG_INFO("Target %s: Enable RVFD FPU registers", p_target->cmd_name);
 	} else if (RV_F) {
 		assert(p_target->reg_cache && p_target->reg_cache->next && p_target->reg_cache->next->reg_list && 32 == p_target->reg_cache->next->num_regs);
 		reg* const p_regs = p_target->reg_cache->next->reg_list;
@@ -3535,7 +3555,7 @@ adjust_target_registers_cache(target* const p_target)
 			p_reg->reg_data_type = &FPU_S_reg_data_type;
 		}
 
-		LOG_INFO("Enable RVF FPU registers");
+		LOG_INFO("Target %s: Enable RVF FPU registers", p_target->cmd_name);
 	}
 
 	return sc_error_code__get(p_target);
@@ -3554,27 +3574,27 @@ sc_riscv32__examine(target* const p_target)
 			break;
 		}
 
-		LOG_DEBUG("update_status error, retry");
+		LOG_DEBUG("Target %s: update_status error, retry", p_target->cmd_name);
 	}
 
 	if (ERROR_OK == sc_error_code__get(p_target)) {
 		uint32_t IDCODE;
 		sc_rv32_IDCODE_get(p_target, &IDCODE);
 
-		if (CHECK_ID_CODE && !sc_rv32__is_IDCODE_valid(p_target, IDCODE)) {
-			LOG_ERROR("Invalid IDCODE=0x%08" PRIX32 "!", IDCODE);
+		if (!sc_rv32__is_IDCODE_valid(p_target, IDCODE)) {
+			LOG_ERROR("Target %s: Invalid IDCODE=0x%08" PRIX32 "!", p_target->cmd_name, IDCODE);
 			sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 		} else {
 			uint32_t DBG_ID;
 			sc_rv32_DBG_ID_get(p_target, &DBG_ID);
 
 			if (!sc_rv32__is_DBG_ID_valid(p_target, DBG_ID)) {
-				LOG_ERROR("Unsupported DBG_ID=0x%08" PRIX32 "!", DBG_ID);
+				LOG_ERROR("Target %s: Unsupported DBG_ID=0x%08" PRIX32 "!", p_target->cmd_name, DBG_ID);
 				sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 			} else {
 				uint32_t BLD_ID;
 				sc_rv32_BLD_ID_get(p_target, &BLD_ID);
-				LOG_INFO("IDCODE=0x%08" PRIX32 " DBG_ID=0x%08" PRIX32 " BLD_ID=0x%08" PRIX32, IDCODE, DBG_ID, BLD_ID);
+				LOG_INFO("Target %s: IDCODE=0x%08" PRIX32 " DBG_ID=0x%08" PRIX32 " BLD_ID=0x%08" PRIX32, p_target->cmd_name, IDCODE, DBG_ID, BLD_ID);
 
 				sc_riscv32__Arch* const p_arch = p_target->arch_info;
 				assert(p_arch);
@@ -3584,7 +3604,11 @@ sc_riscv32__examine(target* const p_target)
 					ERROR_OK == set_DEMODE_ENBL(p_target, HART_DMODE_ENBL_bits_Normal) &&
 					ERROR_OK == adjust_target_registers_cache(p_target)
 				) {
-					LOG_DEBUG("Examined OK");
+					if (!p_target->tap->hasidcode) {
+						p_target->tap->idcode = IDCODE;
+						p_target->tap->hasidcode = true;
+					}
+					LOG_DEBUG("Target %s: Examined OK", p_target->cmd_name);
 					target_set_examined(p_target);
 				}
 			}
@@ -3624,7 +3648,7 @@ sc_riscv32__halt(target* const p_target)
 		}
 
 		if (p_target->state == TARGET_HALTED) {
-			LOG_WARNING("Halt request when target is already in halted state");
+			LOG_WARNING("Target %s: Halt request when target is already in halted state", p_target->cmd_name);
 			return sc_error_code__get_and_clear(p_target);
 		}
 	}
@@ -3632,7 +3656,7 @@ sc_riscv32__halt(target* const p_target)
 	// Try to halt
 	{
 		if (ERROR_OK != sc_rv32_DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_unit_id_HART_0 : DBGC_unit_id_HART_1, DBGC_functional_group_HART_DBGCMD)) {
-			LOG_WARNING("DAP_CTRL_REG_set error");
+			LOG_WARNING("Target %s: DAP_CTRL_REG_set error", p_target->cmd_name);
 			return sc_error_code__get_and_clear(p_target);
 		}
 
@@ -3655,11 +3679,12 @@ sc_riscv32__resume(target* const p_target,
 	assert((UINT32_MAX & _address) == _address);
 	invalidate_DAP_CTR_cache(p_target);
 	uint32_t const address = (uint32_t)(_address);
-	LOG_DEBUG("resume:"
+	LOG_DEBUG("Target %s: resume:"
 			  " current=%d"
 			  " address=0x%08" PRIx32
 			  " handle_breakpoints=%d"
-			  " debug_execution=%d",
+			  " debug_execution=%d", 
+			  p_target->cmd_name,
 			  current,
 			  address,
 			  handle_breakpoints,
@@ -3678,10 +3703,11 @@ sc_riscv32__step(target* const p_target,
 	assert((UINT32_MAX & _address) == _address);
 	invalidate_DAP_CTR_cache(p_target);
 	uint32_t const address = (uint32_t)(_address);
-	LOG_DEBUG("step:"
+	LOG_DEBUG("Target %s: step:"
 			  " current=%d"
 			  " address=0x%08" PRIx32
 			  " handle_breakpoints=%d",
+			  p_target->cmd_name,
 			  current,
 			  address,
 			  handle_breakpoints);
@@ -3694,7 +3720,7 @@ sc_riscv32__step(target* const p_target,
 error_code
 sc_riscv32__soft_reset_halt(target* const p_target)
 {
-	LOG_DEBUG("Soft reset halt called");
+	LOG_DEBUG("Target %s: Soft reset halt called", p_target->cmd_name);
 	invalidate_DAP_CTR_cache(p_target);
 
 	if (ERROR_OK != sc_riscv32__update_status(p_target)) {
@@ -3724,7 +3750,7 @@ scrv32_sys_reset__set(target* const p_target, bool const active)
 	assert(p_target->tap && p_target->tap->enabled);
 	jtag_add_dr_scan(p_target->tap, 1, &field, TAP_IDLE);
 	sc_error_code__update(p_target, jtag_execute_queue());
-	LOG_DEBUG("drscan %s %d 0x%1X", p_target->cmd_name, field.num_bits, *field.out_value);
+	LOG_DEBUG("drscan %s %d 0x%1X", p_target->tap->dotted_name, field.num_bits, *field.out_value);
 
 	if (active) {
 		p_target->state = TARGET_RESET;
@@ -3740,7 +3766,7 @@ scrv32_sys_reset__set(target* const p_target, bool const active)
 error_code
 sc_riscv32__assert_reset(target* const p_target)
 {
-	LOG_DEBUG("Assert reset");
+	LOG_DEBUG("Target %s: Assert reset", p_target->cmd_name);
 	invalidate_DAP_CTR_cache(p_target);
 	scrv32_sys_reset__set(p_target, true);
 	return sc_error_code__get_and_clear(p_target);
@@ -3749,7 +3775,7 @@ sc_riscv32__assert_reset(target* const p_target)
 error_code
 sc_riscv32__deassert_reset(target* const p_target)
 {
-	LOG_DEBUG("Deassert reset");
+	LOG_DEBUG("Target %s: Deassert reset", p_target->cmd_name);
 	invalidate_DAP_CTR_cache(p_target);
 
 	if (ERROR_OK == scrv32_sys_reset__set(p_target, false) && p_target->reset_halt) {
@@ -3769,10 +3795,10 @@ read_memory_space(target* const p_target,
 				  bool const instruction_space)
 {
 	if (!(size == 1 || size == 2 || size == 4)) {
-		LOG_ERROR("Invalid item size %" PRIu32, size);
+		LOG_ERROR("Target %s: Invalid item size %" PRIu32, p_target->cmd_name, size);
 		return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 	} else if (address % size != 0) {
-		LOG_ERROR("Unaligned access at 0x%08" PRIX32 ", for item size %" PRIu32, address, size);
+		LOG_ERROR("Target %s: Unaligned access at 0x%08" PRIX32 ", for item size %" PRIu32, p_target->cmd_name, address, size);
 		return sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 	} else {
 		while (0 != count) {
@@ -3812,10 +3838,10 @@ write_memory_space(target* const p_target,
 				   bool const instruction_space)
 {
 	if (!(size == 1 || size == 2 || size == 4)) {
-		LOG_ERROR("Invalid item size %" PRIu32, size);
+		LOG_ERROR("Target %s: Invalid item size %" PRIu32, p_target->cmd_name, size);
 		return sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 	} else if (address % size != 0) {
-		LOG_ERROR("Unaligned access at 0x%08" PRIx32 ", for item size %" PRIu32, address, size);
+		LOG_ERROR("Target %s: Unaligned access at 0x%08" PRIx32 ", for item size %" PRIu32, p_target->cmd_name, address, size);
 		return sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 	} else {
 		while (0 != count) {
@@ -3881,29 +3907,35 @@ sc_riscv32__read_phys_memory(target* const p_target,
 {
 	assert((UINT32_MAX & _address) == _address);
 	uint32_t address = (uint32_t)(_address);
-	LOG_DEBUG("Read_memory"
+	LOG_DEBUG("Target %s: Read_memory"
 			  " at 0x%08" PRIx32
 			  ", %" PRIu32 " items"
 			  ", each %" PRIu32 " bytes"
-			  ", total %" PRIu64 " bytes", address, count, size, (uint64_t)(count)* size);
+			  ", total %" PRIu64 " bytes",
+			  p_target->cmd_name,
+			  address,
+			  count,
+			  size,
+			  (uint64_t)(count)* size);
 
 	invalidate_DAP_CTR_cache(p_target);
 
 	/// Check for size
 	if (!(size == 1 || size == 2 || size == 4)) {
-		LOG_ERROR("Invalid item size %" PRIu32, size);
+		LOG_ERROR("Target %s: Invalid item size %" PRIu32, p_target->cmd_name, size);
 		sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return sc_error_code__get_and_clear(p_target);
 	} else if (address % size != 0) {
-		LOG_ERROR("Unaligned access"
+		LOG_ERROR("Target %s: Unaligned access"
 				  " at 0x%08" PRIx32
 				  ", for item size %" PRIu32,
+				  p_target->cmd_name,
 				  address,
 				  size);
 		sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 		return sc_error_code__get_and_clear(p_target);
 	} else if (0 == count) {
-		LOG_WARNING("Zero items count");
+		LOG_WARNING("Target %s: Zero items count", p_target->cmd_name);
 		return sc_error_code__get_and_clear(p_target);
 	} else if (ERROR_OK != sc_rv32_check_that_target_halted(p_target)) {
 		return sc_error_code__get_and_clear(p_target);
@@ -4007,11 +4039,12 @@ sc_riscv32__write_phys_memory(target* const p_target,
 {
 	assert((UINT32_MAX & _address) == _address);
 	uint32_t address = (uint32_t)(_address);
-	LOG_DEBUG("Write_memory"
+	LOG_DEBUG("Target %s: Write_memory"
 			  " at 0x%08" PRIx32
 			  ", %" PRIu32 " items"
 			  ", each %" PRIu32 " bytes"
 			  ", total %" PRIu64 " bytes",
+			  p_target->cmd_name,
 			  address,
 			  count,
 			  size,
@@ -4021,16 +4054,17 @@ sc_riscv32__write_phys_memory(target* const p_target,
 
 	/// Check for size
 	if (!(size == 1 || size == 2 || size == 4)) {
-		LOG_ERROR("Invalid item size %" PRIu32, size);
+		LOG_ERROR("Target %s: Invalid item size %" PRIu32, p_target->cmd_name, size);
 		sc_error_code__update(p_target, ERROR_TARGET_FAILURE);
 		return sc_error_code__get_and_clear(p_target);
 	}
 
 	/// Check for alignment
 	if (address % size != 0) {
-		LOG_ERROR("Unaligned access"
+		LOG_ERROR("Target %s: Unaligned access"
 				  " at 0x%08" PRIx32
 				  ", for item size %" PRIu32,
+				  p_target->cmd_name,
 				  address,
 				  size);
 		sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
@@ -4038,7 +4072,7 @@ sc_riscv32__write_phys_memory(target* const p_target,
 	}
 
 	if (0 == count) {
-		LOG_WARNING("Zero items count");
+		LOG_WARNING("Target %s: Zero items count", p_target->cmd_name);
 		return sc_error_code__get_and_clear(p_target);
 	}
 
@@ -4135,7 +4169,7 @@ sc_riscv32__write_phys_memory(target* const p_target,
 						--count;
 
 						if (0 == count) {
-							LOG_DEBUG("Force jtag_execute_queue() - last time");
+							LOG_DEBUG("Target %s: Force jtag_execute_queue() - last time", p_target->cmd_name);
 							sc_error_code__update(p_target, jtag_execute_queue());
 							break;
 						}
@@ -4172,13 +4206,13 @@ sc_riscv32__write_phys_memory(target* const p_target,
 
 						offset -= 1 << 12;
 
-						LOG_DEBUG("Force jtag_execute_queue()");
+						LOG_DEBUG("Target %s: Force jtag_execute_queue()", p_target->cmd_name);
 
 						if (ERROR_OK != sc_error_code__update(p_target, jtag_execute_queue())) {
 							break;
 						}
 
-						LOG_DEBUG("jtag_execute_queue() - OK");
+						LOG_DEBUG("Target %s: jtag_execute_queue() - OK", p_target->cmd_name);
 					}
 				} else {
 					while (ERROR_OK == sc_error_code__get(p_target) && 0 < count) {
@@ -4266,7 +4300,7 @@ add_sw_breakpoint(target* const p_target,
 	assert(p_target);
 
 	if (ERROR_OK != read_memory_space(p_target, (uint32_t)(p_breakpoint->address), 2, p_breakpoint->length / 2, p_breakpoint->orig_instr, true)) {
-		LOG_ERROR("Can't save original instruction");
+		LOG_ERROR("Target %s: Can't save original instruction", p_target->cmd_name);
 	} else {
 		uint8_t buffer[4];
 
@@ -4279,7 +4313,7 @@ add_sw_breakpoint(target* const p_target,
 		}
 
 		if (ERROR_OK != write_memory_space(p_target, p_breakpoint->address, 2, p_breakpoint->length / 2, buffer, true)) {
-			LOG_ERROR("Can't write EBREAK");
+			LOG_ERROR("Target %s: Can't write EBREAK", p_target->cmd_name);
 		} else {
 			p_breakpoint->set = 1;
 		}
@@ -4296,10 +4330,10 @@ sc_riscv32__add_breakpoint(target* const p_target,
 	assert(p_breakpoint);
 
 	if (!(4 == p_breakpoint->length || (RVC_enable && 2 == p_breakpoint->length))) {
-		LOG_ERROR("Invalid breakpoint length: %d", p_breakpoint->length);
+		LOG_ERROR("Target %s: Invalid breakpoint length: %d", p_target->cmd_name, p_breakpoint->length);
 		sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 	} else if (p_breakpoint->address % (RVC_enable ? 2 : 4) != 0) {
-		LOG_ERROR("Unaligned breakpoint: 0x%08" TARGET_PRIxADDR, p_breakpoint->address);
+		LOG_ERROR("Target %s: Unaligned breakpoint: 0x%08" TARGET_PRIxADDR, p_target->cmd_name, p_breakpoint->address);
 		sc_error_code__update(p_target, ERROR_TARGET_UNALIGNED_ACCESS);
 	} else {
 		invalidate_DAP_CTR_cache(p_target);
@@ -4315,7 +4349,7 @@ sc_riscv32__add_breakpoint(target* const p_target,
 			return add_sw_breakpoint(p_target, p_breakpoint);
 
 		default:
-			LOG_ERROR("Unsupported breakpoint type");
+			LOG_ERROR("Target %s: Unsupported breakpoint type", p_target->cmd_name);
 			sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		}
 	}
@@ -4424,7 +4458,7 @@ BRKM_csr_get(target* const p_target,
 	static_assert(XLEN <= CHAR_BIT * sizeof(uint32_t), "Unsupported XLEN");
 
 	if (ERROR_OK != sc_error_code__update(p_target, reg_csr__get(p_bpselect))) {
-		LOG_ERROR("Error read CSR");
+		LOG_ERROR("Target %s: Error read CSR", p_target->cmd_name);
 	} else {
 		assert(p_value);
 		*p_value = buf_get_u32(p_bpselect->value, 0, XLEN);
@@ -4451,21 +4485,21 @@ find_BRKM_free_channel(target* const p_target,
 	// TODO: replace 12 bits of BPSELECT
 	for (uint32_t channel = 0; channel < BIT_MASK(12); ++channel) {
 		if (ERROR_OK != BRKM_csr_set(p_target, BPSELECT, channel)) {
-			LOG_ERROR("Error in BRKM select channel #%" PRIu32, channel);
+			LOG_ERROR("Target %s: Error in BRKM select channel #%" PRIu32, p_target->cmd_name, channel);
 			return UINT32_MAX;
 		} else if (ERROR_OK != BRKM_csr_get(p_target, BPCONTROL, p_bpcontrol)) {
-			LOG_ERROR("Error read BRKM BPCONTROL for channel #%" PRIu32, channel);
+			LOG_ERROR("Target %s: Error read BRKM BPCONTROL for channel #%" PRIu32, p_target->cmd_name, channel);
 			return UINT32_MAX;
 		} else if (0 == (BRKM_channel_busy_mask & *p_bpcontrol)) {
-			LOG_DEBUG("BRKM channel %" PRIu32 " is free", channel);
+			LOG_DEBUG("Target %s: BRKM channel %" PRIu32 " is free", p_target->cmd_name, channel);
 			return channel;
 		}
 
 		// channel busy, find next
-		LOG_DEBUG("BRKM channel %" PRIu32 " is busy", channel);
+		LOG_DEBUG("Target %s: BRKM channel %" PRIu32 " is busy", p_target->cmd_name, channel);
 	}
 
-	LOG_ERROR("No free BRKM channels");
+	LOG_ERROR("Target %s: No free BRKM channels", p_target->cmd_name);
 	sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 	return UINT32_MAX;
 }
@@ -4480,14 +4514,14 @@ BRKM_reason_get(target* const p_target)
 
 	for (uint32_t channel = 0; channel < BIT_MASK(12); ++channel) {
 		if (ERROR_OK != BRKM_csr_set(p_target, BPSELECT, channel)) {
-			LOG_ERROR("Error in BRKM select channel #%" PRIu32, channel);
+			LOG_ERROR("Target %s: Error in BRKM select channel #%" PRIu32, p_target->cmd_name, channel);
 			break;
 		}
 
 		uint32_t bpcontrol = 0;
 
 		if (ERROR_OK != BRKM_csr_get(p_target, BPCONTROL, &bpcontrol)) {
-			LOG_ERROR("Error read BRKM BPCONTROL for channel #%" PRIu32, channel);
+			LOG_ERROR("Target %s: Error read BRKM BPCONTROL for channel #%" PRIu32, p_target->cmd_name, channel);
 			break;
 		}
 
@@ -4525,29 +4559,30 @@ add_hw_breakpoint(target* const p_target,
 	}
 
 	if (0 == (BIT_MASK(BPCONTROL_EXECSUP) & bpcontrol)) {
-		LOG_WARNING("BRKM EXECSUP is not available for channel #%" PRIu32, channel);
+		LOG_WARNING("Target %s: BRKM EXECSUP is not available for channel #%" PRIu32, p_target->cmd_name, channel);
 		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 	} else if (0 == ((BIT_MASK(BPCONTROL_ASUP) | BIT_MASK(BPCONTROL_ARANGESUP)) & bpcontrol)) {
-		LOG_WARNING("ASUP and ARANGESUP are not supported by BRKM for channel #%" PRIu32, channel);
+		LOG_WARNING("Target %s: ASUP and ARANGESUP are not supported by BRKM for channel #%" PRIu32, p_target->cmd_name, channel);
 		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BRKMCTRL, BIT_MASK(15))) {
 		// TODO: BRKMCTRL, BIT_MASK(15)
-		LOG_ERROR("Error: can't init BRKMCTRL");
+		LOG_ERROR("Target %s: can't init BRKMCTRL", p_target->cmd_name);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPLOADDR, (uint32_t)(p_breakpoint->address))) {
-		LOG_ERROR("Error: can't setup BPLOADDR");
+		LOG_ERROR("Target %s: can't setup BPLOADDR", p_target->cmd_name);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPHIADDR, (uint32_t)(p_breakpoint->address) + p_breakpoint->length)) {
-		LOG_ERROR("Error: can't setup BPHIADDR");
+		LOG_ERROR("Target %s: can't setup BPHIADDR", p_target->cmd_name);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPCTRLEXT, BIT_MASK(BPCTRLEXT_ARANGEEXT_EN))) {
-		LOG_ERROR("Error: can't setup BPCTRLEXT");
+		LOG_ERROR("Target %s: can't setup BPCTRLEXT", p_target->cmd_name);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPCONTROL, BIT_MASK(BPCONTROL_ARANGEEN) | BIT_MASK(BPCONTROL_AEN) | BIT_MASK(BPCONTROL_EXECEN) | (2 << BPCONTROL_ACTION_LOW))) {
 		// TODO: add definition for (2 << BPCONTROL_ACTION_LOW)
-		LOG_ERROR("Error: can't setup BPCONTROL");
+		LOG_ERROR("Target %s: can't setup BPCONTROL", p_target->cmd_name);
 	} else {
 		// OK
-		LOG_DEBUG("HW breakpoint"
+		LOG_DEBUG("Target %s: HW breakpoint"
 				  " #%" PRIu32
 				  " enabled for address %" TARGET_PRIxADDR
 				  " length %d",
+				  p_target->cmd_name,
 				  channel,
 				  p_breakpoint->address,
 				  p_breakpoint->length);
@@ -4568,10 +4603,10 @@ sc_riscv32__add_breakpoint_v2(target* const p_target,
 		(BKPT_SOFT == p_breakpoint->type && (4 == p_breakpoint->length || (RVC_enable && 2 == p_breakpoint->length))) ||
 		(BKPT_HARD == p_breakpoint->type && p_breakpoint->length >= 0 && 0 == p_breakpoint->length % (RVC_enable ? 2 : 4))
 		)) {
-		LOG_ERROR("Invalid breakpoint size: %d", p_breakpoint->length);
+		LOG_ERROR("Target %s: Invalid breakpoint size: %d", p_target->cmd_name, p_breakpoint->length);
 		sc_error_code__update(p_target, ERROR_COMMAND_ARGUMENT_INVALID);
 	} else if (0 != p_breakpoint->address % (RVC_enable ? 2 : 4)) {
-		LOG_ERROR("Unaligned breakpoint: 0x%08" TARGET_PRIxADDR, p_breakpoint->address);
+		LOG_ERROR("Target %s: Unaligned breakpoint: 0x%08" TARGET_PRIxADDR, p_target->cmd_name, p_breakpoint->address);
 		sc_error_code__update(p_target, ERROR_COMMAND_ARGUMENT_INVALID);
 	} else {
 		invalidate_DAP_CTR_cache(p_target);
@@ -4590,7 +4625,7 @@ sc_riscv32__add_breakpoint_v2(target* const p_target,
 			return add_hw_breakpoint(p_target, p_breakpoint);
 
 		default:
-			LOG_ERROR("Ivalid breakpoint type");
+			LOG_ERROR("Target %s: Ivalid breakpoint type", p_target->cmd_name);
 			sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 		}
 	}
@@ -4616,11 +4651,11 @@ BRKM_disable_channel(target* const p_target,
 					 uint32_t const channel)
 {
 	if (ERROR_OK != BRKM_csr_set(p_target, BPSELECT, channel)) {
-		LOG_ERROR("Error in BRKM select channel #%" PRIu32, channel);
+		LOG_ERROR("Target %s: in BRKM select channel #%" PRIu32, p_target->cmd_name, channel);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPCONTROL, 0)) {
-		LOG_ERROR("Error clear BRKM BPCONTROL for channel %" PRIu32, channel);
+		LOG_ERROR("Target %s: clear BRKM BPCONTROL for channel %" PRIu32, p_target->cmd_name, channel);
 	} else {
-		LOG_DEBUG("Disable BRKM channel #%" PRIu32, channel);
+		LOG_DEBUG("Target %s: Disable BRKM channel #%" PRIu32, p_target->cmd_name, channel);
 	}
 
 	return sc_error_code__get(p_target);
@@ -4661,7 +4696,7 @@ sc_riscv32__remove_breakpoint(target* const p_target,
 		return remove_hw_breakpoint(p_target, p_breakpoint);
 
 	default:
-		LOG_ERROR("Invalid breakpoint type");
+		LOG_ERROR("Target %s: Invalid breakpoint type", p_target->cmd_name);
 		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 	}
 
@@ -4674,13 +4709,14 @@ sc_riscv32__add_watchpoint(target* const p_target,
 {
 	assert(p_watchpoint);
 
-	LOG_DEBUG("Add watchpoint request:"
+	LOG_DEBUG("Target %s: Add watchpoint request:"
 			 " address=%08" TARGET_PRIxADDR
 			 " length=%" PRIu32
 			 " rw=%d"
 			 " value=%08" PRIx32
 			 " mask=%08" PRIx32
 			 " unique_id=%d",
+			 p_target->cmd_name,
 			 p_watchpoint->address,
 			 p_watchpoint->length,
 			 p_watchpoint->rw,
@@ -4689,9 +4725,10 @@ sc_riscv32__add_watchpoint(target* const p_target,
 			 p_watchpoint->unique_id);
 
 	if (0 == p_watchpoint->mask && 0 != p_watchpoint->value) {
-		LOG_ERROR("Bad mask/value combination:"
+		LOG_ERROR("Target %s: Bad mask/value combination:"
 				  " value=%08" PRIx32
 				  " mask=%08" PRIx32,
+				  p_target->cmd_name,
 				  p_watchpoint->value,
 				  p_watchpoint->mask);
 		return ERROR_COMMAND_ARGUMENT_INVALID;
@@ -4745,33 +4782,34 @@ sc_riscv32__add_watchpoint(target* const p_target,
 		2 << BPCONTROL_ACTION_LOW;
 
 	if ((required_capabilities & bpcontrol) != required_capabilities) {
-		LOG_ERROR("BRKM watchpoint mode is not supported by BRKM for channel"
-					" #%" PRIu32
-					": bpcontrol=%08" PRIx32
-					" but required %08" PRIx32
-					"(not-enough=%08" PRIx32 ")",
-					channel,
-					bpcontrol,
-					required_capabilities,
-					(required_capabilities ^ bpcontrol) & required_capabilities);
+		LOG_ERROR("Target %s: BRKM watchpoint mode is not supported by BRKM for channel"
+				  " #%" PRIu32
+				  ": bpcontrol=%08" PRIx32
+				  " but required %08" PRIx32
+				  "(not-enough=%08" PRIx32 ")",
+				  p_target->cmd_name,
+				  channel,
+				  bpcontrol,
+				  required_capabilities,
+				  (required_capabilities ^ bpcontrol) & required_capabilities);
 		sc_error_code__update(p_target, ERROR_TARGET_RESOURCE_NOT_AVAILABLE);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BRKMCTRL, BIT_MASK(15)/* TODO: BRKMCTRL, BIT_MASK(15) */)) {
-		LOG_ERROR("Error: can't init BRKMCTRL");
+		LOG_ERROR("Target %s: can't init BRKMCTRL", p_target->cmd_name);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPLOADDR, (uint32_t)(p_watchpoint->address))) {
-		LOG_ERROR("Error: can't setup BPLOADDR");
+		LOG_ERROR("Target %s: can't setup BPLOADDR", p_target->cmd_name);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPHIADDR, (uint32_t)(p_watchpoint->address) + p_watchpoint->length)) {
-		LOG_ERROR("Error: can't setup BPHIADDR");
+		LOG_ERROR("Target %s: can't setup BPHIADDR", p_target->cmd_name);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPLODATA, p_watchpoint->value)) {
-		LOG_ERROR("Error: can't setup BPLODATA");
+		LOG_ERROR("Target %s: can't setup BPLODATA", p_target->cmd_name);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPHIDATA, p_watchpoint->mask)) {
-		LOG_ERROR("Error: can't setup BPHIDATA");
+		LOG_ERROR("Target %s: can't setup BPHIDATA", p_target->cmd_name);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPCTRLEXT, BIT_MASK(BPCTRLEXT_ARANGEEXT_EN))) {
-		LOG_ERROR("Error: can't setup BPCTRLEXT");
+		LOG_ERROR("Target %s: can't setup BPCTRLEXT", p_target->cmd_name);
 	} else if (ERROR_OK != BRKM_csr_set(p_target, BPCONTROL, control_bits)) {
-		LOG_ERROR("Error: can't setup BPCONTROL");
+		LOG_ERROR("Target %s: can't setup BPCONTROL", p_target->cmd_name);
 	} else {
 		// OK
-		LOG_INFO("Watchpoint enabled "
+		LOG_INFO("Target %s: Watchpoint enabled "
 				 " channel=%" PRId32
 				 " address=%08" TARGET_PRIxADDR
 				 " length=%" PRIu32
@@ -4780,6 +4818,7 @@ sc_riscv32__add_watchpoint(target* const p_target,
 				 " mask=%08" PRIx32
 				 " unique_id=%d"
 				 " BPCONTROL=%08" PRIx32,
+				 p_target->cmd_name,
 				 channel,
 				 p_watchpoint->address,
 				 p_watchpoint->length,
@@ -4809,7 +4848,7 @@ sc_riscv32__remove_watchpoint(target* const p_target,
 	uint32_t const channel = ~(~UINT32_C(0) << 12) & p_watchpoint->set;
 
 	if (ERROR_OK == BRKM_disable_channel(p_target, channel)) {
-		LOG_INFO("Watchpoint disabled "
+		LOG_INFO("Target %s: Watchpoint disabled "
 				 " channel=%" PRId32
 				 " address=%08" TARGET_PRIxADDR
 				 " length=%" PRIu32
@@ -4817,6 +4856,7 @@ sc_riscv32__remove_watchpoint(target* const p_target,
 				 " value=%08" PRIx32
 				 " mask=%08" PRIx32
 				 " unique_id=%d",
+				 p_target->cmd_name,
 				 channel,
 				 p_watchpoint->address,
 				 p_watchpoint->length,
@@ -4851,8 +4891,9 @@ sc_riscv32__hit_watchpoint(target* const p_target,
 		uint32_t const channel = ~(~UINT32_C(0) << 12) & p_watchpoint->set;
 
 		if (ERROR_OK != BRKM_csr_set(p_target, BPSELECT, channel)) {
-			LOG_ERROR("Error in BRKM select"
+			LOG_ERROR("Target %s: in BRKM select"
 					  " channel #%" PRId32,
+					  p_target->cmd_name,
 					  channel);
 			break;
 		}
@@ -4860,22 +4901,24 @@ sc_riscv32__hit_watchpoint(target* const p_target,
 		uint32_t bpcontrol = 0;
 
 		if (ERROR_OK != BRKM_csr_get(p_target, BPCONTROL, &bpcontrol)) {
-			LOG_ERROR("Error read BRKM BPCONTROL for"
+			LOG_ERROR("Target %s: read BRKM BPCONTROL for"
 					  " channel #%" PRId32,
+					  p_target->cmd_name,
 					  channel);
 			break;;
 		}
 
 		if (0 != (BIT_MASK(BPCONTROL_MATCHED) & bpcontrol)) {
 			if (ERROR_OK != BRKM_csr_set(p_target, BPCONTROL, ~BIT_MASK(BPCONTROL_MATCHED) & bpcontrol)) {
-				LOG_ERROR("Error reset MATCH bit of BRKM BPCONTROL for"
+				LOG_ERROR("Target %s: reset MATCH bit of BRKM BPCONTROL for"
 						  " channel #%" PRId32,
+						  p_target->cmd_name,
 						  channel);
 				break;
 			}
 
 			*pp_hit_watchpoint = p_watchpoint;
-			LOG_INFO("Watchpoint hit"
+			LOG_INFO("Target %s: Watchpoint hit"
 					 " channel=%" PRIu32
 					 " address=%08" TARGET_PRIxADDR
 					 " length=%" PRIu32
@@ -4883,6 +4926,7 @@ sc_riscv32__hit_watchpoint(target* const p_target,
 					 " value=%08" PRIx32
 					 " mask=%08" PRIx32
 					 " unique_id=%d",
+					 p_target->cmd_name,
 					 channel,
 					 p_watchpoint->address,
 					 p_watchpoint->length,
@@ -4954,8 +4998,9 @@ sc_rv32__virt_to_phis_direct_map(target* p_target,
 		*p_bound = UINT32_MAX;
 	}
 
-	LOG_DEBUG("Direct virt_to_phis"
+	LOG_DEBUG("Target %s: Direct virt_to_phis"
 			  " address %08" PRIx32,
+			  p_target->cmd_name,
 			  address);
 	return sc_error_code__get(p_target);
 }
@@ -5182,7 +5227,7 @@ sc_rv32__mmu_1_9(target* p_target,
 	bool const RV_S = 0 != (p_arch->misa & BIT_MASK('S' - 'A'));
 
 	if (!RV_S) {
-		LOG_DEBUG("S-mode is not supporeted");
+		LOG_DEBUG("Target %s: S-mode is not supporeted", p_target->cmd_name);
 		*p_mmu_enabled = 0;
 		return ERROR_OK;
 	}
@@ -5190,7 +5235,7 @@ sc_rv32__mmu_1_9(target* p_target,
 	uint32_t const satp = sc_riscv32__csr_get_value(p_target, CSR_satp);
 
 	if (ERROR_OK == sc_error_code__get(p_target)) {
-		LOG_DEBUG("satp=%08" PRIx32, satp);
+		LOG_DEBUG("Target %s: satp=%08" PRIx32, p_target->cmd_name, satp);
 		*p_mmu_enabled = 0 != (satp & BIT_MASK(31));
 	}
 
@@ -5219,7 +5264,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target,
 	invalidate_DAP_CTR_cache(p_target);
 
 	if (!RV_S) {
-		LOG_DEBUG("misa bit 'S' is 0");
+		LOG_DEBUG("Target %s: misa bit 'S' is 0", p_target->cmd_name);
 		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
 	}
 
@@ -5235,7 +5280,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target,
 
 	uint32_t const current_mode = EXTRACT_FIELD(dbg_status, 6, 7);
 
-	LOG_DEBUG("current_mode=%" PRIu32, current_mode);
+	LOG_DEBUG("Target %s: current_mode=%" PRIu32, p_target->cmd_name, current_mode);
 
 	if (machine_mode == current_mode) {
 		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
@@ -5247,7 +5292,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target,
 		return sc_error_code__get(p_target);
 	}
 
-	LOG_DEBUG("satp=%08" PRIx32, satp);
+	LOG_DEBUG("Target %s: satp=%08" PRIx32, p_target->cmd_name, satp);
 
 	if (0 == (satp & BIT_MASK(31))) {
 		return sc_rv32__virt_to_phis_direct_map(p_target, va, p_physical, p_bound, instruction_space);
@@ -5276,10 +5321,10 @@ sc_rv32__virt_to_phis_1_9(target* p_target,
 		uint32_t const pte_v = EXTRACT_FIELD(pte, 0, 0);
 		uint32_t const pte_r = EXTRACT_FIELD(pte, 1, 1);
 		uint32_t const pte_w = EXTRACT_FIELD(pte, 2, 2);
-		LOG_DEBUG("pte = 0x%08" PRIx32 " (v = 0x%08" PRIx32 " r = 0x%08" PRIx32 " w = 0x%08" PRIx32 ")", pte, pte_v, pte_r, pte_w);
+		LOG_DEBUG("Target %s: pte = 0x%08" PRIx32 " (v = 0x%08" PRIx32 " r = 0x%08" PRIx32 " w = 0x%08" PRIx32 ")", p_target->cmd_name, pte, pte_v, pte_r, pte_w);
 
 		if (0 == pte_v || (0 == pte_r && 0 != pte_w)) {
-			LOG_ERROR("Address translation fault: pte = 0x%08" PRIx32 " (v = 0x%08" PRIx32 " r = 0x%08" PRIx32 " w = 0x%08" PRIx32 ")", pte, pte_v, pte_r, pte_w);
+			LOG_ERROR("Target %s: Address translation fault: pte = 0x%08" PRIx32 " (v = 0x%08" PRIx32 " r = 0x%08" PRIx32 " w = 0x%08" PRIx32 ")", p_target->cmd_name, pte, pte_v, pte_r, pte_w);
 			return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 		}
 
@@ -5288,25 +5333,25 @@ sc_rv32__virt_to_phis_1_9(target* p_target,
 
 		if (!(0 != pte_r || 0 != pte_x)) {
 			if (i < 1) {
-				LOG_ERROR("Address translation fault: Bad level");
+				LOG_ERROR("Target %s: Address translation fault: Bad level", p_target->cmd_name);
 				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 			}
 
 			i = i - 1;
 			a = EXTRACT_FIELD(pte, 10, 31) * pagesize;
-			LOG_DEBUG("Intermediate a= 0x%08" PRIx32, a);
+			LOG_DEBUG("Target %s: Intermediate a= 0x%08" PRIx32, p_target->cmd_name, a);
 		} else {
 			// 5
 			uint32_t const pte_u = EXTRACT_FIELD(pte, 4, 4);
 
 			if ((user_mode == current_mode && 0 == pte_u) || (instruction_space && 0 == pte_x)) {
-				LOG_ERROR("Address translation fault: MMU disable access");
+				LOG_ERROR("Target %s: Address translation fault: MMU disable access", p_target->cmd_name);
 				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 			}
 
 			// 6
 			if (i > 0 && 0 != EXTRACT_FIELD(pte, 10, 19)) {
-				LOG_ERROR("Address translation fault: pte_a[19..10] != 0");
+				LOG_ERROR("Target %s: Address translation fault: pte_a[19..10] != 0", p_target->cmd_name);
 				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 			}
 
@@ -5314,7 +5359,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target,
 			uint32_t const pte_a = EXTRACT_FIELD(pte, 6, 6);
 
 			if (0 == pte_a) {
-				LOG_ERROR("Address translation fault: pte_a[6] == 0");
+				LOG_ERROR("Target %s: Address translation fault: pte_a[6] == 0", p_target->cmd_name);
 				return sc_error_code__update(p_target, ERROR_TARGET_TRANSLATION_FAULT);
 			}
 
@@ -5322,7 +5367,7 @@ sc_rv32__virt_to_phis_1_9(target* p_target,
 			unsigned const off_bits = i > 0 ? 22 : 12;
 			assert(p_physical);
 			*p_physical = (EXTRACT_FIELD(pte, off_bits - 2, 32) << off_bits) | EXTRACT_FIELD(va, 0, off_bits - 1);
-			LOG_DEBUG("Final a= 0x%08" TARGET_PRIxADDR, *p_physical);
+			LOG_DEBUG("Target %s: Final a= 0x%08" TARGET_PRIxADDR, p_target->cmd_name, *p_physical);
 
 			if (p_bound) {
 				*p_bound = UINT32_C(1) << off_bits;
