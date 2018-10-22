@@ -253,7 +253,7 @@ static void ublast_flush_buffer(void)
 
 /**
  * ublast_queue_byte - queue one 'bitbang mode' byte for USB Blaster
- * @param abyte the byte to queue
+ * @abyte: the byte to queue
  *
  * Queues one byte in 'bitbang mode' to the USB Blaster. The byte is not
  * actually sent, but stored in a buffer. The write is performed once
@@ -271,7 +271,7 @@ static void ublast_queue_byte(uint8_t abyte)
 
 /**
  * ublast_compute_pin - compute if gpio should be asserted
- * @param steer control (ie. TRST driven, SRST driven, of fixed)
+ * @steer: control (ie. TRST driven, SRST driven, of fixed)
  *
  * Returns pin value (1 means driven high, 0 mean driven low)
  */
@@ -293,7 +293,7 @@ bool ublast_compute_pin(enum gpio_steer steer)
 
 /**
  * ublast_build_out - build bitbang mode output byte
- * @param type says if reading back TDO is required
+ * @type: says if reading back TDO is required
  *
  * Returns the compute bitbang mode byte
  */
@@ -313,8 +313,8 @@ static uint8_t ublast_build_out(enum scan_type type)
 
 /**
  * ublast_reset - reset the JTAG device is possible
- * @param trst 1 if TRST is to be asserted
- * @param srst 1 if SRST is to be asserted
+ * @trst: 1 if TRST is to be asserted
+ * @srst: 1 if SRST is to be asserted
  */
 static void ublast_reset(int trst, int srst)
 {
@@ -329,7 +329,7 @@ static void ublast_reset(int trst, int srst)
 
 /**
  * ublast_clock_tms - clock a TMS transition
- * @param tms the TMS to be sent
+ * @tms: the TMS to be sent
  *
  * Triggers a TMS transition (ie. one JTAG TAP state move).
  */
@@ -360,15 +360,16 @@ static void ublast_idle_clock(void)
 
 /**
  * ublast_clock_tdi - Output a TDI with bitbang mode
- * @param tdi the TDI bit to be shifted out
- * @param type scan type (ie. does a readback of TDO is required)
+ * @tdi: the TDI bit to be shifted out
+ * @type: scan type (ie. does a readback of TDO is required)
  *
- * Output a TDI bit and assert clock to push it into the JTAG device:
- * - writing out TCK=0, TMS=\<old_state\>=0, TDI=\<tdi\>
- * - writing out TCK=1, TMS=\<new_state\>, TDI=\<tdi\> which triggers the JTAG device acquiring the data.
+ * Output a TDI bit and assert clock to push it into the JTAG device :
+ *  - writing out TCK=0, TMS=<old_state>=0, TDI=<tdi>
+ * - writing out TCK=1, TMS=<new_state>, TDI=<tdi> which triggers the JTAG
+ *    device aquiring the data.
  *
  * If a TDO is to be read back, the required read is requested (bitbang mode),
- * and the USB Blaster will send back a byte with bit0 representing the TDO.
+ * and the USB Blaster will send back a byte with bit0 reprensenting the TDO.
  */
 static void ublast_clock_tdi(int tdi, enum scan_type type)
 {
@@ -386,8 +387,8 @@ static void ublast_clock_tdi(int tdi, enum scan_type type)
 
 /**
  * ublast_clock_tdi_flip_tms - Output a TDI with bitbang mode, change JTAG state
- * @param tdi the TDI bit to be shifted out
- * @param type scan type (ie. does a readback of TDO is required)
+ * @tdi: the TDI bit to be shifted out
+ * @type: scan type (ie. does a readback of TDO is required)
  *
  * This function is the same as ublast_clock_tdi(), but it changes also the TMS
  * while outputing the TDI. This should be the last TDI output of a TDI
@@ -415,8 +416,8 @@ static void ublast_clock_tdi_flip_tms(int tdi, enum scan_type type)
 
 /**
  * ublast_queue_bytes - queue bytes for the USB Blaster
- * @param bytes byte array
- * @param nb_bytes number of bytes
+ * @bytes: byte array
+ * @nb_bytes: number of bytes
  *
  * Queues bytes to be sent to the USB Blaster. The bytes are not
  * actually sent, but stored in a buffer. The write is performed once
@@ -442,42 +443,43 @@ static void ublast_queue_bytes(uint8_t *bytes, int nb_bytes)
 
 /**
  * ublast_tms_seq - write a TMS sequence transition to JTAG
- * @param bits TMS bits to be written (bit0, bit1 .. bitN)
- * @param nb_bits number of TMS bits (between 1 and 8)
+ * @bits: TMS bits to be written (bit0, bit1 .. bitN)
+ * @nb_bits: number of TMS bits (between 1 and 8)
+ * @skip: number of TMS bits to skip at the beginning of the series
  *
  * Write a serie of TMS transitions, where each transition consists in :
- *  - writing out TCK=0, TMS=\<new_state\>, TDI=\<???\>
- *  - writing out TCK=1, TMS=\<new_state\>, TDI=\<???\> which triggers the transition
+ *  - writing out TCK=0, TMS=<new_state>, TDI=<???>
+ *  - writing out TCK=1, TMS=<new_state>, TDI=<???> which triggers the transition
  * The function ensures that at the end of the sequence, the clock (TCK) is put
  * low.
  */
-static void ublast_tms_seq(const uint8_t *bits, int nb_bits)
+static void ublast_tms_seq(const uint8_t *bits, int nb_bits, int skip)
 {
 	int i;
 
 	DEBUG_JTAG_IO("(bits=%02x..., nb_bits=%d)", bits[0], nb_bits);
-	for (i = 0; i < nb_bits; i++)
+	for (i = skip; i < nb_bits; i++)
 		ublast_clock_tms((bits[i / 8] >> (i % 8)) & 0x01);
 	ublast_idle_clock();
 }
 
 /**
  * ublast_tms - write a tms command
- * @param cmd tms command
+ * @cmd: tms command
  */
 static void ublast_tms(struct tms_command *cmd)
 {
 	DEBUG_JTAG_IO("(num_bits=%d)", cmd->num_bits);
-	ublast_tms_seq(cmd->bits, cmd->num_bits);
+	ublast_tms_seq(cmd->bits, cmd->num_bits, 0);
 }
 
 /**
  * ublast_path_move - write a TMS sequence transition to JTAG
- * @param cmd path transition
+ * @cmd: path transition
  *
  * Write a serie of TMS transitions, where each transition consists in :
- *  - writing out TCK=0, TMS=\<new_state\>, TDI=\<???\>
- *  - writing out TCK=1, TMS=\<new_state\>, TDI=\<???\> which triggers the transition
+ *  - writing out TCK=0, TMS=<new_state>, TDI=<???>
+ *  - writing out TCK=1, TMS=<new_state>, TDI=<???> which triggers the transition
  * The function ensures that at the end of the sequence, the clock (TCK) is put
  * low.
  */
@@ -499,12 +501,13 @@ static void ublast_path_move(struct pathmove_command *cmd)
 
 /**
  * ublast_state_move - move JTAG state to the target state
- * @param state the target state
+ * @state: the target state
+ * @skip: number of bits to skip at the beginning of the path
  *
  * Input the correct TMS sequence to the JTAG TAP so that we end up in the
  * target state. This assumes the current state (tap_get_state()) is correct.
  */
-static void ublast_state_move(tap_state_t state)
+static void ublast_state_move(tap_state_t state, int skip)
 {
 	uint8_t tms_scan;
 	int tms_len;
@@ -515,14 +518,14 @@ static void ublast_state_move(tap_state_t state)
 		return;
 	tms_scan = tap_get_tms_path(tap_get_state(), state);
 	tms_len = tap_get_tms_path_len(tap_get_state(), state);
-	ublast_tms_seq(&tms_scan, tms_len);
+	ublast_tms_seq(&tms_scan, tms_len, skip);
 	tap_set_state(state);
 }
 
 /**
  * ublast_read_byteshifted_tdos - read TDO of byteshift writes
- * @param buf the buffer to store the bits
- * @param nb_bits the number of bits
+ * @buf: the buffer to store the bits
+ * @nb_bits: the number of bits
  *
  * Reads back from USB Blaster TDO bits, triggered by a 'byteshift write', ie. eight
  * bits per received byte from USB interface, and store them in buffer.
@@ -549,8 +552,8 @@ static int ublast_read_byteshifted_tdos(uint8_t *buf, int nb_bytes)
 
 /**
  * ublast_read_bitbang_tdos - read TDO of bitbang writes
- * @param buf the buffer to store the bits
- * @param nb_bits the number of bits
+ * @buf: the buffer to store the bits
+ * @nb_bits: the number of bits
  *
  * Reads back from USB Blaster TDO bits, triggered by a 'bitbang write', ie. one
  * bit per received byte from USB interface, and store them in buffer, where :
@@ -589,9 +592,9 @@ static int ublast_read_bitbang_tdos(uint8_t *buf, int nb_bits)
 
 /**
  * ublast_queue_tdi - short description
- * @param bits bits to be queued on TDI (or NULL if 0 are to be queued)
- * @param nb_bits number of bits
- * @param scan scan type (ie. if TDO read back is required or not)
+ * @bits: bits to be queued on TDI (or NULL if 0 are to be queued)
+ * @nb_bits: number of bits
+ * @scan: scan type (ie. if TDO read back is required or not)
  *
  * Outputs a serie of TDI bits on TDI.
  * As a side effect, the last TDI bit is sent along a TMS=1, and triggers a JTAG
@@ -687,9 +690,9 @@ static void ublast_runtest(int cycles, tap_state_t state)
 {
 	DEBUG_JTAG_IO("%s(cycles=%i, end_state=%d)", __func__, cycles, state);
 
-	ublast_state_move(TAP_IDLE);
+	ublast_state_move(TAP_IDLE, 0);
 	ublast_queue_tdi(NULL, cycles, SCAN_OUT);
-	ublast_state_move(state);
+	ublast_state_move(state, 0);
 }
 
 static void ublast_stableclocks(int cycles)
@@ -700,7 +703,7 @@ static void ublast_stableclocks(int cycles)
 
 /**
  * ublast_scan - launches a DR-scan or IR-scan
- * @param cmd the command to launch
+ * @cmd: the command to launch
  *
  * Launch a JTAG IR-scan or DR-scan
  *
@@ -719,9 +722,9 @@ static int ublast_scan(struct scan_command *cmd)
 	scan_bits = jtag_build_buffer(cmd, &buf);
 
 	if (cmd->ir_scan)
-		ublast_state_move(TAP_IRSHIFT);
+		ublast_state_move(TAP_IRSHIFT, 0);
 	else
-		ublast_state_move(TAP_DRSHIFT);
+		ublast_state_move(TAP_DRSHIFT, 0);
 
 	log_buf = hexdump(buf, DIV_ROUND_UP(scan_bits, 8));
 	DEBUG_JTAG_IO("%s(scan=%s, type=%s, bits=%d, buf=[%s], end_state=%d)", __func__,
@@ -732,20 +735,15 @@ static int ublast_scan(struct scan_command *cmd)
 
 	ublast_queue_tdi(buf, scan_bits, type);
 
-	/*
-	 * As our JTAG is in an unstable state (IREXIT1 or DREXIT1), move it
-	 * forward to a stable IRPAUSE or DRPAUSE.
-	 */
-	ublast_clock_tms(0);
-	if (cmd->ir_scan)
-		tap_set_state(TAP_IRPAUSE);
-	else
-		tap_set_state(TAP_DRPAUSE);
-
 	ret = jtag_read_buffer(buf, cmd);
 	if (buf)
 		free(buf);
-	ublast_state_move(cmd->end_state);
+	/*
+	 * ublast_queue_tdi sends the last bit with TMS=1. We are therefore
+	 * already in Exit1-DR/IR and have to skip the first step on our way
+	 * to end_state.
+	 */
+	ublast_state_move(cmd->end_state, 1);
 	return ret;
 }
 
@@ -775,7 +773,7 @@ static void ublast_initial_wipeout(void)
 	/*
 	 * Put JTAG in RESET state (five 1 on TMS)
 	 */
-	ublast_tms_seq(&tms_reset, 5);
+	ublast_tms_seq(&tms_reset, 5, 0);
 	tap_set_state(TAP_RESET);
 }
 
@@ -804,7 +802,7 @@ static int ublast_execute_queue(void)
 			ublast_stableclocks(cmd->cmd.stableclocks->num_cycles);
 			break;
 		case JTAG_TLR_RESET:
-			ublast_state_move(cmd->cmd.statemove->end_state);
+			ublast_state_move(cmd->cmd.statemove->end_state, 0);
 			break;
 		case JTAG_PATHMOVE:
 			ublast_path_move(cmd->cmd.pathmove);
@@ -838,26 +836,30 @@ static int ublast_init(void)
 {
 	int ret, i;
 
-	if (info.lowlevel_name) {
-		for (i = 0; lowlevel_drivers_map[i].name; i++)
-			if (!strcmp(lowlevel_drivers_map[i].name, info.lowlevel_name))
+	for (i = 0; lowlevel_drivers_map[i].name; i++) {
+		if (info.lowlevel_name) {
+			if (!strcmp(lowlevel_drivers_map[i].name, info.lowlevel_name)) {
+				info.drv = lowlevel_drivers_map[i].drv_register();
+				if (!info.drv) {
+					LOG_ERROR("Error registering lowlevel driver \"%s\"",
+						  info.lowlevel_name);
+					return ERROR_JTAG_DEVICE_ERROR;
+				}
 				break;
-		if (lowlevel_drivers_map[i].name)
+			}
+		} else {
 			info.drv = lowlevel_drivers_map[i].drv_register();
-		if (!info.drv) {
-			LOG_ERROR("no lowlevel driver found for %s or lowlevel driver opening error",
-				  info.lowlevel_name);
-			return ERROR_JTAG_DEVICE_ERROR;
+			if (info.drv) {
+				info.lowlevel_name = strdup(lowlevel_drivers_map[i].name);
+				LOG_INFO("No lowlevel driver configured, using %s", info.lowlevel_name);
+				break;
+			}
 		}
-	} else {
-		LOG_INFO("No lowlevel driver configured, will try them all");
-		for (i = 0; !info.drv && lowlevel_drivers_map[i].name; i++)
-			info.drv = lowlevel_drivers_map[i].drv_register();
-		if (!info.drv) {
-			LOG_ERROR("no lowlevel driver found");
-			return ERROR_JTAG_DEVICE_ERROR;
-		}
-		info.lowlevel_name = strdup(lowlevel_drivers_map[i-1].name);
+	}
+
+	if (!info.drv) {
+		LOG_ERROR("No lowlevel driver available");
+		return ERROR_JTAG_DEVICE_ERROR;
 	}
 
 	/*

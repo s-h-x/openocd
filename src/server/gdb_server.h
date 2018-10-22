@@ -36,6 +36,7 @@ struct reg;
 
 int gdb_target_add_all(struct target *target);
 int gdb_register_commands(struct command_context *command_context);
+void gdb_service_free(void);
 
 int gdb_put_packet(struct connection *connection, char *buffer, int len);
 
@@ -45,10 +46,7 @@ static inline struct target *get_target_from_connection(struct connection *conne
 	return gdb_service->target;
 }
 
-#if BUILD_RISCV == 1
 void gdb_set_frontend_state_running(struct connection *connection);
-void gdb_sig_halted(struct connection *connection);
-#endif
 
 #define ERROR_GDB_BUFFER_TOO_SMALL (-800)
 #define ERROR_GDB_TIMEOUT (-801)

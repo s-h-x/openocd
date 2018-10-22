@@ -31,6 +31,9 @@ extern struct flash_driver at91samd_flash;
 extern struct flash_driver ath79_flash;
 extern struct flash_driver atsamv_flash;
 extern struct flash_driver avr_flash;
+extern struct flash_driver bluenrgx_flash;
+extern struct flash_driver cc3220sf_flash;
+extern struct flash_driver cc26xx_flash;
 extern struct flash_driver cfi_flash;
 extern struct flash_driver dsp5680xx_flash;
 extern struct flash_driver efm32_flash;
@@ -38,9 +41,7 @@ extern struct flash_driver em357_flash;
 extern struct flash_driver faux_flash;
 extern struct flash_driver fm3_flash;
 extern struct flash_driver fm4_flash;
-#if BUILD_RISCV == 1
 extern struct flash_driver fespi_flash;
-#endif
 extern struct flash_driver jtagspi_flash;
 extern struct flash_driver kinetis_flash;
 extern struct flash_driver kinetis_ke_flash;
@@ -50,6 +51,7 @@ extern struct flash_driver lpc2900_flash;
 extern struct flash_driver lpcspifi_flash;
 extern struct flash_driver mdr_flash;
 extern struct flash_driver mrvlqspi_flash;
+extern struct flash_driver msp432_flash;
 extern struct flash_driver niietcm4_flash;
 extern struct flash_driver nrf5_flash;
 extern struct flash_driver nrf51_flash;
@@ -57,6 +59,10 @@ extern struct flash_driver numicro_flash;
 extern struct flash_driver ocl_flash;
 extern struct flash_driver pic32mx_flash;
 extern struct flash_driver psoc4_flash;
+extern struct flash_driver psoc5lp_flash;
+extern struct flash_driver psoc5lp_eeprom_flash;
+extern struct flash_driver psoc5lp_nvl_flash;
+extern struct flash_driver psoc6_flash;
 extern struct flash_driver sim3x_flash;
 extern struct flash_driver stellaris_flash;
 extern struct flash_driver stm32f1x_flash;
@@ -70,6 +76,7 @@ extern struct flash_driver str9x_flash;
 extern struct flash_driver str9xpec_flash;
 extern struct flash_driver tms470_flash;
 extern struct flash_driver virtual_flash;
+extern struct flash_driver xcf_flash;
 extern struct flash_driver xmc1xxx_flash;
 extern struct flash_driver xmc4xxx_flash;
 
@@ -89,6 +96,9 @@ static struct flash_driver *flash_drivers[] = {
 	&ath79_flash,
 	&atsamv_flash,
 	&avr_flash,
+	&bluenrgx_flash,
+	&cc3220sf_flash,
+	&cc26xx_flash,
 	&cfi_flash,
 	&dsp5680xx_flash,
 	&efm32_flash,
@@ -96,9 +106,7 @@ static struct flash_driver *flash_drivers[] = {
 	&faux_flash,
 	&fm3_flash,
 	&fm4_flash,
-#if BUILD_RISCV == 1
 	&fespi_flash,
-#endif
 	&jtagspi_flash,
 	&kinetis_flash,
 	&kinetis_ke_flash,
@@ -108,6 +116,7 @@ static struct flash_driver *flash_drivers[] = {
 	&lpcspifi_flash,
 	&mdr_flash,
 	&mrvlqspi_flash,
+	&msp432_flash,
 	&niietcm4_flash,
 	&nrf5_flash,
 	&nrf51_flash,
@@ -115,6 +124,10 @@ static struct flash_driver *flash_drivers[] = {
 	&ocl_flash,
 	&pic32mx_flash,
 	&psoc4_flash,
+	&psoc5lp_flash,
+	&psoc5lp_eeprom_flash,
+	&psoc5lp_nvl_flash,
+	&psoc6_flash,
 	&sim3x_flash,
 	&stellaris_flash,
 	&stm32f1x_flash,
@@ -128,6 +141,7 @@ static struct flash_driver *flash_drivers[] = {
 	&str9xpec_flash,
 	&tms470_flash,
 	&virtual_flash,
+	&xcf_flash,
 	&xmc1xxx_flash,
 	&xmc4xxx_flash,
 	NULL,

@@ -77,8 +77,8 @@ static int jtag_vpi_receive_cmd(struct vpi_cmd *vpi)
 
 /**
  * jtag_vpi_reset - ask to reset the JTAG device
- * @param trst 1 if TRST is to be asserted
- * @param srst 1 if SRST is to be asserted
+ * @trst: 1 if TRST is to be asserted
+ * @srst: 1 if SRST is to be asserted
  */
 static int jtag_vpi_reset(int trst, int srst)
 {
@@ -91,12 +91,12 @@ static int jtag_vpi_reset(int trst, int srst)
 
 /**
  * jtag_vpi_tms_seq - ask a TMS sequence transition to JTAG
- * @param bits TMS bits to be written (bit0, bit1 .. bitN)
- * @param nb_bits number of TMS bits (between 1 and 8)
+ * @bits: TMS bits to be written (bit0, bit1 .. bitN)
+ * @nb_bits: number of TMS bits (between 1 and 8)
  *
  * Write a serie of TMS transitions, where each transition consists in :
- *  - writing out TCK=0, TMS=\<new_state\>, TDI=\<???\>
- *  - writing out TCK=1, TMS=\<new_state\>, TDI=\<???\> which triggers the transition
+ *  - writing out TCK=0, TMS=<new_state>, TDI=<???>
+ *  - writing out TCK=1, TMS=<new_state>, TDI=<???> which triggers the transition
  * The function ensures that at the end of the sequence, the clock (TCK) is put
  * low.
  */
@@ -117,11 +117,11 @@ static int jtag_vpi_tms_seq(const uint8_t *bits, int nb_bits)
 
 /**
  * jtag_vpi_path_move - ask a TMS sequence transition to JTAG
- * @param cmd path transition
+ * @cmd: path transition
  *
  * Write a serie of TMS transitions, where each transition consists in :
- *  - writing out TCK=0, TMS=\<new_state\>, TDI=\<???\>
- *  - writing out TCK=1, TMS=\<new_state\>, TDI=\<???\> which triggers the transition
+ *  - writing out TCK=0, TMS=<new_state>, TDI=<???>
+ *  - writing out TCK=1, TMS=<new_state>, TDI=<???> which triggers the transition
  * The function ensures that at the end of the sequence, the clock (TCK) is put
  * low.
  */
@@ -143,7 +143,7 @@ static int jtag_vpi_path_move(struct pathmove_command *cmd)
 
 /**
  * jtag_vpi_tms - ask a tms command
- * @param cmd tms command
+ * @cmd: tms command
  */
 static int jtag_vpi_tms(struct tms_command *cmd)
 {
@@ -198,29 +198,26 @@ static int jtag_vpi_queue_tdi_xfer(uint8_t *bits, int nb_bits, int tap_shift)
 
 /**
  * jtag_vpi_queue_tdi - short description
- * @param bits bits to be queued on TDI (or NULL if 0 are to be queued)
- * @param nb_bits number of bits
+ * @bits: bits to be queued on TDI (or NULL if 0 are to be queued)
+ * @nb_bits: number of bits
  */
 static int jtag_vpi_queue_tdi(uint8_t *bits, int nb_bits, int tap_shift)
 {
 	int nb_xfer = DIV_ROUND_UP(nb_bits, XFERT_MAX_SIZE * 8);
-	uint8_t *xmit_buffer = bits;
-	int xmit_nb_bits = nb_bits;
-	int i = 0;
 	int retval;
 
 	while (nb_xfer) {
-
 		if (nb_xfer ==  1) {
-			retval = jtag_vpi_queue_tdi_xfer(&xmit_buffer[i], xmit_nb_bits, tap_shift);
+			retval = jtag_vpi_queue_tdi_xfer(bits, nb_bits, tap_shift);
 			if (retval != ERROR_OK)
 				return retval;
 		} else {
-			retval = jtag_vpi_queue_tdi_xfer(&xmit_buffer[i], XFERT_MAX_SIZE * 8, NO_TAP_SHIFT);
+			retval = jtag_vpi_queue_tdi_xfer(bits, XFERT_MAX_SIZE * 8, NO_TAP_SHIFT);
 			if (retval != ERROR_OK)
 				return retval;
-			xmit_nb_bits -= XFERT_MAX_SIZE * 8;
-			i += XFERT_MAX_SIZE;
+			nb_bits -= XFERT_MAX_SIZE * 8;
+			if (bits)
+				bits += XFERT_MAX_SIZE;
 		}
 
 		nb_xfer--;
@@ -231,7 +228,7 @@ static int jtag_vpi_queue_tdi(uint8_t *bits, int nb_bits, int tap_shift)
 
 /**
  * jtag_vpi_clock_tms - clock a TMS transition
- * @param tms the TMS to be sent
+ * @tms: the TMS to be sent
  *
  * Triggers a TMS transition (ie. one JTAG TAP state move).
  */
@@ -245,7 +242,7 @@ static int jtag_vpi_clock_tms(int tms)
 
 /**
  * jtag_vpi_scan - launches a DR-scan or IR-scan
- * @param cmd the command to launch
+ * @cmd: the command to launch
  *
  * Launch a JTAG IR-scan or DR-scan
  *
@@ -318,11 +315,7 @@ static int jtag_vpi_runtest(int cycles, tap_state_t state)
 	if (retval != ERROR_OK)
 		return retval;
 
-#if BUILD_RISCV == 1
-	retval = jtag_vpi_queue_tdi(NULL, cycles, NO_TAP_SHIFT);
-#else
 	retval = jtag_vpi_queue_tdi(NULL, cycles, TAP_SHIFT);
-#endif
 	if (retval != ERROR_OK)
 		return retval;
 
