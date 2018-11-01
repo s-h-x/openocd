@@ -53,7 +53,6 @@ int riscv_batch_run(struct riscv_batch *batch)
 
 	keep_alive();
 
-	LOG_DEBUG("%s: running a batch of %ld scans", batch->target->cmd_name, (long)batch->used_scans);
 	riscv_batch_add_nop(batch);
 
 	for (size_t i = 0; i < batch->used_scans; ++i) {
@@ -62,7 +61,6 @@ int riscv_batch_run(struct riscv_batch *batch)
 			jtag_add_runtest(batch->idle_count, TAP_IDLE);
 	}
 
-	LOG_DEBUG("%s: executing queue", batch->target->cmd_name);
 	if (jtag_execute_queue() != ERROR_OK) {
 		LOG_ERROR("%s: Unable to execute JTAG queue", batch->target->cmd_name);
 		return ERROR_FAIL;
@@ -104,10 +102,6 @@ size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address)
 	riscv_batch_add_nop(batch);
 
 	batch->read_keys[batch->read_keys_used] = batch->used_scans - 1;
-	LOG_DEBUG("%s: read key %u for batch 0x%p is %u (0x%p)",
-			batch->target->cmd_name,
-			(unsigned) batch->read_keys_used, batch, (unsigned) (batch->used_scans - 1),
-			batch->data_in + sizeof(uint64_t) * (batch->used_scans + 1));
 	return batch->read_keys_used++;
 }
 
@@ -138,7 +132,6 @@ void riscv_batch_add_nop(struct riscv_batch *batch)
 	riscv_fill_dmi_nop_u64(batch->target, (char *)field->in_value);
 	batch->last_scan = RISCV_SCAN_TYPE_NOP;
 	batch->used_scans++;
-	LOG_DEBUG("%s:  added NOP with in_value=0x%p", batch->target->cmd_name, field->in_value);
 }
 
 void dump_field(const struct scan_field *field)
