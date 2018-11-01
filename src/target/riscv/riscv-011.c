@@ -248,7 +248,7 @@ static unsigned int slot_offset(const struct target *target, slot_t slot)
 				case SLOT_LAST: return info->dramsize-2;
 			}
 	}
-	LOG_ERROR("slot_offset called with xlen=%d, slot=%d",
+	LOG_ERROR("%s: slot_offset called with xlen=%d, slot=%d", target->cmd_name,
 			riscv_xlen(target), slot);
 	assert(0);
 	return 0; /* Silence -Werror=return-type */
@@ -296,12 +296,12 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 
 	int retval = jtag_execute_queue();
 	if (retval != ERROR_OK) {
-		LOG_ERROR("failed jtag scan: %d", retval);
+		LOG_ERROR("%s: failed jtag scan: %d", target->cmd_name, retval);
 		return retval;
 	}
 
 	uint32_t in = buf_get_u32(field.in_value, 0, 32);
-	LOG_DEBUG("DTMCONTROL: 0x%x -> 0x%x", out, in);
+	LOG_DEBUG("%s: DTMCONTROL: 0x%x -> 0x%x", target->cmd_name, out, in);
 
 	return in;
 }
@@ -320,7 +320,7 @@ static uint32_t idcode_scan(struct target *target)
 
 	int retval = jtag_execute_queue();
 	if (retval != ERROR_OK) {
-		LOG_ERROR("failed jtag scan: %d", retval);
+		LOG_ERROR("%s: failed jtag scan: %d", target->cmd_name, retval);
 		return retval;
 	}
 
@@ -328,7 +328,7 @@ static uint32_t idcode_scan(struct target *target)
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
 	uint32_t in = buf_get_u32(field.in_value, 0, 32);
-	LOG_DEBUG("IDCODE: 0x0 -> 0x%x", in);
+	LOG_DEBUG("%s: IDCODE: 0x0 -> 0x%x", target->cmd_name, in);
 
 	return in;
 }
@@ -337,7 +337,7 @@ static void increase_dbus_busy_delay(struct target *target)
 {
 	riscv011_info_t *info = get_info(target);
 	info->dbus_busy_delay += info->dbus_busy_delay / 10 + 1;
-	LOG_DEBUG("dtmcontrol_idle=%d, dbus_busy_delay=%d, interrupt_high_delay=%d",
+	LOG_DEBUG("%s: dtmcontrol_idle=%d, dbus_busy_delay=%d, interrupt_high_delay=%d", target->cmd_name,
 			info->dtmcontrol_idle, info->dbus_busy_delay,
 			info->interrupt_high_delay);
 
@@ -348,7 +348,7 @@ static void increase_interrupt_high_delay(struct target *target)
 {
 	riscv011_info_t *info = get_info(target);
 	info->interrupt_high_delay += info->interrupt_high_delay / 10 + 1;
-	LOG_DEBUG("dtmcontrol_idle=%d, dbus_busy_delay=%d, interrupt_high_delay=%d",
+	LOG_DEBUG("%s: dtmcontrol_idle=%d, dbus_busy_delay=%d, interrupt_high_delay=%d", target->cmd_name,
 			info->dtmcontrol_idle, info->dbus_busy_delay,
 			info->interrupt_high_delay);
 }
@@ -436,7 +436,7 @@ static dbus_status_t dbus_scan(struct target *target, uint16_t *address_in,
 
 	int retval = jtag_execute_queue();
 	if (retval != ERROR_OK) {
-		LOG_ERROR("dbus_scan failed jtag scan");
+		LOG_ERROR("%s: dbus_scan failed jtag scan", target->cmd_name);
 		return DBUS_STATUS_FAILED;
 	}
 
@@ -468,14 +468,14 @@ static uint64_t dbus_read(struct target *target, uint16_t address)
 		if (status == DBUS_STATUS_BUSY)
 			increase_dbus_busy_delay(target);
 		if (status == DBUS_STATUS_FAILED) {
-			LOG_ERROR("dbus_read(0x%x) failed!", address);
+			LOG_ERROR("%s: dbus_read(0x%x) failed!", target->cmd_name, address);
 			return 0;
 		}
 	} while (((status == DBUS_STATUS_BUSY) || (address_in != address)) &&
 			i++ < 256);
 
 	if (status != DBUS_STATUS_SUCCESS)
-		LOG_ERROR("failed read from 0x%x; value=0x%" PRIx64 ", status=%d\n", address, value, status);
+		LOG_ERROR("%s: failed read from 0x%x; value=0x%" PRIx64 ", status=%d\n", target->cmd_name, address, value, status);
 
 	return value;
 }
@@ -490,7 +490,7 @@ static void dbus_write(struct target *target, uint16_t address, uint64_t value)
 			increase_dbus_busy_delay(target);
 	}
 	if (status != DBUS_STATUS_SUCCESS)
-		LOG_ERROR("failed to write 0x%" PRIx64 " to 0x%x; status=%d\n", value, address, status);
+		LOG_ERROR("%s: failed to write 0x%" PRIx64 " to 0x%x; status=%d", target->cmd_name, value, address, status);
 }
 
 /*** scans "class" ***/
@@ -676,7 +676,7 @@ static bits_t read_bits(struct target *target)
 			if (status == DBUS_STATUS_BUSY) {
 				if (address_in == (1<<info->addrbits) - 1 &&
 						value == (1ULL<<DBUS_DATA_SIZE) - 1) {
-					LOG_ERROR("TDO seems to be stuck high.");
+					LOG_ERROR("%s: TDO seems to be stuck high.", target->cmd_name);
 					return err_result;
 				}
 				increase_dbus_busy_delay(target);
@@ -687,7 +687,7 @@ static bits_t read_bits(struct target *target)
 		} while (status == DBUS_STATUS_BUSY && i++ < 256);
 
 		if (i >= 256) {
-			LOG_ERROR("Failed to read from 0x%x; status=%d", address_in, status);
+			LOG_ERROR("%s: Failed to read from 0x%x; status=%d", target->cmd_name, address_in, status);
 			return err_result;
 		}
 	} while (address_in > 0x10 && address_in != DMCONTROL);
@@ -714,8 +714,9 @@ static int wait_for_debugint_clear(struct target *target, bool ignore_first)
 		if (!bits.interrupt)
 			return ERROR_OK;
 		if (time(NULL) - start > riscv_command_timeout_sec) {
-			LOG_ERROR("Timed out waiting for debug int to clear."
-				  "Increase timeout with riscv set_command_timeout_sec.");
+			LOG_ERROR("%s: Timed out waiting for debug int to clear."
+					  "Increase timeout with riscv set_command_timeout_sec.",
+					  target->cmd_name);
 			return ERROR_FAIL;
 		}
 	}
@@ -727,8 +728,11 @@ static int dram_check32(struct target *target, unsigned int index,
 	uint16_t address = dram_address(index);
 	uint32_t actual = dbus_read(target, address);
 	if (expected != actual) {
-		LOG_ERROR("Wrote 0x%x to Debug RAM at %d, but read back 0x%x",
-				expected, index, actual);
+		LOG_ERROR("%s: Wrote 0x%x to Debug RAM at %d, but read back 0x%x",
+				  target->cmd_name,
+				  expected,
+				  index,
+				  actual);
 		return ERROR_FAIL;
 	}
 	return ERROR_OK;
@@ -740,10 +744,12 @@ static void cache_set32(struct target *target, unsigned int index, uint32_t data
 	if (info->dram_cache[index].valid &&
 			info->dram_cache[index].data == data) {
 		/* This is already preset on the target. */
-		LOG_DEBUG("cache[0x%x] = 0x%08x: DASM(0x%x) (hit)", index, data, data);
+		LOG_DEBUG("%s: cache[0x%x] = 0x%08x: DASM(0x%x) (hit)",
+				  target->cmd_name, index, data, data);
 		return;
 	}
-	LOG_DEBUG("cache[0x%x] = 0x%08x: DASM(0x%x)", index, data, data);
+	LOG_DEBUG("%s: cache[0x%x] = 0x%08x: DASM(0x%x)",
+			  target->cmd_name, index, data, data);
 	info->dram_cache[index].data = data;
 	info->dram_cache[index].valid = true;
 	info->dram_cache[index].dirty = true;
@@ -781,7 +787,8 @@ static void dump_debug_ram(struct target *target)
 {
 	for (unsigned int i = 0; i < DRAM_CACHE_SIZE; i++) {
 		uint32_t value = dram_read32(target, i);
-		LOG_ERROR("Debug RAM 0x%x: 0x%08x", i, value);
+		LOG_ERROR("%s: Debug RAM 0x%x: 0x%08x",
+				  target->cmd_name, i, value);
 	}
 }
 
@@ -832,7 +839,7 @@ static int cache_check(struct target *target)
 #define CACHE_NO_READ	128
 static int cache_write(struct target *target, unsigned int address, bool run)
 {
-	LOG_DEBUG("enter");
+	LOG_DEBUG("%s: enter", target->cmd_name);
 	riscv011_info_t *info = get_info(target);
 	scans_t *scans = scans_new(target, info->dramsize + 2);
 
@@ -869,7 +876,7 @@ static int cache_write(struct target *target, unsigned int address, bool run)
 	int retval = scans_execute(scans);
 	if (retval != ERROR_OK) {
 		scans_delete(scans);
-		LOG_ERROR("JTAG execute failed.");
+		LOG_ERROR("%s: JTAG execute failed.", target->cmd_name);
 		return retval;
 	}
 
@@ -881,14 +888,14 @@ static int cache_write(struct target *target, unsigned int address, bool run)
 			case DBUS_STATUS_SUCCESS:
 				break;
 			case DBUS_STATUS_FAILED:
-				LOG_ERROR("Debug RAM write failed. Hardware error?");
+				LOG_ERROR("%s: Debug RAM write failed. Hardware error?", target->cmd_name);
 				scans_delete(scans);
 				return ERROR_FAIL;
 			case DBUS_STATUS_BUSY:
 				errors++;
 				break;
 			default:
-				LOG_ERROR("Got invalid bus access status: %d", status);
+				LOG_ERROR("%s: Got invalid bus access status: %d", target->cmd_name, status);
 				scans_delete(scans);
 				return ERROR_FAIL;
 		}
@@ -910,7 +917,7 @@ static int cache_write(struct target *target, unsigned int address, bool run)
 			cache_clean(target);
 
 		if (wait_for_debugint_clear(target, true) != ERROR_OK) {
-			LOG_ERROR("Debug interrupt didn't clear.");
+			LOG_ERROR("%s: Debug interrupt didn't clear.", target->cmd_name);
 			dump_debug_ram(target);
 			scans_delete(scans);
 			return ERROR_FAIL;
@@ -931,7 +938,7 @@ static int cache_write(struct target *target, unsigned int address, bool run)
 				increase_interrupt_high_delay(target);
 				/* Slow path wait for it to clear. */
 				if (wait_for_debugint_clear(target, false) != ERROR_OK) {
-					LOG_ERROR("Debug interrupt didn't clear.");
+					LOG_ERROR("%s: Debug interrupt didn't clear.", target->cmd_name);
 					dump_debug_ram(target);
 					scans_delete(scans);
 					return ERROR_FAIL;
@@ -941,8 +948,9 @@ static int cache_write(struct target *target, unsigned int address, bool run)
 				unsigned int read_addr = scans_get_u32(scans, scans->next_scan-1,
 						DBUS_ADDRESS_START, info->addrbits);
 				if (read_addr != address) {
-					LOG_INFO("Got data from 0x%x but expected it from 0x%x",
-							read_addr, address);
+					LOG_INFO("%s: Got data from 0x%x but expected it from 0x%x",
+							 target->cmd_name,
+							 read_addr, address);
 				}
 				info->dram_cache[read_addr].data =
 					scans_get_u32(scans, scans->next_scan-1, DBUS_DATA_START, 32);
@@ -952,7 +960,7 @@ static int cache_write(struct target *target, unsigned int address, bool run)
 	}
 
 	scans_delete(scans);
-	LOG_DEBUG("exit");
+	LOG_DEBUG("%s: exit", target->cmd_name);
 
 	return ERROR_OK;
 }
@@ -996,8 +1004,9 @@ static int wait_for_state(struct target *target, enum target_state state)
 		if (target->state == state)
 			return ERROR_OK;
 		if (time(NULL) - start > riscv_command_timeout_sec) {
-			LOG_ERROR("Timed out waiting for state %d. "
-				  "Increase timeout with riscv set_command_timeout_sec.", state);
+			LOG_ERROR("%s: Timed out waiting for state %d. "
+					  "Increase timeout with riscv set_command_timeout_sec.",
+					  target->cmd_name, state);
 			return ERROR_FAIL;
 		}
 	}
@@ -1012,12 +1021,14 @@ static int read_csr(struct target *target, uint64_t *value, uint32_t csr)
 	if (cache_write(target, 4, true) != ERROR_OK)
 		return ERROR_FAIL;
 	*value = cache_get(target, SLOT0);
-	LOG_DEBUG("csr 0x%x = 0x%" PRIx64, csr, *value);
+	LOG_DEBUG("%s: csr 0x%x = 0x%" PRIx64, target->cmd_name, csr, *value);
 
 	uint32_t exception = cache_get32(target, info->dramsize-1);
 	if (exception) {
-		LOG_WARNING("Got exception 0x%x when reading %s", exception,
-				gdb_regno_name(GDB_REGNO_CSR0 + csr));
+		LOG_WARNING("%s: Got exception 0x%x when reading %s",
+					target->cmd_name,
+					exception,
+					gdb_regno_name(GDB_REGNO_CSR0 + csr));
 		*value = ~0;
 		return ERROR_FAIL;
 	}
@@ -1027,7 +1038,7 @@ static int read_csr(struct target *target, uint64_t *value, uint32_t csr)
 
 static int write_csr(struct target *target, uint32_t csr, uint64_t value)
 {
-	LOG_DEBUG("csr 0x%x <- 0x%" PRIx64, csr, value);
+	LOG_DEBUG("%s: csr 0x%x <- 0x%" PRIx64, target->cmd_name, csr, value);
 	cache_set_load(target, 0, S0, SLOT0);
 	cache_set32(target, 1, csrw(S0, csr));
 	cache_set_jump(target, 2);
@@ -1080,7 +1091,7 @@ static int execute_resume(struct target *target, bool step)
 {
 	riscv011_info_t *info = get_info(target);
 
-	LOG_DEBUG("step=%d", step);
+	LOG_DEBUG("%s: step=%d", target->cmd_name, step);
 
 	maybe_write_tselect(target);
 
@@ -1126,7 +1137,7 @@ static int execute_resume(struct target *target, bool step)
 	cache_invalidate(target);
 
 	if (wait_for_debugint_clear(target, true) != ERROR_OK) {
-		LOG_ERROR("Debug interrupt didn't clear.");
+		LOG_ERROR("%s: Debug interrupt didn't clear.", target->cmd_name);
 		return ERROR_FAIL;
 	}
 
@@ -1150,8 +1161,9 @@ static int full_step(struct target *target, bool announce)
 		if (target->state != TARGET_DEBUG_RUNNING)
 			break;
 		if (time(NULL) - start > riscv_command_timeout_sec) {
-			LOG_ERROR("Timed out waiting for step to complete."
-					"Increase timeout with riscv set_command_timeout_sec");
+			LOG_ERROR("%s: Timed out waiting for step to complete."
+					  "Increase timeout with riscv set_command_timeout_sec",
+					  target->cmd_name);
 			return ERROR_FAIL;
 		}
 	}
@@ -1161,7 +1173,7 @@ static int full_step(struct target *target, bool announce)
 static int resume(struct target *target, int debug_execution, bool step)
 {
 	if (debug_execution) {
-		LOG_ERROR("TODO: debug_execution is true");
+		LOG_ERROR("%s: TODO: debug_execution is true", target->cmd_name);
 		return ERROR_FAIL;
 	}
 
@@ -1172,11 +1184,13 @@ static uint64_t reg_cache_get(struct target *target, unsigned int number)
 {
 	struct reg *r = &target->reg_cache->reg_list[number];
 	if (!r->valid) {
-		LOG_ERROR("Register cache entry for %d is invalid!", number);
+		LOG_ERROR("%s: Register cache entry for %d is invalid!",
+				  target->cmd_name,
+				  number);
 		assert(r->valid);
 	}
 	uint64_t value = buf_get_u64(r->value, 0, r->size);
-	LOG_DEBUG("%s = 0x%" PRIx64, r->name, value);
+	LOG_DEBUG("%s: %s = 0x%" PRIx64, target->cmd_name, r->name, value);
 	return value;
 }
 
@@ -1184,7 +1198,7 @@ static void reg_cache_set(struct target *target, unsigned int number,
 		uint64_t value)
 {
 	struct reg *r = &target->reg_cache->reg_list[number];
-	LOG_DEBUG("%s <= 0x%" PRIx64, r->name, value);
+	LOG_DEBUG("%s: %s <= 0x%" PRIx64, target->cmd_name, r->name, value);
 	r->valid = true;
 	buf_set_u64(r->value, 0, r->size, value);
 }
@@ -1213,7 +1227,7 @@ static int register_read(struct target *target, riscv_reg_t *value, int regnum)
 		cache_set_store(target, 1, S0, SLOT0);
 		cache_set_jump(target, 2);
 	} else {
-		LOG_ERROR("Don't know how to read register %d", regnum);
+		LOG_ERROR("%s: Don't know how to read register %d", target->cmd_name, regnum);
 		return ERROR_FAIL;
 	}
 
@@ -1222,13 +1236,15 @@ static int register_read(struct target *target, riscv_reg_t *value, int regnum)
 
 	uint32_t exception = cache_get32(target, info->dramsize-1);
 	if (exception) {
-		LOG_WARNING("Got exception 0x%x when reading %s", exception, gdb_regno_name(regnum));
+		LOG_WARNING("%s: Got exception 0x%x when reading %s",
+					target->cmd_name, exception, gdb_regno_name(regnum));
 		*value = ~0;
 		return ERROR_FAIL;
 	}
 
 	*value = cache_get(target, SLOT0);
-	LOG_DEBUG("reg[%d]=0x%" PRIx64, regnum, *value);
+	LOG_DEBUG("%s: reg[%d]=0x%" PRIx64,
+			  target->cmd_name, regnum, *value);
 
 	if (regnum == GDB_REGNO_MSTATUS)
 		info->mstatus_actual = *value;
@@ -1286,7 +1302,7 @@ static int register_write(struct target *target, unsigned int number,
 		info->dcsr = set_field(info->dcsr, DCSR_PRV, value);
 		return ERROR_OK;
 	} else {
-		LOG_ERROR("Don't know how to write register %d", number);
+		LOG_ERROR("%s: Don't know how to write register %d", target->cmd_name, number);
 		return ERROR_FAIL;
 	}
 
@@ -1296,8 +1312,9 @@ static int register_write(struct target *target, unsigned int number,
 
 	uint32_t exception = cache_get32(target, info->dramsize-1);
 	if (exception) {
-		LOG_WARNING("Got exception 0x%x when writing %s", exception,
-				gdb_regno_name(number));
+		LOG_WARNING("%s: Got exception 0x%x when writing %s",
+					target->cmd_name, exception,
+					gdb_regno_name(number));
 		return ERROR_FAIL;
 	}
 
@@ -1359,7 +1376,7 @@ static int set_register(struct target *target, int hartid, int regid,
 
 static int halt(struct target *target)
 {
-	LOG_DEBUG("riscv_halt()");
+	LOG_DEBUG("%s: riscv_halt()", target->cmd_name);
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
 	cache_set32(target, 0, csrsi(CSR_DCSR, DCSR_HALT));
@@ -1368,7 +1385,7 @@ static int halt(struct target *target)
 	cache_set_jump(target, 3);
 
 	if (cache_write(target, 4, true) != ERROR_OK) {
-		LOG_ERROR("cache_write() failed.");
+		LOG_ERROR("%s: cache_write() failed.", target->cmd_name);
 		return ERROR_FAIL;
 	}
 
@@ -1378,7 +1395,7 @@ static int halt(struct target *target)
 static int init_target(struct command_context *cmd_ctx,
 		struct target *target)
 {
-	LOG_DEBUG("init");
+	LOG_DEBUG("%s: init", target->cmd_name);
 	riscv_info_t *generic_info = (riscv_info_t *) target->arch_info;
 	generic_info->get_register = get_register;
 	generic_info->set_register = set_register;
@@ -1396,7 +1413,7 @@ static int init_target(struct command_context *cmd_ctx,
 
 static void deinit_target(struct target *target)
 {
-	LOG_DEBUG("riscv_deinit_target()");
+	LOG_DEBUG("%s: riscv_deinit_target()", target->cmd_name);
 	riscv_info_t *info = (riscv_info_t *) target->arch_info;
 	free(info->version_specific);
 	info->version_specific = NULL;
@@ -1406,7 +1423,7 @@ static int strict_step(struct target *target, bool announce)
 {
 	riscv011_info_t *info = get_info(target);
 
-	LOG_DEBUG("enter");
+	LOG_DEBUG("%s: enter", target->cmd_name);
 
 	struct watchpoint *watchpoint = target->watchpoints;
 	while (watchpoint) {
@@ -1438,8 +1455,9 @@ static int step(struct target *target, int current, target_addr_t address,
 
 	if (!current) {
 		if (riscv_xlen(target) > 32) {
-			LOG_WARNING("Asked to resume at 32-bit PC on %d-bit target.",
-					riscv_xlen(target));
+			LOG_WARNING("%s: Asked to resume at 32-bit PC on %d-bit target.",
+						target->cmd_name,
+						riscv_xlen(target));
 		}
 		int result = register_write(target, GDB_REGNO_PC, address);
 		if (result != ERROR_OK)
@@ -1462,16 +1480,16 @@ static int examine(struct target *target)
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 
 	uint32_t dtmcontrol = dtmcontrol_scan(target, 0);
-	LOG_DEBUG("dtmcontrol=0x%x", dtmcontrol);
-	LOG_DEBUG("  addrbits=%d", get_field(dtmcontrol, DTMCONTROL_ADDRBITS));
-	LOG_DEBUG("  version=%d", get_field(dtmcontrol, DTMCONTROL_VERSION));
-	LOG_DEBUG("  idle=%d", get_field(dtmcontrol, DTMCONTROL_IDLE));
+	LOG_DEBUG("%s: dtmcontrol=0x%x", target->cmd_name, dtmcontrol);
+	LOG_DEBUG("%s:  addrbits=%d", target->cmd_name, get_field(dtmcontrol, DTMCONTROL_ADDRBITS));
+	LOG_DEBUG("%s:  version=%d", target->cmd_name, get_field(dtmcontrol, DTMCONTROL_VERSION));
+	LOG_DEBUG("%s:  idle=%d", target->cmd_name, get_field(dtmcontrol, DTMCONTROL_IDLE));
 	if (dtmcontrol == 0) {
-		LOG_ERROR("dtmcontrol is 0. Check JTAG connectivity/board power.");
+		LOG_ERROR("%s: dtmcontrol is 0. Check JTAG connectivity/board power.", target->cmd_name);
 		return ERROR_FAIL;
 	}
 	if (get_field(dtmcontrol, DTMCONTROL_VERSION) != 0) {
-		LOG_ERROR("Unsupported DTM version %d. (dtmcontrol=0x%x)",
+		LOG_ERROR("%s: Unsupported DTM version %d. (dtmcontrol=0x%x)", target->cmd_name,
 				get_field(dtmcontrol, DTMCONTROL_VERSION), dtmcontrol);
 		return ERROR_FAIL;
 	}

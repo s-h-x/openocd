@@ -44,14 +44,16 @@ bool riscv_batch_full(struct riscv_batch *batch)
 
 int riscv_batch_run(struct riscv_batch *batch)
 {
+	assert(batch && batch->target);
+
 	if (batch->used_scans == 0) {
-		LOG_DEBUG("Ignoring empty batch.");
+		LOG_DEBUG("%s: Ignoring empty batch.", batch->target->cmd_name);
 		return ERROR_OK;
 	}
 
 	keep_alive();
 
-	LOG_DEBUG("running a batch of %ld scans", (long)batch->used_scans);
+	LOG_DEBUG("%s: running a batch of %ld scans", batch->target->cmd_name, (long)batch->used_scans);
 	riscv_batch_add_nop(batch);
 
 	for (size_t i = 0; i < batch->used_scans; ++i) {
@@ -60,9 +62,9 @@ int riscv_batch_run(struct riscv_batch *batch)
 			jtag_add_runtest(batch->idle_count, TAP_IDLE);
 	}
 
-	LOG_DEBUG("executing queue");
+	LOG_DEBUG("%s: executing queue", batch->target->cmd_name);
 	if (jtag_execute_queue() != ERROR_OK) {
-		LOG_ERROR("Unable to execute JTAG queue");
+		LOG_ERROR("%s: Unable to execute JTAG queue", batch->target->cmd_name);
 		return ERROR_FAIL;
 	}
 
@@ -87,7 +89,7 @@ void riscv_batch_add_dmi_write(struct riscv_batch *batch, unsigned address, uint
 
 size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address)
 {
-	assert(batch->used_scans < batch->allocated_scans);
+	assert(batch && batch->used_scans < batch->allocated_scans);
 	struct scan_field *field = batch->fields + batch->used_scans;
 	field->num_bits = riscv_dmi_write_u64_bits(batch->target);
 	field->out_value = (void *)(batch->data_out + batch->used_scans * sizeof(uint64_t));
@@ -102,7 +104,8 @@ size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address)
 	riscv_batch_add_nop(batch);
 
 	batch->read_keys[batch->read_keys_used] = batch->used_scans - 1;
-	LOG_DEBUG("read key %u for batch 0x%p is %u (0x%p)",
+	LOG_DEBUG("%s: read key %u for batch 0x%p is %u (0x%p)",
+			batch->target->cmd_name,
 			(unsigned) batch->read_keys_used, batch, (unsigned) (batch->used_scans - 1),
 			batch->data_in + sizeof(uint64_t) * (batch->used_scans + 1));
 	return batch->read_keys_used++;
@@ -135,7 +138,7 @@ void riscv_batch_add_nop(struct riscv_batch *batch)
 	riscv_fill_dmi_nop_u64(batch->target, (char *)field->in_value);
 	batch->last_scan = RISCV_SCAN_TYPE_NOP;
 	batch->used_scans++;
-	LOG_DEBUG("  added NOP with in_value=0x%p", field->in_value);
+	LOG_DEBUG("%s:  added NOP with in_value=0x%p", batch->target->cmd_name, field->in_value);
 }
 
 void dump_field(const struct scan_field *field)
