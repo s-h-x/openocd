@@ -972,6 +972,7 @@ static int riscv_read_memory(struct target *target, target_addr_t address,
 
 	if (riscv_select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
+
 	struct target_type *tt = get_target_type(target);
 	return tt->read_memory(target, address, size, count, buffer);
 }
@@ -997,6 +998,7 @@ static int riscv_write_memory(struct target *target, target_addr_t address,
 
 	if (riscv_select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
+
 	struct target_type *tt = get_target_type(target);
 	return tt->write_memory(target, address, size, count, buffer);
 }
