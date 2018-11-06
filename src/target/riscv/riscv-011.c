@@ -701,7 +701,8 @@ static bits_t read_bits(struct target *target)
 
 static int wait_for_debugint_clear(struct target *target, bool ignore_first)
 {
-	time_t start = time(NULL);
+	time_t const start = time(NULL);
+
 	if (ignore_first) {
 		/* Throw away the results of the first read, since they'll contain the
 		 * result of the read that happened just before debugint was set.
@@ -709,7 +710,8 @@ static int wait_for_debugint_clear(struct target *target, bool ignore_first)
 		 * sets debugint.) */
 		read_bits(target);
 	}
-	while (1) {
+
+	for (;;) {
 		bits_t bits = read_bits(target);
 		if (!bits.interrupt)
 			return ERROR_OK;
@@ -996,13 +998,17 @@ static void dram_write_jump(struct target *target, unsigned int index,
 
 static int wait_for_state(struct target *target, enum target_state state)
 {
-	time_t start = time(NULL);
-	while (1) {
-		int result = riscv011_poll(target);
+	time_t const start = time(NULL);
+
+	for (;;) {
+		int const result = riscv011_poll(target);
+
 		if (result != ERROR_OK)
 			return result;
+
 		if (target->state == state)
 			return ERROR_OK;
+
 		if (time(NULL) - start > riscv_command_timeout_sec) {
 			LOG_ERROR("%s: Timed out waiting for state %d. "
 					  "Increase timeout with riscv set_command_timeout_sec.",
@@ -1150,16 +1156,23 @@ static int execute_resume(struct target *target, bool step)
 /* Execute a step, and wait for reentry into Debug Mode. */
 static int full_step(struct target *target, bool announce)
 {
-	int result = execute_resume(target, true);
-	if (result != ERROR_OK)
-		return result;
-	time_t start = time(NULL);
-	while (1) {
-		result = poll_target(target, announce);
+	{
+		int const result = execute_resume(target, true);
 		if (result != ERROR_OK)
 			return result;
+	}
+
+	time_t const start = time(NULL);
+
+	for (;;) {
+		int const result = poll_target(target, announce);
+
+		if (result != ERROR_OK)
+			return result;
+
 		if (target->state != TARGET_DEBUG_RUNNING)
 			break;
+
 		if (time(NULL) - start > riscv_command_timeout_sec) {
 			LOG_ERROR("%s: Timed out waiting for step to complete."
 					  "Increase timeout with riscv set_command_timeout_sec",
@@ -1167,6 +1180,7 @@ static int full_step(struct target *target, bool announce)
 			return ERROR_FAIL;
 		}
 	}
+
 	return ERROR_OK;
 }
 
