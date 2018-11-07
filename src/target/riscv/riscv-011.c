@@ -288,29 +288,30 @@ static uint16_t dram_address(unsigned index)
 
 static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 {
-	struct scan_field field;
-	uint8_t in_value[4];
-	uint8_t out_value[4];
-
-	buf_set_u32(out_value, 0, 32, out);
-
 	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
 
-	field.num_bits = 32;
-	field.out_value = out_value;
-	field.in_value = in_value;
+	uint8_t out_value[4];
+	buf_set_u32(out_value, 0, 32, out);
+	uint8_t in_value[4];
+	struct scan_field const field = {
+		.num_bits = 32,
+		.out_value = out_value,
+		.in_value = in_value,
+	};
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
 	/* Always return to dbus. */
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
-	int retval = jtag_execute_queue();
+	int const retval = jtag_execute_queue();
 	if (retval != ERROR_OK) {
-		LOG_ERROR("%s: failed jtag scan: %d", target->cmd_name, retval);
+		LOG_ERROR("%s: failed jtag scan: %d",
+			target->cmd_name,
+			retval);
 		return retval;
 	}
 
-	uint32_t in = buf_get_u32(field.in_value, 0, 32);
+	uint32_t const in = buf_get_u32(field.in_value, 0, 32);
 	LOG_DEBUG("%s: DTMCONTROL: 0x%x -> 0x%x", target->cmd_name, out, in);
 
 	return in;
@@ -697,7 +698,7 @@ static bits_t read_bits(struct target *target)
 				}
 				increase_dbus_busy_delay(target);
 			} else if (status == DBUS_STATUS_FAILED) {
-				/* TODO: return an actual error */
+				/** @todo return an actual error */
 				return err_result;
 			}
 		} while (status == DBUS_STATUS_BUSY && i++ < 256);
@@ -1121,7 +1122,7 @@ static int execute_resume(struct target *target, bool step)
 
 	maybe_write_tselect(target);
 
-	/* TODO: check if dpc is dirty (which also is true if an exception was hit
+	/** @todo check if dpc is dirty (which also is true if an exception was hit
 	 * at any time) */
 	cache_set_load(target, 0, S0, SLOT0);
 	cache_set32(target, 1, csrw(S0, CSR_DPC));
@@ -1902,7 +1903,7 @@ static riscv_error_t handle_halt_routine(struct target *target)
 		return RE_AGAIN;
 	}
 
-	/* TODO: get rid of those 2 variables and talk to the cache directly. */
+	/** @todo get rid of those 2 variables and talk to the cache directly. */
 	info->dpc = reg_cache_get(target, CSR_DPC);
 	info->dcsr = reg_cache_get(target, CSR_DCSR);
 
@@ -2049,7 +2050,7 @@ static int riscv011_resume(struct target *target, int current,
 static int assert_reset(struct target *target)
 {
 	riscv011_info_t *info = get_info(target);
-	/* TODO: Maybe what I implemented here is more like soft_reset_halt()? */
+	/** @todo Maybe what I implemented here is more like soft_reset_halt()? */
 
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
@@ -2417,7 +2418,7 @@ static int arch_state(struct target *target)
 	return ERROR_OK;
 }
 
-struct target_type riscv011_target = {
+struct target_type const riscv011_target = {
 	.name = "riscv",
 
 	.init_target = init_target,

@@ -16,8 +16,8 @@ struct riscv_program;
 #define DEFAULT_COMMAND_TIMEOUT_SEC		2
 #define DEFAULT_RESET_TIMEOUT_SEC		30
 
-extern struct target_type riscv011_target;
-extern struct target_type riscv013_target;
+extern struct target_type const riscv011_target;
+extern struct target_type const riscv013_target;
 
 /*
  * Definitions shared by code supporting all RISC-V versions.
@@ -144,16 +144,15 @@ extern bool riscv_prefer_sba;
 
 /* Everything needs the RISC-V specific info structure, so here's a nice macro
  * that provides that. */
-static inline riscv_info_t *riscv_info(const struct target *target) __attribute__((unused));
 static inline riscv_info_t *riscv_info(const struct target *target)
-{ return target->arch_info; }
+{
+	return target->arch_info;
+}
+
 #define RISCV_INFO(R) riscv_info_t *R = riscv_info(target);
 
-extern uint8_t ir_dtmcontrol[1];
 extern struct scan_field select_dtmcontrol;
-extern uint8_t ir_dbus[1];
 extern struct scan_field select_dbus;
-extern uint8_t ir_idcode[1];
 extern struct scan_field select_idcode;
 
 /** OpenOCD Interface */
@@ -183,9 +182,6 @@ int riscv_openocd_deassert_reset(struct target *target);
 
 /** RISC-V Interface */
 /** @{ */
-
-/** Initializes the shared RISC-V structure. */
-void riscv_info_init(struct target *target, riscv_info_t *r);
 
 /** Run control, possibly for multiple harts.  The _all_harts versions resume
  * all the enabled harts, which when running in RTOS mode is all the harts on

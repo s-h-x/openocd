@@ -2901,7 +2901,7 @@ static int arch_state(struct target *target)
 	return ERROR_OK;
 }
 
-struct target_type riscv013_target = {
+struct target_type const riscv013_target = {
 	.name = "riscv",
 
 	.init_target = init_target,

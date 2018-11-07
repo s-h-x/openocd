@@ -166,20 +166,21 @@ enum slot slot_t;
 #define DRAM_CACHE_SIZE		16
 /** @} */
 
-uint8_t ir_dtmcontrol[1] = {DTMCONTROL};
+static uint8_t const ir_dtmcontrol[1] = {DTMCONTROL};
+
 struct scan_field select_dtmcontrol = {
 	.in_value = NULL,
 	.out_value = ir_dtmcontrol
 };
 
-uint8_t ir_dbus[1] = {DBUS};
+static uint8_t const ir_dbus[1] = {DBUS};
 
 struct scan_field select_dbus = {
 	.in_value = NULL,
 	.out_value = ir_dbus
 };
 
-uint8_t ir_idcode[1] = {0x1};
+static uint8_t ir_idcode[1] = {0x1};
 
 struct scan_field select_idcode = {
 	.in_value = NULL,
@@ -201,6 +202,7 @@ int riscv_command_timeout_sec = DEFAULT_COMMAND_TIMEOUT_SEC;
 /** Wall-clock timeout after reset. Settable via RISC-V Target commands.*/
 int riscv_reset_timeout_sec = DEFAULT_RESET_TIMEOUT_SEC;
 
+/** @bug uninitialized */
 bool riscv_prefer_sba;
 
 struct range_t {
@@ -220,36 +222,37 @@ range_t *expose_custom;
 
 static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 {
-	struct scan_field field;
-	uint8_t in_value[4];
-	uint8_t out_value[4];
-
-	buf_set_u32(out_value, 0, 32, out);
-
 	assert(target);
 	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
 
-	field.num_bits = 32;
-	field.out_value = out_value;
-	field.in_value = in_value;
+	uint8_t out_value[4];
+	buf_set_u32(out_value, 0, 32, out);
+	uint8_t in_value[4];
+	struct scan_field const field = {
+		.num_bits = 32,
+		.out_value = out_value,
+		.in_value = in_value,
+	};
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
 	/* Always return to dbus. */
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
-	int retval = jtag_execute_queue();
-	if (retval != ERROR_OK) {
-		LOG_ERROR("%s: failed jtag scan: %d", target->cmd_name, retval);
-		return retval;
+	{
+		int const retval = jtag_execute_queue();
+
+		if (retval != ERROR_OK) {
+			LOG_ERROR("%s: failed jtag scan: %d", target->cmd_name, retval);
+			return retval;
+		}
 	}
 
-	uint32_t in = buf_get_u32(field.in_value, 0, 32);
+	uint32_t const in = buf_get_u32(field.in_value, 0, 32);
 	LOG_DEBUG("%s: DTMCONTROL: 0x%x -> 0x%x", target->cmd_name, out, in);
-
 	return in;
 }
 
-static struct target_type *get_target_type(struct target *target)
+static struct target_type const *get_target_type(struct target *target)
 {
 	assert(target);
 	riscv_info_t *const info = (riscv_info_t *)(target->arch_info);
@@ -262,27 +265,32 @@ static struct target_type *get_target_type(struct target *target)
 	switch (info->dtm_version) {
 		case 0:
 			return &riscv011_target;
+
 		case 1:
 			return &riscv013_target;
+
 		default:
 			LOG_ERROR("%s: Unsupported DTM version: %d", target->cmd_name, info->dtm_version);
 			return NULL;
 	}
 }
 
+/** Initializes the shared RISC-V structure. */
+static riscv_info_t *riscv_info_init(struct target *target);
+
 static int riscv_init_target(struct command_context *cmd_ctx, struct target *target)
 {
 	assert(target);
 	LOG_DEBUG("%s: riscv_init_target()", target->cmd_name);
-	target->arch_info = calloc(1, sizeof(riscv_info_t));
+	target->arch_info = riscv_info_init(target);
 
 	if (!target->arch_info)
 		return ERROR_FAIL;
 
 	riscv_info_t *const info = (riscv_info_t *)target->arch_info;
-	riscv_info_init(target, info);
 	info->cmd_ctx = cmd_ctx;
 
+	assert(target->tap);
 	select_dtmcontrol.num_bits = target->tap->ir_length;
 	select_dbus.num_bits = target->tap->ir_length;
 	select_idcode.num_bits = target->tap->ir_length;
@@ -297,7 +305,7 @@ static int riscv_init_target(struct command_context *cmd_ctx, struct target *tar
 static void riscv_deinit_target(struct target *target)
 {
 	LOG_DEBUG("%s: riscv_deinit_target()", target->cmd_name);
-	struct target_type *tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 
 	if (tt) {
 		tt->deinit_target(target);
@@ -320,7 +328,7 @@ static void riscv_deinit_target(struct target *target)
 
 static int oldriscv_halt(struct target *target)
 {
-	struct target_type *tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	assert(tt);
 	return tt->halt(target);
 }
@@ -846,7 +854,7 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 static int oldriscv_step(struct target *target, int current, uint32_t address,
 		int handle_breakpoints)
 {
-	struct target_type *tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	assert(tt);
 	return tt->step(target, current, address, handle_breakpoints);
 }
@@ -870,20 +878,20 @@ static int riscv_examine(struct target *target)
 {
 	assert(target);
 	LOG_DEBUG("%s: riscv_examine()", target->cmd_name);
+
 	if (target_was_examined(target)) {
 		LOG_DEBUG("%s: Target was already examined.", target->cmd_name);
 		return ERROR_OK;
 	}
 
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
-
 	uint32_t const dtmcontrol = dtmcontrol_scan(target, 0);
 	LOG_DEBUG("%s: dtmcontrol=0x%x", target->cmd_name, dtmcontrol);
-	riscv_info_t *info = (riscv_info_t *)target->arch_info;
+	riscv_info_t *const info = (riscv_info_t *)target->arch_info;
 	info->dtm_version = get_field(dtmcontrol, DTMCONTROL_VERSION);
 	LOG_DEBUG("%s:  version=0x%x", target->cmd_name, info->dtm_version);
 
-	struct target_type *tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	if (!tt)
 		return ERROR_FAIL;
 
@@ -896,7 +904,7 @@ static int riscv_examine(struct target *target)
 
 static int oldriscv_poll(struct target *target)
 {
-	struct target_type *tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	return tt->poll(target);
 }
 
@@ -920,7 +928,7 @@ static int old_or_new_riscv_halt(struct target *target)
 
 static int riscv_assert_reset(struct target *target)
 {
-	struct target_type *tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	return tt->assert_reset(target);
 }
 
@@ -928,7 +936,7 @@ static int riscv_deassert_reset(struct target *target)
 {
 	assert(target);
 	LOG_DEBUG("%s: RISCV DEASSERT RESET", target->cmd_name);
-	struct target_type *tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	return tt->deassert_reset(target);
 }
 
@@ -936,7 +944,7 @@ static int riscv_deassert_reset(struct target *target)
 static int oldriscv_resume(struct target *target, int current, uint32_t address,
 		int handle_breakpoints, int debug_execution)
 {
-	struct target_type *tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	return tt->resume(target, current, address, handle_breakpoints,
 			debug_execution);
 }
@@ -999,7 +1007,7 @@ static int riscv_read_memory(struct target *target, target_addr_t address,
 	if (riscv_select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
 
-	struct target_type *tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	return tt->read_memory(target, address, size, count, buffer);
 }
 
@@ -1022,7 +1030,7 @@ static int riscv_write_memory(struct target *target, target_addr_t address,
 	if (riscv_select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
 
-	struct target_type *tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	return tt->write_memory(target, address, size, count, buffer);
 }
 
@@ -1078,7 +1086,7 @@ static int riscv_get_gdb_reg_list(struct target *target,
 
 static int riscv_arch_state(struct target *target)
 {
-	struct target_type *tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	return tt->arch_state(target);
 }
 
@@ -1789,7 +1797,7 @@ COMMAND_HANDLER(riscv_test_sba_config_reg)
 	}
 }
 
-static const struct command_registration riscv_exec_command_handlers[] = {
+static struct command_registration const riscv_exec_command_handlers[] = {
 	{
 		.name = "test_compliance",
 		.handler = riscv_test_compliance,
@@ -1899,7 +1907,7 @@ extern __COMMAND_HANDLER(handle_common_semihosting_cmdline);
  * protocol, then a command like `riscv semihosting enable` will make
  * sense, but for now all semihosting commands are prefixed with `arm`.
  */
-static const struct command_registration arm_exec_command_handlers[] = {
+static struct command_registration const arm_exec_command_handlers[] = {
 	{
 		"semihosting",
 		.handler = handle_common_semihosting_command,
@@ -1931,7 +1939,7 @@ static const struct command_registration arm_exec_command_handlers[] = {
 	COMMAND_REGISTRATION_DONE
 };
 
-const struct command_registration riscv_command_handlers[] = {
+struct command_registration const riscv_command_handlers[] = {
 	{
 		.name = "riscv",
 		.mode = COMMAND_ANY,
@@ -1989,8 +1997,12 @@ struct target_type riscv_target = {
 
 /* RISC-V Interface */
 
-void riscv_info_init(struct target *target, riscv_info_t *r)
+riscv_info_t *riscv_info_init(struct target *target)
 {
+	riscv_info_t *const r = calloc(1, sizeof(riscv_info_t));
+	if (!r)
+		return NULL;
+
 	memset(r, 0, sizeof(*r));
 	r->dtm_version = 1;
 	r->registers_initialized = false;
@@ -2004,6 +2016,8 @@ void riscv_info_init(struct target *target, riscv_info_t *r)
 		for (size_t e = 0; e < RISCV_MAX_REGISTERS; ++e)
 			r->valid_saved_registers[h][e] = false;
 	}
+
+	return r;
 }
 
 int riscv_halt_all_harts(struct target *target)
@@ -2466,7 +2480,7 @@ static int register_set(struct reg *reg, uint8_t *buf)
 	return ERROR_OK;
 }
 
-static struct reg_arch_type riscv_reg_arch_type = {
+static struct reg_arch_type const riscv_reg_arch_type = {
 	.get = register_get,
 	.set = register_set
 };

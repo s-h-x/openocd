@@ -53,6 +53,7 @@ static int riscv_semihosting_post_result(struct target *target);
  */
 void riscv_semihosting_init(struct target *target)
 {
+	/** @bug Non portable conversion of code pointer to data pointer */
 	semihosting_common_init(target, riscv_semihosting_setup,
 		riscv_semihosting_post_result);
 }
