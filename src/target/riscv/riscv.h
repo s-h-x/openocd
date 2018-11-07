@@ -132,7 +132,6 @@ struct riscv_info_t {
 
 	int (*test_compliance)(struct target *target);
 };
-typedef struct riscv_info_t riscv_info_t;
 
 /* Wall-clock timeout for a command/access. Settable via RISC-V Target commands.*/
 extern int riscv_command_timeout_sec;
@@ -144,12 +143,12 @@ extern bool riscv_prefer_sba;
 
 /* Everything needs the RISC-V specific info structure, so here's a nice macro
  * that provides that. */
-static inline riscv_info_t *riscv_info(const struct target *target)
+static inline struct riscv_info_t *riscv_info(const struct target *target)
 {
 	return target->arch_info;
 }
 
-#define RISCV_INFO(R) riscv_info_t *R = riscv_info(target);
+#define RISCV_INFO(R) struct riscv_info_t *R = riscv_info(target);
 
 extern struct scan_field select_dtmcontrol;
 extern struct scan_field select_dbus;

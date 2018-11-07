@@ -236,7 +236,7 @@ static int get_register(struct target *target, riscv_reg_t *value, int hartid,
 
 static riscv011_info_t *get_info(const struct target *target)
 {
-	riscv_info_t *info = (riscv_info_t *) target->arch_info;
+	struct riscv_info_t *const info = target->arch_info;
 	return (riscv011_info_t *) info->version_specific;
 }
 
@@ -1431,7 +1431,7 @@ static int init_target(struct command_context *cmd_ctx,
 		struct target *target)
 {
 	LOG_DEBUG("%s: init", target->cmd_name);
-	riscv_info_t *generic_info = (riscv_info_t *) target->arch_info;
+	struct riscv_info_t *const generic_info = target->arch_info;
 	generic_info->get_register = get_register;
 	generic_info->set_register = set_register;
 
@@ -1449,7 +1449,7 @@ static int init_target(struct command_context *cmd_ctx,
 static void deinit_target(struct target *target)
 {
 	LOG_DEBUG("%s: riscv_deinit_target()", target->cmd_name);
-	riscv_info_t *info = (riscv_info_t *) target->arch_info;
+	struct riscv_info_t *const info = target->arch_info;
 	free(info->version_specific);
 	info->version_specific = NULL;
 }
@@ -1598,7 +1598,8 @@ static int examine(struct target *target)
 
 	uint32_t word0 = cache_get32(target, 0);
 	uint32_t word1 = cache_get32(target, 1);
-	riscv_info_t *generic_info = (riscv_info_t *) target->arch_info;
+	struct riscv_info_t *const generic_info = target->arch_info;
+
 	if (word0 == 1 && word1 == 0) {
 		generic_info->xlen[0] = 32;
 	} else if (word0 == 0xffffffff && word1 == 3) {
@@ -1612,6 +1613,7 @@ static int examine(struct target *target)
 		dump_debug_ram(target);
 		return ERROR_FAIL;
 	}
+
 	LOG_DEBUG("%s: Discovered XLEN is %d", target->cmd_name, riscv_xlen(target));
 
 	if (read_csr(target, &r->misa[0], CSR_MISA) != ERROR_OK) {

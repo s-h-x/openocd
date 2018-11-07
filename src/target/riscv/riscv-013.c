@@ -240,7 +240,7 @@ static inline riscv013_info_t *
 get_info(struct target const *target)
 {
 	assert(target);
-	riscv_info_t *const info = (riscv_info_t *)target->arch_info;
+	struct riscv_info_t *const info = target->arch_info;
 	assert(info);
 	return (riscv013_info_t *)info->version_specific;
 }
@@ -1457,7 +1457,7 @@ int wait_for_authbusy(struct target *target, uint32_t *dmstatus)
 static void deinit_target(struct target *target)
 {
 	LOG_DEBUG("%s: riscv_deinit_target()", target->cmd_name);
-	riscv_info_t *const info = (riscv_info_t *)target->arch_info;
+	struct riscv_info_t *const info = target->arch_info;
 	assert(info);
 	free(info->version_specific);
 	/** @todo free register arch_info */
@@ -1723,7 +1723,7 @@ static int init_target(struct command_context *cmd_ctx,
 {
 	assert(target);
 	LOG_DEBUG("%s: init", target->cmd_name);
-	riscv_info_t *const generic_info = (riscv_info_t *)target->arch_info;
+	struct riscv_info_t *const generic_info = target->arch_info;
 	assert(generic_info);
 
 	generic_info->get_register = &riscv013_get_register;

@@ -255,7 +255,7 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 static struct target_type const *get_target_type(struct target *target)
 {
 	assert(target);
-	riscv_info_t *const info = (riscv_info_t *)(target->arch_info);
+	struct riscv_info_t const *const info = target->arch_info;
 
 	if (!info) {
 		LOG_ERROR("%s: Target has not been initialized", target->cmd_name);
@@ -276,7 +276,29 @@ static struct target_type const *get_target_type(struct target *target)
 }
 
 /** Initializes the shared RISC-V structure. */
-static riscv_info_t *riscv_info_init(struct target *target);
+static struct riscv_info_t *riscv_info_init(struct target *target)
+{
+	struct riscv_info_t *const r = calloc(1, sizeof(struct riscv_info_t));
+
+	if (!r)
+		return NULL;
+
+	memset(r, 0, sizeof(*r));
+	r->dtm_version = 1;
+	r->registers_initialized = false;
+	r->current_hartid = target->coreid;
+
+	memset(r->trigger_unique_id, 0xff, sizeof(r->trigger_unique_id));
+
+	for (size_t h = 0; h < RISCV_MAX_HARTS; ++h) {
+		r->xlen[h] = -1;
+
+		for (size_t e = 0; e < RISCV_MAX_REGISTERS; ++e)
+			r->valid_saved_registers[h][e] = false;
+	}
+
+	return r;
+}
 
 static int riscv_init_target(struct command_context *cmd_ctx, struct target *target)
 {
@@ -287,7 +309,7 @@ static int riscv_init_target(struct command_context *cmd_ctx, struct target *tar
 	if (!target->arch_info)
 		return ERROR_FAIL;
 
-	riscv_info_t *const info = (riscv_info_t *)target->arch_info;
+	struct riscv_info_t *const info = target->arch_info;
 	info->cmd_ctx = cmd_ctx;
 
 	assert(target->tap);
@@ -309,7 +331,7 @@ static void riscv_deinit_target(struct target *target)
 
 	if (tt) {
 		tt->deinit_target(target);
-		riscv_info_t *info = (riscv_info_t *) target->arch_info;
+		struct riscv_info_t *const info = target->arch_info;
 		free(info->reg_names);
 		free(info);
 	}
@@ -887,7 +909,7 @@ static int riscv_examine(struct target *target)
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 	uint32_t const dtmcontrol = dtmcontrol_scan(target, 0);
 	LOG_DEBUG("%s: dtmcontrol=0x%x", target->cmd_name, dtmcontrol);
-	riscv_info_t *const info = (riscv_info_t *)target->arch_info;
+	struct riscv_info_t *const info = target->arch_info;
 	info->dtm_version = get_field(dtmcontrol, DTMCONTROL_VERSION);
 	LOG_DEBUG("%s:  version=0x%x", target->cmd_name, info->dtm_version);
 
@@ -1097,7 +1119,7 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 		target_addr_t exit_point, int timeout_ms, void *arch_info)
 {
 	assert(target);
-	riscv_info_t *info = (riscv_info_t *) target->arch_info;
+	struct riscv_info_t *const info = target->arch_info;
 
 	if (num_mem_params > 0) {
 		LOG_ERROR("%s: Memory parameters are not supported for RISC-V algorithms.",
@@ -1996,29 +2018,6 @@ struct target_type riscv_target = {
 };
 
 /* RISC-V Interface */
-
-riscv_info_t *riscv_info_init(struct target *target)
-{
-	riscv_info_t *const r = calloc(1, sizeof(riscv_info_t));
-	if (!r)
-		return NULL;
-
-	memset(r, 0, sizeof(*r));
-	r->dtm_version = 1;
-	r->registers_initialized = false;
-	r->current_hartid = target->coreid;
-
-	memset(r->trigger_unique_id, 0xff, sizeof(r->trigger_unique_id));
-
-	for (size_t h = 0; h < RISCV_MAX_HARTS; ++h) {
-		r->xlen[h] = -1;
-
-		for (size_t e = 0; e < RISCV_MAX_REGISTERS; ++e)
-			r->valid_saved_registers[h][e] = false;
-	}
-
-	return r;
-}
 
 int riscv_halt_all_harts(struct target *target)
 {
