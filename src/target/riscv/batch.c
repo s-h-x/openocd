@@ -77,8 +77,8 @@ void riscv_batch_add_dmi_write(struct riscv_batch *batch, unsigned address, uint
 	assert(batch->used_scans < batch->allocated_scans);
 	struct scan_field *field = batch->fields + batch->used_scans;
 	field->num_bits = riscv_dmi_write_u64_bits(batch->target);
-	field->out_value = (void *)(batch->data_out + batch->used_scans * sizeof(uint64_t));
-	field->in_value  = (void *)(batch->data_in  + batch->used_scans * sizeof(uint64_t));
+	field->out_value = batch->data_out + batch->used_scans * sizeof(uint64_t);
+	field->in_value  = batch->data_in  + batch->used_scans * sizeof(uint64_t);
 	riscv_fill_dmi_write_u64(batch->target, (char *)field->out_value, address, data);
 	riscv_fill_dmi_nop_u64(batch->target, (char *)field->in_value);
 	batch->last_scan = RISCV_SCAN_TYPE_WRITE;
@@ -90,8 +90,8 @@ size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address)
 	assert(batch && batch->used_scans < batch->allocated_scans);
 	struct scan_field *field = batch->fields + batch->used_scans;
 	field->num_bits = riscv_dmi_write_u64_bits(batch->target);
-	field->out_value = (void *)(batch->data_out + batch->used_scans * sizeof(uint64_t));
-	field->in_value  = (void *)(batch->data_in  + batch->used_scans * sizeof(uint64_t));
+	field->out_value = batch->data_out + batch->used_scans * sizeof(uint64_t);
+	field->in_value  = batch->data_in  + batch->used_scans * sizeof(uint64_t);
 	riscv_fill_dmi_read_u64(batch->target, (char *)field->out_value, address);
 	riscv_fill_dmi_nop_u64(batch->target, (char *)field->in_value);
 	batch->last_scan = RISCV_SCAN_TYPE_READ;
@@ -126,8 +126,8 @@ void riscv_batch_add_nop(struct riscv_batch *batch)
 	assert(batch->used_scans < batch->allocated_scans);
 	struct scan_field *field = batch->fields + batch->used_scans;
 	field->num_bits = riscv_dmi_write_u64_bits(batch->target);
-	field->out_value = (void *)(batch->data_out + batch->used_scans * sizeof(uint64_t));
-	field->in_value  = (void *)(batch->data_in  + batch->used_scans * sizeof(uint64_t));
+	field->out_value = batch->data_out + batch->used_scans * sizeof(uint64_t);
+	field->in_value  = batch->data_in  + batch->used_scans * sizeof(uint64_t);
 	riscv_fill_dmi_nop_u64(batch->target, (char *)field->out_value);
 	riscv_fill_dmi_nop_u64(batch->target, (char *)field->in_value);
 	batch->last_scan = RISCV_SCAN_TYPE_NOP;

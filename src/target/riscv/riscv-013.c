@@ -240,9 +240,9 @@ static inline riscv013_info_t *
 get_info(struct target const *target)
 {
 	assert(target);
-	struct riscv_info_t *const info = target->arch_info;
+	struct riscv_info_t const *const info = target->arch_info;
 	assert(info);
-	return (riscv013_info_t *)info->version_specific;
+	return info->version_specific;
 }
 
 /**
@@ -3161,25 +3161,25 @@ int riscv013_execute_debug_buffer(struct target *target)
 void riscv013_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t d)
 {
 	riscv013_info_t *const info = get_info(target);
-	buf_set_u64((unsigned char *)buf, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH, DMI_OP_WRITE);
-	buf_set_u64((unsigned char *)buf, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH, d);
-	buf_set_u64((unsigned char *)buf, DTM_DMI_ADDRESS_OFFSET, info->abits, a);
+	buf_set_u64((uint8_t *)buf, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH, DMI_OP_WRITE);
+	buf_set_u64((uint8_t *)buf, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH, d);
+	buf_set_u64((uint8_t *)buf, DTM_DMI_ADDRESS_OFFSET, info->abits, a);
 }
 
 void riscv013_fill_dmi_read_u64(struct target *target, char *buf, int a)
 {
 	riscv013_info_t *const info = get_info(target);
-	buf_set_u64((unsigned char *)buf, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH, DMI_OP_READ);
-	buf_set_u64((unsigned char *)buf, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH, 0);
-	buf_set_u64((unsigned char *)buf, DTM_DMI_ADDRESS_OFFSET, info->abits, a);
+	buf_set_u64((uint8_t *)buf, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH, DMI_OP_READ);
+	buf_set_u64((uint8_t *)buf, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH, 0);
+	buf_set_u64((uint8_t *)buf, DTM_DMI_ADDRESS_OFFSET, info->abits, a);
 }
 
 void riscv013_fill_dmi_nop_u64(struct target *target, char *buf)
 {
 	riscv013_info_t *const info = get_info(target);
-	buf_set_u64((unsigned char *)buf, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH, DMI_OP_NOP);
-	buf_set_u64((unsigned char *)buf, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH, 0);
-	buf_set_u64((unsigned char *)buf, DTM_DMI_ADDRESS_OFFSET, info->abits, 0);
+	buf_set_u64((uint8_t *)buf, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH, DMI_OP_NOP);
+	buf_set_u64((uint8_t *)buf, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH, 0);
+	buf_set_u64((uint8_t *)buf, DTM_DMI_ADDRESS_OFFSET, info->abits, 0);
 }
 
 /* Helper function for riscv013_test_sba_config_reg */

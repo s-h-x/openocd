@@ -236,8 +236,8 @@ static int get_register(struct target *target, riscv_reg_t *value, int hartid,
 
 static riscv011_info_t *get_info(const struct target *target)
 {
-	struct riscv_info_t *const info = target->arch_info;
-	return (riscv011_info_t *) info->version_specific;
+	struct riscv_info_t const *const info = target->arch_info;
+	return info->version_specific;
 }
 
 static unsigned slot_offset(const struct target *target, slot_t slot)

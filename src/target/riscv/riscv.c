@@ -2953,8 +2953,8 @@ int riscv_init_registers(struct target *target)
 			r->feature = &feature_custom;
 			r->arch_info = calloc(1, sizeof(riscv_reg_info_t));
 			assert(r->arch_info);
-			((riscv_reg_info_t *) r->arch_info)->target = target;
-			((riscv_reg_info_t *) r->arch_info)->custom_number = custom_number;
+			((riscv_reg_info_t *)r->arch_info)->target = target;
+			((riscv_reg_info_t *)r->arch_info)->custom_number = custom_number;
 			sprintf(reg_name, "custom%d", custom_number);
 
 			++custom_within_range;
