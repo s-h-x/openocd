@@ -154,7 +154,8 @@ extern struct scan_field select_dbus;
 extern uint8_t ir_idcode[1];
 extern struct scan_field select_idcode;
 
-/*** OpenOCD Interface */
+/** OpenOCD Interface */
+/** @{*/
 int riscv_openocd_poll(struct target *target);
 
 int riscv_openocd_halt(struct target *target);
@@ -176,67 +177,80 @@ int riscv_openocd_step(
 
 int riscv_openocd_assert_reset(struct target *target);
 int riscv_openocd_deassert_reset(struct target *target);
+/** @} */
 
-/*** RISC-V Interface ***/
+/** RISC-V Interface */
+/** @{ */
 
-/* Initializes the shared RISC-V structure. */
+/** Initializes the shared RISC-V structure. */
 void riscv_info_init(struct target *target, riscv_info_t *r);
 
-/* Run control, possibly for multiple harts.  The _all_harts versions resume
+/** Run control, possibly for multiple harts.  The _all_harts versions resume
  * all the enabled harts, which when running in RTOS mode is all the harts on
  * the system. */
+ /** @{ */
 int riscv_halt_all_harts(struct target *target);
 int riscv_halt_one_hart(struct target *target, int hartid);
 int riscv_resume_all_harts(struct target *target);
 int riscv_resume_one_hart(struct target *target, int hartid);
+/** @} */
 
-/* Steps the hart that's currently selected in the RTOS, or if there is no RTOS
+/** Steps the hart that's currently selected in the RTOS, or if there is no RTOS
  * then the only hart. */
 int riscv_step_rtos_hart(struct target *target);
 
 bool riscv_supports_extension(struct target *target, int hartid, char letter);
 
-/* Returns XLEN for the given (or current) hart. */
+/** @returns XLEN for the given (or current) hart. */
+/** @{ */
 int riscv_xlen(const struct target *target);
 int riscv_xlen_of_hart(const struct target *target, int hartid);
+/** @} */
 
 bool riscv_rtos_enabled(const struct target *target);
 
-/* Sets the current hart, which is the hart that will actually be used when
+/** Sets the current hart, which is the hart that will actually be used when
  * issuing debug commands. */
+ /** @{ */
 int riscv_set_current_hartid(struct target *target, int hartid);
 int riscv_current_hartid(const struct target *target);
+/** @} */
 
-/*** Support functions for the RISC-V 'RTOS', which provides multihart support
+/** Support functions for the RISC-V 'RTOS', which provides multihart support
  * without requiring multiple targets.  */
 
-/* When using the RTOS to debug, this selects the hart that is currently being
+/** When using the RTOS to debug, this selects the hart that is currently being
  * debugged.  This doesn't propogate to the hardware. */
+ /** @{ */
 void riscv_set_all_rtos_harts(struct target *target);
 void riscv_set_rtos_hartid(struct target *target, int hartid);
+/** @} */
 
-/* Lists the number of harts in the system, which are assumed to be
+/** Lists the number of harts in the system, which are assumed to be
  * concecutive and start with mhartid=0. */
 int riscv_count_harts(struct target *target);
 
-/* Returns TRUE if the target has the given register on the given hart.  */
+/** @returns TRUE if the target has the given register on the given hart.  */
 bool riscv_has_register(struct target *target, int hartid, int regid);
 
-/* Returns the value of the given register on the given hart.  32-bit registers
+/* @returns the value of the given register on the given hart.  32-bit registers
  * are zero extended to 64 bits.  */
+ /** @{ */
 int riscv_set_register(struct target *target, enum gdb_regno i, riscv_reg_t v);
 int riscv_set_register_on_hart(struct target *target, int hid, enum gdb_regno rid, uint64_t v);
 int riscv_get_register(struct target *target, riscv_reg_t *value,
 		enum gdb_regno r);
 int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
 		int hartid, enum gdb_regno regid);
+/** @} */
 
-/* Checks the state of the current hart -- "is_halted" checks the actual
+/** Checks the state of the current hart -- "is_halted" checks the actual
  * on-device register. */
 bool riscv_is_halted(struct target *target);
+
 enum riscv_halt_reason riscv_halt_reason(struct target *target, int hartid);
 
-/* These helper functions let the generic program interface get target-specific
+/** These helper functions let the generic program interface get target-specific
  * information. */
 size_t riscv_debug_buffer_size(struct target *target);
 
@@ -249,10 +263,10 @@ void riscv_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t 
 void riscv_fill_dmi_read_u64(struct target *target, char *buf, int a);
 int riscv_dmi_write_u64_bits(struct target *target);
 
-/* Invalidates the register cache. */
+/** Invalidates the register cache. */
 void riscv_invalidate_register_cache(struct target *target);
 
-/* Returns TRUE when a hart is enabled in this target. */
+/** @returns TRUE when a hart is enabled in this target. */
 bool riscv_hart_enabled(struct target *target, int hartid);
 
 int riscv_enumerate_triggers(struct target *target);
@@ -269,5 +283,6 @@ int riscv_init_registers(struct target *target);
 
 void riscv_semihosting_init(struct target *target);
 int riscv_semihosting(struct target *target, int *retval);
+/** @} */
 
 #endif
