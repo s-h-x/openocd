@@ -18,6 +18,7 @@ int riscv_program_init(struct riscv_program *p, struct target *target)
 	p->target = target;
 	p->instruction_count = 0;
 	p->target_xlen = riscv_xlen(target);
+
 	for (size_t i = 0; i < RISCV_REGISTER_COUNT; ++i)
 		p->writes_xreg[i] = 0;
 
@@ -32,9 +33,13 @@ int riscv_program_write(struct riscv_program *program)
 	assert(program && program->target);
 
 	for (unsigned i = 0; i < program->instruction_count; ++i) {
-		LOG_DEBUG("%s: %p: debug_buffer[%02x] = DASM(0x%08x)", program->target->cmd_name, program, i, program->debug_buffer[i]);
-		if (riscv_write_debug_buffer(program->target, i,
-					program->debug_buffer[i]) != ERROR_OK)
+		LOG_DEBUG("%s: %p: debug_buffer[%02x] = DASM(0x%08" PRIx32 ")",
+			program->target->cmd_name,
+			program,
+			i,
+			program->debug_buffer[i]);
+
+		if (ERROR_OK != riscv_write_debug_buffer(program->target, i, program->debug_buffer[i]))
 			return ERROR_FAIL;
 	}
 	return ERROR_OK;
@@ -58,7 +63,11 @@ int riscv_program_exec(struct riscv_program *p, struct target *t)
 	if (riscv_program_ebreak(p) != ERROR_OK) {
 		LOG_ERROR("%s: Unable to write ebreak", t->cmd_name);
 		for (size_t i = 0; i < riscv_debug_buffer_size(p->target); ++i)
-			LOG_ERROR("%s: ram[%02x]: DASM(0x%08lx) [0x%08lx]", t->cmd_name, (int)i, (long)p->debug_buffer[i], (long)p->debug_buffer[i]);
+			LOG_ERROR("%s: ram[%02" PRIxPTR "]: DASM(0x%08" PRIx32 ") [0x%08" PRIx32 "]",
+				t->cmd_name,
+				i,
+				p->debug_buffer[i],
+				p->debug_buffer[i]);
 		return ERROR_FAIL;
 	}
 
@@ -154,16 +163,16 @@ int riscv_program_insert(struct riscv_program *p, riscv_insn_t i)
 	assert(p && p->target);
 	if (p->instruction_count >= riscv_debug_buffer_size(p->target)) {
 		LOG_ERROR("%s: Unable to insert instruction:" "\n"
-				  "  instruction_count=%d" "\n"
-				  "  buffer size      =%d",
-				  p->target->cmd_name,
-				  (int)p->instruction_count,
-				  (int)riscv_debug_buffer_size(p->target)
+				"  instruction_count=%d" "\n"
+				"  buffer size      =%d",
+				p->target->cmd_name,
+				(int)p->instruction_count,
+				(int)riscv_debug_buffer_size(p->target)
 		);
 		return ERROR_FAIL;
 	}
 
 	p->debug_buffer[p->instruction_count] = i;
-	p->instruction_count++;
+	++p->instruction_count;
 	return ERROR_OK;
 }
