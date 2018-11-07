@@ -123,12 +123,14 @@ enum slot {
 typedef enum slot slot_t;
 
 /* Debug Bus registers. */
-#define CMDERR_NONE				0
-#define CMDERR_BUSY				1
-#define CMDERR_NOT_SUPPORTED	2
-#define CMDERR_EXCEPTION		3
-#define CMDERR_HALT_RESUME		4
-#define CMDERR_OTHER			7
+enum CMDERR_e {
+	CMDERR_NONE          = 0,
+	CMDERR_BUSY          = 1,
+	CMDERR_NOT_SUPPORTED = 2,
+	CMDERR_EXCEPTION     = 3,
+	CMDERR_HALT_RESUME   = 4,
+	CMDERR_OTHER         = 7,
+};
 
 /* Info about the core being debugged. */
 
@@ -986,13 +988,14 @@ static int examine_progbuf(struct target *target)
 	return ERROR_OK;
 }
 
-typedef enum {
+enum memory_space_t {
 	SPACE_DMI_DATA,
 	SPACE_DMI_PROGBUF,
 	SPACE_DMI_RAM
-} memory_space_t;
+};
+typedef enum memory_space_t memory_space_t;
 
-typedef struct {
+struct scratch_mem_t {
 	/* How can the debugger access this memory? */
 	memory_space_t memory_space;
 	/* Memory address to access the scratch memory from the hart. */
@@ -1000,7 +1003,8 @@ typedef struct {
 	/* Memory address to access the scratch memory from the debugger. */
 	riscv_addr_t debug_address;
 	struct working_area *area;
-} scratch_mem_t;
+};
+typedef struct scratch_mem_t scratch_mem_t;
 
 /**
  * Find some scratch memory to be used with the given program.
@@ -2385,7 +2389,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 
 				/* Clobbers DMI_DATA0. */
 				result = register_read_direct(target, &next_read_addr,
-						GDB_REGNO_S0);
+					GDB_REGNO_S0);
 
 				if (result != ERROR_OK) {
 					riscv_batch_free(batch);
