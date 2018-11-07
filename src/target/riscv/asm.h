@@ -5,9 +5,8 @@
 
 #include <assert.h>
 
-/** Version-independent functions that we don't want in the main address space.
-	@{
-*/
+/** Version-independent functions that we don't want in the main address space. */
+/** @{ */
 static uint32_t __attribute__((unused))
 load(const struct target *target, unsigned rd, unsigned base, uint16_t offset)
 {
@@ -18,11 +17,13 @@ load(const struct target *target, unsigned rd, unsigned base, uint16_t offset)
 	case 64:
 		return ld(rd, base, offset);
 
-		/** @bug no default case*/
+	default:
+		break;
 	}
 
 	assert(0);
-	return 0; /*< Silence -Werror=return-type */
+	/* Silence -Werror=return-type */
+	return 0;
 }
 
 static uint32_t __attribute__((unused))
@@ -35,11 +36,13 @@ store(const struct target *target, unsigned src, unsigned base, uint16_t offset)
 	case 64:
 		return sd(src, base, offset);
 
-		/** @bug no default case*/
+	default:
+		break;
 	}
 
 	assert(0);
-	return 0; /*< Silence -Werror=return-type */
+	/* Silence -Werror=return-type */
+	return 0;
 }
 /** @} */
 
