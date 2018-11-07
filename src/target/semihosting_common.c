@@ -125,7 +125,9 @@ int semihosting_common_init(struct target *target, void *setup,
 	/* If possible, update it in setup(). */
 	semihosting->setup_time = clock();
 
+	/** @bug Non portable conversion of data pointer to code pointer */
 	semihosting->setup = setup;
+	/** @bug Non portable conversion of data pointer to code pointer */
 	semihosting->post_result = post_result;
 
 	target->semihosting = semihosting;
@@ -691,7 +693,7 @@ int semihosting_common(struct target *target)
 						return retval;
 					}
 					fn[len] = 0;
-					/* TODO: implement the :semihosting-features special file.
+					/** @todo implement the :semihosting-features special file.
 					 * */
 					if (semihosting->is_fileio) {
 						if (strcmp((char *)fn, ":semihosting-features") == 0) {
