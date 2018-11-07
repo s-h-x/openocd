@@ -203,9 +203,11 @@ int riscv_reset_timeout_sec = DEFAULT_RESET_TIMEOUT_SEC;
 
 bool riscv_prefer_sba;
 
-typedef struct {
-	uint16_t low, high;
-} range_t;
+struct range_t {
+	uint16_t low;
+	uint16_t high;
+};
+typedef struct range_t range_t;
 
 /** In addition to the ones in the standard spec, we'll also expose additional
  * CSRs in this list.
@@ -277,7 +279,7 @@ static int riscv_init_target(struct command_context *cmd_ctx, struct target *tar
 	if (!target->arch_info)
 		return ERROR_FAIL;
 
-	riscv_info_t *info = (riscv_info_t *)target->arch_info;
+	riscv_info_t *const info = (riscv_info_t *)target->arch_info;
 	riscv_info_init(target, info);
 	info->cmd_ctx = cmd_ctx;
 
@@ -753,7 +755,7 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 			target->cmd_name,
 			riscv_current_hartid(target));
 
-	/*TODO instead of disassembling the instruction that we think caused the
+	/** @todo instead of disassembling the instruction that we think caused the
 	 * trigger, check the hit bit of each watchpoint first. The hit bit is
 	 * simpler and more reliable to check but as it is optional and relatively
 	 * new, not all hardware will implement it  */
@@ -820,8 +822,8 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 		return ERROR_FAIL;
 	}
 
-	while (wp) {
-		/*TODO support length/mask */
+	for (; wp; wp = wp->next) {
+		/** @todo support length/mask */
 		if (wp->address == mem_addr) {
 			assert(hit_watchpoint);
 			*hit_watchpoint = wp;
@@ -830,7 +832,6 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 					wp->address);
 			return ERROR_OK;
 		}
-		wp = wp->next;
 	}
 
 	/* No match found - either we hit a watchpoint caused by an instruction that
@@ -876,9 +877,9 @@ static int riscv_examine(struct target *target)
 
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 
-	riscv_info_t *info = (riscv_info_t *) target->arch_info;
-	uint32_t dtmcontrol = dtmcontrol_scan(target, 0);
+	uint32_t const dtmcontrol = dtmcontrol_scan(target, 0);
 	LOG_DEBUG("%s: dtmcontrol=0x%x", target->cmd_name, dtmcontrol);
+	riscv_info_t *info = (riscv_info_t *)target->arch_info;
 	info->dtm_version = get_field(dtmcontrol, DTMCONTROL_VERSION);
 	LOG_DEBUG("%s:  version=0x%x", target->cmd_name, info->dtm_version);
 
