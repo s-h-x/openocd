@@ -99,31 +99,37 @@
 #define DBUS						0x11
 #define DBUS_OP_START				0
 #define DBUS_OP_SIZE				2
-typedef enum {
+
+enum dbus_op_t {
 	DBUS_OP_NOP = 0,
 	DBUS_OP_READ = 1,
 	DBUS_OP_WRITE = 2
-} dbus_op_t;
-typedef enum {
+};
+typedef enum dbus_op_t dbus_op_t;
+
+enum dbus_status_t {
 	DBUS_STATUS_SUCCESS = 0,
 	DBUS_STATUS_FAILED = 2,
 	DBUS_STATUS_BUSY = 3
-} dbus_status_t;
+};
+typedef enum dbus_status_t dbus_status_t;
 #define DBUS_DATA_START				2
 #define DBUS_DATA_SIZE				34
 #define DBUS_ADDRESS_START			36
 
-typedef enum {
+enum riscv_error_t {
 	RE_OK,
 	RE_FAIL,
 	RE_AGAIN
-} riscv_error_t;
+};
+typedef enum riscv_error_t riscv_error_t;
 
-typedef enum slot {
+enum slot {
 	SLOT0,
 	SLOT1,
 	SLOT_LAST,
-} slot_t;
+};
+typedef enum slot slot_t;
 
 /* Debug Bus registers. */
 
@@ -173,7 +179,7 @@ struct memory_cache_line {
 	bool dirty;
 };
 
-typedef struct {
+struct riscv011_info_t {
 	/** Number of address bits in the dbus register. */
 	uint8_t addrbits;
 
@@ -209,12 +215,14 @@ typedef struct {
 
 	bool need_strict_step;
 	bool never_halted;
-} riscv011_info_t;
+};
+typedef struct riscv011_info_t riscv011_info_t;
 
-typedef struct {
+struct bits_t {
 	bool haltnot;
 	bool interrupt;
-} bits_t;
+};
+typedef struct bits_t bits_t;
 
 /* Necessary prototypes. */
 static int poll_target(struct target *target, bool announce);
