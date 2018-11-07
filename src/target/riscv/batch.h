@@ -1,5 +1,5 @@
-#ifndef TARGET__RISCV__SCANS_H
-#define TARGET__RISCV__SCANS_H
+#ifndef TARGET_RISCV_SCANS_H_
+#define TARGET_RISCV_SCANS_H_
 
 #include "target/target.h"
 #include "jtag/jtag.h"
@@ -61,4 +61,4 @@ uint64_t riscv_batch_get_dmi_read(struct riscv_batch *batch, size_t key);
 /* Scans in a NOP. */
 void riscv_batch_add_nop(struct riscv_batch *batch);
 
-#endif
+#endif  /* TARGET_RISCV_SCANS_H_ */

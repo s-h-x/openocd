@@ -1,5 +1,5 @@
-#ifndef TARGET__RISCV__PROGRAM_H
-#define TARGET__RISCV__PROGRAM_H
+#ifndef TARGET_RISCV_PROGRAM_H_
+#define TARGET_RISCV_PROGRAM_H_
 
 #include "riscv.h"
 
@@ -72,4 +72,4 @@ int riscv_program_ebreak(struct riscv_program *p);
 
 int riscv_program_addi(struct riscv_program *p, enum gdb_regno d, enum gdb_regno s, int16_t i);
 
-#endif
+#endif  /* TARGET_RISCV_PROGRAM_H_ */

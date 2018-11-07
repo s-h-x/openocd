@@ -1,5 +1,5 @@
-#ifndef TARGET__RISCV__ASM_H
-#define TARGET__RISCV__ASM_H
+#ifndef TARGET_RISCV_ASM_H_
+#define TARGET_RISCV_ASM_H_
 
 #include "riscv.h"
 
@@ -46,4 +46,4 @@ store(const struct target *target, unsigned src, unsigned base, uint16_t offset)
 }
 /** @} */
 
-#endif
+#endif  /* TARGET_RISCV_ASM_H_ */

@@ -1,5 +1,5 @@
-#ifndef RISCV_H
-#define RISCV_H
+#ifndef TARGET_RISCV_RISCV_H_
+#define TARGET_RISCV_RISCV_H_
 
 struct riscv_program;
 
@@ -35,12 +35,13 @@ enum riscv_halt_reason {
 	RISCV_HALT_ERROR
 };
 
-typedef struct {
+struct riscv_reg_info_t {
 	struct target *target;
 	unsigned custom_number;
-} riscv_reg_info_t;
+};
+typedef struct riscv_reg_info_t riscv_reg_info_t;
 
-typedef struct {
+struct riscv_info_t {
 	unsigned dtm_version;
 
 	struct command_context *cmd_ctx;
@@ -130,7 +131,8 @@ typedef struct {
 			uint32_t num_words, target_addr_t illegal_address, bool run_sbbusyerror_test);
 
 	int (*test_compliance)(struct target *target);
-} riscv_info_t;
+};
+typedef struct riscv_info_t riscv_info_t;
 
 /* Wall-clock timeout for a command/access. Settable via RISC-V Target commands.*/
 extern int riscv_command_timeout_sec;
@@ -285,4 +287,4 @@ void riscv_semihosting_init(struct target *target);
 int riscv_semihosting(struct target *target, int *retval);
 /** @} */
 
-#endif
+#endif  /* TARGET_RISCV_RISCV_H_ */

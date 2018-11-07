@@ -1,3 +1,6 @@
+#ifndef TARGET_RISCV_OPCODES_H_
+#define TARGET_RISCV_OPCODES_H_
+
 #include "encoding.h"
 
 #define ZERO	0
@@ -263,3 +266,5 @@ static inline uint32_t auipc(unsigned dest)
 {
 	return MATCH_AUIPC | (dest << 7);
 }
+
+#endif  /* TARGET_RISCV_OPCODES_H_ */

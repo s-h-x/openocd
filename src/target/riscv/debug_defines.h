@@ -1,3 +1,6 @@
+#ifndef TARGET_RISCV_DEBUG_DEFINES_H_
+#define TARGET_RISCV_DEBUG_DEFINES_H_
+
 #define DTM_IDCODE                          0x01
 /*
 * Identifies the release version of this part.
@@ -1412,3 +1415,5 @@
 #define VIRT_PRIV_PRV_OFFSET                0
 #define VIRT_PRIV_PRV_LENGTH                2
 #define VIRT_PRIV_PRV                       (0x3U << VIRT_PRIV_PRV_OFFSET)
+
+#endif  /* TARGET_RISCV_DEBUG_DEFINES_H_ */

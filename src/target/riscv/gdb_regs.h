@@ -1,5 +1,5 @@
-#ifndef TARGET__RISCV__GDB_REGS_H
-#define TARGET__RISCV__GDB_REGS_H
+#ifndef TARGET_RISCV_GDB_REGS_H_
+#define TARGET_RISCV_GDB_REGS_H_
 
 /* gdb's register list is defined in riscv_gdb_reg_names gdb/riscv-tdep.c in
  * its source tree. We must interpret the numbers the same here. */
@@ -90,4 +90,4 @@ enum gdb_regno {
 
 const char *gdb_regno_name(enum gdb_regno regno);
 
-#endif
+#endif  /* TARGET_RISCV_GDB_REGS_H_ */
