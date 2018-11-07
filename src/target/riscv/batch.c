@@ -82,7 +82,7 @@ void riscv_batch_add_dmi_write(struct riscv_batch *batch, unsigned address, uint
 	riscv_fill_dmi_write_u64(batch->target, (char *)field->out_value, address, data);
 	riscv_fill_dmi_nop_u64(batch->target, (char *)field->in_value);
 	batch->last_scan = RISCV_SCAN_TYPE_WRITE;
-	batch->used_scans++;
+	++batch->used_scans;
 }
 
 size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address)
@@ -95,14 +95,14 @@ size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address)
 	riscv_fill_dmi_read_u64(batch->target, (char *)field->out_value, address);
 	riscv_fill_dmi_nop_u64(batch->target, (char *)field->in_value);
 	batch->last_scan = RISCV_SCAN_TYPE_READ;
-	batch->used_scans++;
+	++batch->used_scans;
 
 	/* FIXME We get the read response back on the next scan.  For now I'm
 	 * just sticking a NOP in there, but this should be coelesced away. */
 	riscv_batch_add_nop(batch);
 
 	batch->read_keys[batch->read_keys_used] = batch->used_scans - 1;
-	return batch->read_keys_used++;
+	return ++batch->read_keys_used;
 }
 
 uint64_t riscv_batch_get_dmi_read(struct riscv_batch *batch, size_t key)
@@ -131,7 +131,7 @@ void riscv_batch_add_nop(struct riscv_batch *batch)
 	riscv_fill_dmi_nop_u64(batch->target, (char *)field->out_value);
 	riscv_fill_dmi_nop_u64(batch->target, (char *)field->in_value);
 	batch->last_scan = RISCV_SCAN_TYPE_NOP;
-	batch->used_scans++;
+	++batch->used_scans;
 }
 
 void dump_field(const struct scan_field *field)
@@ -144,15 +144,15 @@ void dump_field(const struct scan_field *field)
 
 	assert(field->out_value != NULL);
 	uint64_t out = buf_get_u64(field->out_value, 0, field->num_bits);
-	unsigned int out_op = get_field(out, DTM_DMI_OP);
-	unsigned int out_data = get_field(out, DTM_DMI_DATA);
-	unsigned int out_address = out >> DTM_DMI_ADDRESS_OFFSET;
+	unsigned out_op = get_field(out, DTM_DMI_OP);
+	unsigned out_data = get_field(out, DTM_DMI_DATA);
+	unsigned out_address = out >> DTM_DMI_ADDRESS_OFFSET;
 
 	if (field->in_value) {
 		uint64_t in = buf_get_u64(field->in_value, 0, field->num_bits);
-		unsigned int in_op = get_field(in, DTM_DMI_OP);
-		unsigned int in_data = get_field(in, DTM_DMI_DATA);
-		unsigned int in_address = in >> DTM_DMI_ADDRESS_OFFSET;
+		unsigned in_op = get_field(in, DTM_DMI_OP);
+		unsigned in_data = get_field(in, DTM_DMI_DATA);
+		unsigned in_address = in >> DTM_DMI_ADDRESS_OFFSET;
 
 		log_printf_lf(LOG_LVL_DEBUG,
 				__FILE__, __LINE__, __PRETTY_FUNCTION__,
