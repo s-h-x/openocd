@@ -143,7 +143,7 @@ extern bool riscv_prefer_sba;
 
 /* Everything needs the RISC-V specific info structure, so here's a nice macro
  * that provides that. */
-static inline struct riscv_info_t *riscv_info(const struct target *target)
+static inline struct riscv_info_t *riscv_info(struct target const *const target)
 {
 	return target->arch_info;
 }

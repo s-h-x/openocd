@@ -9,7 +9,38 @@
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
 
-static void dump_field(const struct scan_field *field);
+static void dump_field(struct scan_field const *const field)
+{
+	static const char * const op_string[] = {"-", "r", "w", "?"};
+	static const char * const status_string[] = {"+", "?", "F", "b"};
+
+	if (debug_level < LOG_LVL_DEBUG)
+		return;
+
+	assert(field->out_value != NULL);
+	uint64_t const out = buf_get_u64(field->out_value, 0, field->num_bits);
+	unsigned const out_op = get_field(out, DTM_DMI_OP);
+	unsigned const out_data = get_field(out, DTM_DMI_DATA);
+	unsigned const out_address = out >> DTM_DMI_ADDRESS_OFFSET;
+
+	if (field->in_value) {
+		uint64_t const in = buf_get_u64(field->in_value, 0, field->num_bits);
+		unsigned const in_op = get_field(in, DTM_DMI_OP);
+		unsigned const in_data = get_field(in, DTM_DMI_DATA);
+		unsigned const in_address = in >> DTM_DMI_ADDRESS_OFFSET;
+
+		log_printf_lf(LOG_LVL_DEBUG,
+			__FILE__, __LINE__, __PRETTY_FUNCTION__,
+			"%db %s %08x @%02x -> %s %08x @%02x",
+			field->num_bits,
+			op_string[out_op], out_data, out_address,
+			status_string[in_op], in_data, in_address);
+	} else {
+		log_printf_lf(LOG_LVL_DEBUG,
+			__FILE__, __LINE__, __PRETTY_FUNCTION__, "%db %s %08x @%02x -> ?",
+			field->num_bits, op_string[out_op], out_data, out_address);
+	}
+}
 
 struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_t idle)
 {
@@ -134,35 +165,3 @@ void riscv_batch_add_nop(struct riscv_batch *batch)
 	++batch->used_scans;
 }
 
-void dump_field(const struct scan_field *field)
-{
-	static const char * const op_string[] = {"-", "r", "w", "?"};
-	static const char * const status_string[] = {"+", "?", "F", "b"};
-
-	if (debug_level < LOG_LVL_DEBUG)
-		return;
-
-	assert(field->out_value != NULL);
-	uint64_t out = buf_get_u64(field->out_value, 0, field->num_bits);
-	unsigned out_op = get_field(out, DTM_DMI_OP);
-	unsigned out_data = get_field(out, DTM_DMI_DATA);
-	unsigned out_address = out >> DTM_DMI_ADDRESS_OFFSET;
-
-	if (field->in_value) {
-		uint64_t in = buf_get_u64(field->in_value, 0, field->num_bits);
-		unsigned in_op = get_field(in, DTM_DMI_OP);
-		unsigned in_data = get_field(in, DTM_DMI_DATA);
-		unsigned in_address = in >> DTM_DMI_ADDRESS_OFFSET;
-
-		log_printf_lf(LOG_LVL_DEBUG,
-				__FILE__, __LINE__, __PRETTY_FUNCTION__,
-				"%db %s %08x @%02x -> %s %08x @%02x",
-				field->num_bits,
-				op_string[out_op], out_data, out_address,
-				status_string[in_op], in_data, in_address);
-	} else {
-		log_printf_lf(LOG_LVL_DEBUG,
-				__FILE__, __LINE__, __PRETTY_FUNCTION__, "%db %s %08x @%02x -> ?",
-				field->num_bits, op_string[out_op], out_data, out_address);
-	}
-}
