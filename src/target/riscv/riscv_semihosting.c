@@ -45,16 +45,44 @@
 #include "target/semihosting_common.h"
 #include "riscv.h"
 
-static int riscv_semihosting_setup(struct target *target, int enable);
-static int riscv_semihosting_post_result(struct target *target);
-
 /**
- * Initialize RISC-V semihosting. Use common ARM code.
- */
-void riscv_semihosting_init(struct target *target)
+* Called via semihosting->setup() later, after the target is known,
+* usually on the first semihosting command.
+*/
+static int riscv_semihosting_setup(struct target *const target, int enable)
+{
+	LOG_DEBUG("%s: enable=%d", target->cmd_name, enable);
+
+	struct semihosting *const semihosting = target->semihosting;
+
+	if (semihosting)
+		semihosting->setup_time = clock();
+
+	return ERROR_OK;
+}
+
+static int
+riscv_semihosting_post_result(struct target *const target)
+{
+	struct semihosting *const semihosting = target->semihosting;
+
+	if (!semihosting) {
+		/* If not enabled, silently ignored. */
+		return 0;
+	}
+
+	LOG_DEBUG("%s: 0x%" PRIx64, target->cmd_name, semihosting->result);
+	riscv_set_register(target, GDB_REGNO_A0, semihosting->result);
+	return 0;
+}
+
+/** Initialize RISC-V semihosting. Use common ARM code. */
+void
+riscv_semihosting_init(struct target *const target)
 {
 	/** @bug Non portable conversion of code pointer to data pointer */
-	semihosting_common_init(target, riscv_semihosting_setup,
+	semihosting_common_init(target,
+		riscv_semihosting_setup,
 		riscv_semihosting_post_result);
 }
 
@@ -70,9 +98,11 @@ void riscv_semihosting_init(struct target *target)
  * @param retval Pointer to a location where the return code will be stored
  * @return non-zero value if a request was processed or an error encountered
  */
-int riscv_semihosting(struct target *target, int *retval)
+int
+riscv_semihosting(struct target *const target, int *const retval)
 {
-	struct semihosting *semihosting = target->semihosting;
+	struct semihosting *const semihosting = target->semihosting;
+
 	if (!semihosting)
 		return 0;
 
@@ -80,14 +110,16 @@ int riscv_semihosting(struct target *target, int *retval)
 		return 0;
 
 	riscv_reg_t dpc;
-	int result = riscv_get_register(target, &dpc, GDB_REGNO_DPC);
-	if (result != ERROR_OK)
+	if (ERROR_OK != riscv_get_register(target, &dpc, GDB_REGNO_DPC))
 		return 0;
 
 	uint8_t tmp[12];
 
+	assert(retval);
+
 	/* Read the current instruction, including the bracketing */
 	*retval = target_read_memory(target, dpc - 4, 2, 6, tmp);
+
 	if (*retval != ERROR_OK)
 		return 0;
 
@@ -104,11 +136,9 @@ int riscv_semihosting(struct target *target, int *retval)
 	uint32_t post = target_buffer_get_u32(target, tmp + 8);
 	LOG_DEBUG("%s: check %08x %08x %08x from 0x%" PRIx64 "-4", target->cmd_name, pre, ebreak, post, dpc);
 
-	if (pre != 0x01f01013 || ebreak != 0x00100073 || post != 0x40705013) {
-
+	if (pre != 0x01f01013 || ebreak != 0x00100073 || post != 0x40705013)
 		/* Not the magic sequence defining semihosting. */
 		return 0;
-	}
 
 	/*
 	 * Perform semihosting call if we are not waiting on a fileio
@@ -120,12 +150,10 @@ int riscv_semihosting(struct target *target, int *retval)
 		riscv_reg_t r0;
 		riscv_reg_t r1;
 
-		result = riscv_get_register(target, &r0, GDB_REGNO_A0);
-		if (result != ERROR_OK)
+		if (ERROR_OK != riscv_get_register(target, &r0, GDB_REGNO_A0))
 			return 0;
 
-		result = riscv_get_register(target, &r1, GDB_REGNO_A1);
-		if (result != ERROR_OK)
+		if (ERROR_OK != riscv_get_register(target, &r1, GDB_REGNO_A1))
 			return 0;
 
 		semihosting->op = r0;
@@ -160,36 +188,5 @@ int riscv_semihosting(struct target *target, int *retval)
 		return 1;
 	}
 
-	return 0;
-}
-
-/* -------------------------------------------------------------------------
- * Local functions. */
-
-/**
- * Called via semihosting->setup() later, after the target is known,
- * usually on the first semihosting command.
- */
-static int riscv_semihosting_setup(struct target *target, int enable)
-{
-	LOG_DEBUG("%s: enable=%d", target->cmd_name, enable);
-
-	struct semihosting *semihosting = target->semihosting;
-	if (semihosting)
-		semihosting->setup_time = clock();
-
-	return ERROR_OK;
-}
-
-static int riscv_semihosting_post_result(struct target *target)
-{
-	struct semihosting *semihosting = target->semihosting;
-	if (!semihosting) {
-		/* If not enabled, silently ignored. */
-		return 0;
-	}
-
-	LOG_DEBUG("%s: 0x%" PRIx64, target->cmd_name, semihosting->result);
-	riscv_set_register(target, GDB_REGNO_A0, semihosting->result);
 	return 0;
 }
