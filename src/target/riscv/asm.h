@@ -8,7 +8,7 @@
 /** Version-independent functions that we don't want in the main address space. */
 /** @{ */
 static uint32_t __attribute__((unused))
-load(const struct target *target, unsigned rd, unsigned base, uint16_t offset)
+load(struct target const *const target, unsigned const rd, unsigned const base, uint16_t const offset)
 {
 	switch (riscv_xlen(target)) {
 	case 32:
@@ -27,7 +27,7 @@ load(const struct target *target, unsigned rd, unsigned base, uint16_t offset)
 }
 
 static uint32_t __attribute__((unused))
-store(const struct target *target, unsigned src, unsigned base, uint16_t offset)
+store(struct target const *const target, unsigned const src, unsigned const base, uint16_t const offset)
 {
 	switch (riscv_xlen(target)) {
 	case 32:
