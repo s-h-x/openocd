@@ -92,33 +92,33 @@ static int	riscv013_test_compliance(struct target *target);
 
 /* JTAG registers. */
 
-enum dmi_op {
+enum dmi_op_e {
 	DMI_OP_NOP = 0,
 	DMI_OP_READ = 1,
 	DMI_OP_WRITE = 2
 };
-typedef enum dmi_op dmi_op_t;
+typedef enum dmi_op_e dmi_op_t;
 
-enum dmi_status {
+enum dmi_status_e {
 	DMI_STATUS_SUCCESS = 0,
 	DMI_STATUS_FAILED = 2,
 	DMI_STATUS_BUSY = 3
 };
-typedef enum dmi_status dmi_status_t;
+typedef enum dmi_status_e dmi_status_t;
 
-enum riscv_error {
+enum riscv_error_e {
 	RE_OK,
 	RE_FAIL,
 	RE_AGAIN
 };
-typedef enum riscv_error riscv_error_t;
+typedef enum riscv_error_e riscv_error_t;
 
-enum slot {
+enum slot_e {
 	SLOT0,
 	SLOT1,
 	SLOT_LAST,
 };
-typedef enum slot slot_t;
+typedef enum slot_e slot_t;
 
 /* Debug Bus registers. */
 enum CMDERR_e {
@@ -141,14 +141,14 @@ struct trigger {
 	int unique_id;
 };
 
-enum yes_no_maybe {
+enum yes_no_maybe_e {
 	YNM_MAYBE,
 	YNM_YES,
 	YNM_NO
 };
-typedef enum yes_no_maybe yes_no_maybe_t;
+typedef enum yes_no_maybe_e yes_no_maybe_t;
 
-struct dm013_info {
+struct dm013_info_s {
 	struct list_head list;
 	int abs_chain_position;
 
@@ -161,15 +161,15 @@ struct dm013_info {
 	/* The currently selected hartid on this DM. */
 	int current_hartid;
 };
-typedef struct dm013_info dm013_info_t;
+typedef struct dm013_info_s dm013_info_t;
 
-struct riscv013_target_list {
+struct target_list_s {
 	struct list_head list;
 	struct target *target;
 };
-typedef struct riscv013_target_list target_list_t;
+typedef struct target_list_s target_list_t;
 
-struct riscv013_info {
+struct riscv013_info_s {
 	/** Number of address bits in the dbus register. */
 	unsigned abits;
 
@@ -230,7 +230,7 @@ struct riscv013_info {
 	/** DM that provides access to this target. */
 	dm013_info_t *dm;
 };
-typedef struct riscv013_info riscv013_info_t;
+typedef struct riscv013_info_s riscv013_info_t;
 
 LIST_HEAD(dm_list);
 
@@ -806,7 +806,7 @@ static int write_abstract_arg(struct target *target, unsigned index,
 }
 
 /**
- * @par size in bits
+ * @param size in bits
  */
 static uint32_t
 access_register_command(struct target *target,
@@ -1002,14 +1002,14 @@ examine_progbuf(struct target *const target)
 	return ERROR_OK;
 }
 
-enum memory_space_t {
+enum memory_space_e {
 	SPACE_DMI_DATA,
 	SPACE_DMI_PROGBUF,
 	SPACE_DMI_RAM
 };
-typedef enum memory_space_t memory_space_t;
+typedef enum memory_space_e memory_space_t;
 
-struct scratch_mem_t {
+struct scratch_mem_s {
 	/* How can the debugger access this memory? */
 	memory_space_t memory_space;
 
@@ -1021,7 +1021,7 @@ struct scratch_mem_t {
 
 	struct working_area *area;
 };
-typedef struct scratch_mem_t scratch_mem_t;
+typedef struct scratch_mem_s scratch_mem_t;
 
 /**
  * Find some scratch memory to be used with the given program.
@@ -1928,7 +1928,7 @@ static int deassert_reset(struct target *target)
 	return ERROR_OK;
 }
 
-/** @par size in bytes */
+/** @param size in bytes */
 static void write_to_buf(uint8_t *buffer, uint64_t value, unsigned size)
 {
 	switch (size) {

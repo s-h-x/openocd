@@ -100,12 +100,12 @@ enum CSR_BPCONTROL_e {
 #define DBUS_OP_START				0
 #define DBUS_OP_SIZE				2
 
-enum dbus_op_t {
+enum dbus_op_e {
 	DBUS_OP_NOP = 0,
 	DBUS_OP_READ = 1,
 	DBUS_OP_WRITE = 2
 };
-typedef enum dbus_op_t dbus_op_t;
+typedef enum dbus_op_e dbus_op_t;
 
 enum dbus_status_t {
 	DBUS_STATUS_SUCCESS = 0,
@@ -117,19 +117,19 @@ typedef enum dbus_status_t dbus_status_t;
 #define DBUS_DATA_SIZE				34
 #define DBUS_ADDRESS_START			36
 
-enum riscv_error_t {
+enum riscv_error_e {
 	RE_OK,
 	RE_FAIL,
 	RE_AGAIN
 };
-typedef enum riscv_error_t riscv_error_t;
+typedef enum riscv_error_e riscv_error_t;
 
-enum slot {
+enum slot_e {
 	SLOT0,
 	SLOT1,
 	SLOT_LAST,
 };
-typedef enum slot slot_t;
+typedef enum slot_e slot_t;
 
 /* Debug Bus registers. */
 
@@ -179,7 +179,7 @@ struct memory_cache_line {
 	bool dirty;
 };
 
-struct riscv011_info_t {
+struct riscv011_info_s {
 	/** Number of address bits in the dbus register. */
 	uint8_t addrbits;
 
@@ -216,13 +216,13 @@ struct riscv011_info_t {
 	bool need_strict_step;
 	bool never_halted;
 };
-typedef struct riscv011_info_t riscv011_info_t;
+typedef struct riscv011_info_s riscv011_info_t;
 
-struct bits_t {
+struct bits_s {
 	bool haltnot;
 	bool interrupt;
 };
-typedef struct bits_t bits_t;
+typedef struct bits_s bits_t;
 
 /* Necessary prototypes. */
 static int poll_target(struct target *target, bool announce);
@@ -508,7 +508,7 @@ static void dbus_write(struct target *target, uint16_t address, uint64_t value)
 		LOG_ERROR("%s: failed to write 0x%" PRIx64 " to 0x%x; status=%d", target->cmd_name, value, address, status);
 }
 
-struct scans {
+struct scans_s {
 	/** Number of scans that space is reserved for. */
 	unsigned scan_count;
 
@@ -522,7 +522,7 @@ struct scans {
 };
 /** @bug doc/manual/style.txt: "This should be reserved for types that should be passed by value"
 */
-typedef struct scans scans_t;
+typedef struct scans_s scans_t;
 
 static scans_t *
 scans_new(struct target *target, unsigned scan_count)

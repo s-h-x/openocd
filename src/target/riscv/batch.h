@@ -4,7 +4,7 @@
 #include "target/target.h"
 #include "jtag/jtag.h"
 
-enum riscv_scan_type {
+enum riscv_scan_type_e {
 	RISCV_SCAN_TYPE_INVALID,
 	RISCV_SCAN_TYPE_NOP,
 	RISCV_SCAN_TYPE_READ,
@@ -31,7 +31,7 @@ struct riscv_batch {
 	 * scan.  This is a pain for users, so we just provide them the
 	 * illusion of not having to do this by eliding all but the last NOP.
 	 * */
-	enum riscv_scan_type last_scan;
+	enum riscv_scan_type_e last_scan;
 
 	/* The read keys. */
 	size_t *read_keys;

@@ -37,11 +37,11 @@ enum riscv_halt_reason {
 	RISCV_HALT_ERROR
 };
 
-struct riscv_reg_info_t {
+struct riscv_reg_info_s {
 	struct target *target;
 	unsigned custom_number;
 };
-typedef struct riscv_reg_info_t riscv_reg_info_t;
+typedef struct riscv_reg_info_s riscv_reg_info_t;
 
 struct riscv_info_t {
 	unsigned dtm_version;

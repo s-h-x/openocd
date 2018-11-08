@@ -96,38 +96,38 @@ enum CSR_BPCONTROL_e {
 #define DBUS_OP_START				0
 #define DBUS_OP_SIZE				2
 
-enum dbus_op {
+enum dbus_op_e {
 	DBUS_OP_NOP = 0,
 	DBUS_OP_READ = 1,
 	DBUS_OP_WRITE = 2
 };
-typedef enum dbus_op dbus_op_t;
+typedef enum dbus_op_e dbus_op_t;
 
-enum dbus_status {
+enum dbus_status_e {
 	DBUS_STATUS_SUCCESS = 0,
 	DBUS_STATUS_FAILED = 2,
 	DBUS_STATUS_BUSY = 3
 };
-typedef enum dbus_status dbus_status_t;
+typedef enum dbus_status_e dbus_status_t;
 
 #define DBUS_DATA_START				2
 #define DBUS_DATA_SIZE				34
 #define DBUS_ADDRESS_START			36
 /** @} */
 
-enum riscv_error {
+enum riscv_error_e {
 	RE_OK,
 	RE_FAIL,
 	RE_AGAIN
 };
-typedef enum riscv_error riscv_error_t;
+typedef enum riscv_error_e riscv_error_t;
 
-enum slot {
+enum slot_e {
 	SLOT0,
 	SLOT1,
 	SLOT_LAST,
 };
-enum slot slot_t;
+enum slot_e slot_t;
 
 /** Debug Bus registers. */
 /** @{ */
@@ -181,7 +181,7 @@ struct scan_field select_dbus = {
 	.out_value = ir_dbus
 };
 
-static uint8_t ir_idcode[1] = {0x1};
+static uint8_t const ir_idcode[1] = {0x1};
 
 struct scan_field select_idcode = {
 	.in_value = NULL,
@@ -206,11 +206,11 @@ int riscv_reset_timeout_sec = DEFAULT_RESET_TIMEOUT_SEC;
 /** @bug uninitialized */
 bool riscv_prefer_sba;
 
-struct range_t {
+struct range_s {
 	uint16_t low;
 	uint16_t high;
 };
-typedef struct range_t range_t;
+typedef struct range_s range_t;
 
 /** In addition to the ones in the standard spec, we'll also expose additional
  * CSRs in this list.
@@ -1258,13 +1258,15 @@ static int riscv_run_algorithm(struct target *const target, int const num_mem_pa
 	return ERROR_OK;
 }
 
-/* Should run code on the target to perform CRC of
-memory. Not yet implemented.
+/** Should run code on the target to perform CRC of memory.
+	
+	@todo Not yet implemented.
 */
-
-static int riscv_checksum_memory(struct target *const target,
-		target_addr_t const address, uint32_t const count,
-		uint32_t *const checksum)
+static int
+riscv_checksum_memory(struct target *const target,
+	target_addr_t const address,
+	uint32_t const count,
+	uint32_t *const checksum)
 {
 	assert(checksum);
 	*checksum = 0xFFFFFFFF;
@@ -1273,14 +1275,15 @@ static int riscv_checksum_memory(struct target *const target,
 
 /* OpenOCD Helper Functions */
 
-enum riscv_poll_hart {
+enum riscv_poll_hart_e {
 	RPH_NO_CHANGE,
 	RPH_DISCOVERED_HALTED,
 	RPH_DISCOVERED_RUNNING,
 	RPH_ERROR
 };
 
-static enum riscv_poll_hart riscv_poll_hart(struct target *const target, int const hartid)
+static enum riscv_poll_hart_e
+riscv_poll_hart(struct target *const target, int const hartid)
 {
 	RISCV_INFO(r);
 	if (riscv_set_current_hartid(target, hartid) != ERROR_OK)
@@ -1315,7 +1318,8 @@ int riscv_openocd_poll(struct target *const target)
 	if (riscv_rtos_enabled(target)) {
 		/* Check every hart for an event. */
 		for (int i = 0; i < riscv_count_harts(target); ++i) {
-			enum riscv_poll_hart out = riscv_poll_hart(target, i);
+			enum riscv_poll_hart_e const out = riscv_poll_hart(target, i);
+
 			switch (out) {
 			case RPH_NO_CHANGE:
 			case RPH_DISCOVERED_RUNNING:
@@ -1345,7 +1349,7 @@ int riscv_openocd_poll(struct target *const target)
 			riscv_halt_one_hart(target, i);
 
 	} else {
-		enum riscv_poll_hart const out =
+		enum riscv_poll_hart_e const out =
 			riscv_poll_hart(target, riscv_current_hartid(target));
 
 		if (out == RPH_NO_CHANGE || out == RPH_DISCOVERED_RUNNING)
@@ -2553,35 +2557,42 @@ int riscv_init_registers(struct target *target)
 		calloc(target->reg_cache->num_regs, max_reg_name_len);
 	char *reg_name = info->reg_names;
 
-	static struct reg_feature feature_cpu = {
+	static struct reg_feature const feature_cpu = {
 		.name = "org.gnu.gdb.riscv.cpu"
 	};
-	static struct reg_feature feature_fpu = {
+
+	static struct reg_feature const feature_fpu = {
 		.name = "org.gnu.gdb.riscv.fpu"
 	};
-	static struct reg_feature feature_csr = {
+
+	static struct reg_feature const feature_csr = {
 		.name = "org.gnu.gdb.riscv.csr"
 	};
-	static struct reg_feature feature_virtual = {
+
+	static struct reg_feature const feature_virtual = {
 		.name = "org.gnu.gdb.riscv.virtual"
 	};
-	static struct reg_feature feature_custom = {
+
+	static struct reg_feature const feature_custom = {
 		.name = "org.gnu.gdb.riscv.custom"
 	};
 
-	static struct reg_data_type type_ieee_single = {
+	static struct reg_data_type const type_ieee_single = {
 		.type = REG_TYPE_IEEE_SINGLE,
 		.id = "ieee_single"
 	};
-	static struct reg_data_type type_ieee_double = {
+
+	static struct reg_data_type const type_ieee_double = {
 		.type = REG_TYPE_IEEE_DOUBLE,
 		.id = "ieee_double"
 	};
+
 	struct csr_info csr_info[] = {
 #define DECLARE_CSR(name, number) { number, #name },
 #include "encoding.h"
 #undef DECLARE_CSR
 	};
+
 	/* encoding.h does not contain the registers in sorted order. */
 	qsort(csr_info, DIM(csr_info), sizeof(*csr_info), cmp_csr_info);
 	unsigned csr_info_index = 0;
@@ -2615,100 +2626,132 @@ int riscv_init_registers(struct target *target)
 				case GDB_REGNO_ZERO:
 					r->name = "zero";
 					break;
+
 				case GDB_REGNO_RA:
 					r->name = "ra";
 					break;
+
 				case GDB_REGNO_SP:
 					r->name = "sp";
 					break;
+
 				case GDB_REGNO_GP:
 					r->name = "gp";
 					break;
+
 				case GDB_REGNO_TP:
 					r->name = "tp";
 					break;
+
 				case GDB_REGNO_T0:
 					r->name = "t0";
 					break;
+
 				case GDB_REGNO_T1:
 					r->name = "t1";
 					break;
+
 				case GDB_REGNO_T2:
 					r->name = "t2";
 					break;
+
 				case GDB_REGNO_FP:
 					r->name = "fp";
 					break;
+
 				case GDB_REGNO_S1:
 					r->name = "s1";
 					break;
+
 				case GDB_REGNO_A0:
 					r->name = "a0";
 					break;
+
 				case GDB_REGNO_A1:
 					r->name = "a1";
 					break;
+
 				case GDB_REGNO_A2:
 					r->name = "a2";
 					break;
+
 				case GDB_REGNO_A3:
 					r->name = "a3";
 					break;
+
 				case GDB_REGNO_A4:
 					r->name = "a4";
 					break;
+
 				case GDB_REGNO_A5:
 					r->name = "a5";
 					break;
+
 				case GDB_REGNO_A6:
 					r->name = "a6";
 					break;
+
 				case GDB_REGNO_A7:
 					r->name = "a7";
 					break;
+
 				case GDB_REGNO_S2:
 					r->name = "s2";
 					break;
+
 				case GDB_REGNO_S3:
 					r->name = "s3";
 					break;
+
 				case GDB_REGNO_S4:
 					r->name = "s4";
 					break;
+
 				case GDB_REGNO_S5:
 					r->name = "s5";
 					break;
+
 				case GDB_REGNO_S6:
 					r->name = "s6";
 					break;
+
 				case GDB_REGNO_S7:
 					r->name = "s7";
 					break;
+
 				case GDB_REGNO_S8:
 					r->name = "s8";
 					break;
+
 				case GDB_REGNO_S9:
 					r->name = "s9";
 					break;
+
 				case GDB_REGNO_S10:
 					r->name = "s10";
 					break;
+
 				case GDB_REGNO_S11:
 					r->name = "s11";
 					break;
+
 				case GDB_REGNO_T3:
 					r->name = "t3";
 					break;
+
 				case GDB_REGNO_T4:
 					r->name = "t4";
 					break;
+
 				case GDB_REGNO_T5:
 					r->name = "t5";
 					break;
+
 				case GDB_REGNO_T6:
 					r->name = "t6";
 					break;
 			}
+
 			r->group = "general";
 			r->feature = &feature_cpu;
 		} else if (number == GDB_REGNO_PC) {
@@ -2718,115 +2761,148 @@ int riscv_init_registers(struct target *target)
 			r->feature = &feature_cpu;
 		} else if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
 			r->caller_save = true;
-			if (riscv_supports_extension(target, riscv_current_hartid(target),
-						'D')) {
+
+			if (riscv_supports_extension(target, riscv_current_hartid(target), 'D')) {
 				r->reg_data_type = &type_ieee_double;
 				r->size = 64;
-			} else if (riscv_supports_extension(target,
-						riscv_current_hartid(target), 'F')) {
+			} else if (riscv_supports_extension(target, riscv_current_hartid(target), 'F')) {
 				r->reg_data_type = &type_ieee_single;
 				r->size = 32;
 			} else {
 				r->exist = false;
 			}
+
 			switch (number) {
 				case GDB_REGNO_FT0:
 					r->name = "ft0";
 					break;
+
 				case GDB_REGNO_FT1:
 					r->name = "ft1";
 					break;
+
 				case GDB_REGNO_FT2:
 					r->name = "ft2";
 					break;
+
 				case GDB_REGNO_FT3:
 					r->name = "ft3";
 					break;
+
 				case GDB_REGNO_FT4:
 					r->name = "ft4";
 					break;
+
 				case GDB_REGNO_FT5:
 					r->name = "ft5";
 					break;
+
 				case GDB_REGNO_FT6:
 					r->name = "ft6";
 					break;
+
 				case GDB_REGNO_FT7:
 					r->name = "ft7";
 					break;
+
 				case GDB_REGNO_FS0:
 					r->name = "fs0";
 					break;
+
 				case GDB_REGNO_FS1:
 					r->name = "fs1";
 					break;
+
 				case GDB_REGNO_FA0:
 					r->name = "fa0";
 					break;
+
 				case GDB_REGNO_FA1:
 					r->name = "fa1";
 					break;
+
 				case GDB_REGNO_FA2:
 					r->name = "fa2";
 					break;
+
 				case GDB_REGNO_FA3:
 					r->name = "fa3";
 					break;
+
 				case GDB_REGNO_FA4:
 					r->name = "fa4";
 					break;
+
 				case GDB_REGNO_FA5:
 					r->name = "fa5";
 					break;
+
 				case GDB_REGNO_FA6:
 					r->name = "fa6";
 					break;
+
 				case GDB_REGNO_FA7:
 					r->name = "fa7";
 					break;
+
 				case GDB_REGNO_FS2:
 					r->name = "fs2";
 					break;
+
 				case GDB_REGNO_FS3:
 					r->name = "fs3";
 					break;
+
 				case GDB_REGNO_FS4:
 					r->name = "fs4";
 					break;
+
 				case GDB_REGNO_FS5:
 					r->name = "fs5";
 					break;
+
 				case GDB_REGNO_FS6:
 					r->name = "fs6";
 					break;
+
 				case GDB_REGNO_FS7:
 					r->name = "fs7";
 					break;
+
 				case GDB_REGNO_FS8:
 					r->name = "fs8";
 					break;
+
 				case GDB_REGNO_FS9:
 					r->name = "fs9";
 					break;
+
 				case GDB_REGNO_FS10:
 					r->name = "fs10";
 					break;
+
 				case GDB_REGNO_FS11:
 					r->name = "fs11";
 					break;
+
 				case GDB_REGNO_FT8:
 					r->name = "ft8";
 					break;
+
 				case GDB_REGNO_FT9:
 					r->name = "ft9";
 					break;
+
 				case GDB_REGNO_FT10:
 					r->name = "ft10";
 					break;
+
 				case GDB_REGNO_FT11:
 					r->name = "ft11";
 					break;
+
 			}
+
 			r->group = "float";
 			r->feature = &feature_fpu;
 		} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
@@ -2858,6 +2934,7 @@ int riscv_init_registers(struct target *target)
 					r->group = "float";
 					r->feature = &feature_fpu;
 					break;
+
 				case CSR_SSTATUS:
 				case CSR_STVEC:
 				case CSR_SIP:
@@ -2871,6 +2948,7 @@ int riscv_init_registers(struct target *target)
 					r->exist = riscv_supports_extension(target,
 							riscv_current_hartid(target), 'S');
 					break;
+
 				case CSR_MEDELEG:
 				case CSR_MIDELEG:
 					/* "In systems with only M-mode, or with both M-mode and
@@ -2988,9 +3066,9 @@ int riscv_init_registers(struct target *target)
 
 		if (reg_name[0])
 			r->name = reg_name;
+
 		reg_name += strlen(reg_name) + 1;
-		assert(reg_name < info->reg_names + target->reg_cache->num_regs *
-				max_reg_name_len);
+		assert(reg_name < info->reg_names + target->reg_cache->num_regs * max_reg_name_len);
 		r->value = &info->reg_cache_values[number];
 	}
 
