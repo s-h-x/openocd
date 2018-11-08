@@ -12,7 +12,7 @@
 #include "encoding.h"
 
 /* Program interface. */
-int riscv_program_init(struct riscv_program *p, struct target *target)
+int riscv_program_init(struct riscv_program *p, struct target *const target)
 {
 	memset(p, 0, sizeof(*p));
 	p->target = target;
@@ -144,12 +144,14 @@ int riscv_program_fence(struct riscv_program *p)
 
 int riscv_program_ebreak(struct riscv_program *p)
 {
-	struct target *target = p->target;
-	RISCV_INFO(r);
+	struct target *const target = p->target;
+	struct riscv_info_t *const r = riscv_info(target);
+
 	if (p->instruction_count == riscv_debug_buffer_size(p->target) &&
 			r->impebreak) {
 		return ERROR_OK;
 	}
+
 	return riscv_program_insert(p, ebreak());
 }
 

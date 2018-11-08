@@ -119,9 +119,9 @@ struct riscv_info_t {
 	riscv_insn_t (*read_debug_buffer)(struct target *target, unsigned index);
 	int (*execute_debug_buffer)(struct target *target);
 	int (*dmi_write_u64_bits)(struct target *target);
-	void (*fill_dmi_write_u64)(struct target *target, char *buf, int a, uint64_t d);
-	void (*fill_dmi_read_u64)(struct target *target, char *buf, int a);
-	void (*fill_dmi_nop_u64)(struct target *target, char *buf);
+	void (*fill_dmi_write_u64)(struct target *target, uint8_t *buf, int a, uint64_t d);
+	void (*fill_dmi_read_u64)(struct target *target, uint8_t *buf, int a);
+	void (*fill_dmi_nop_u64)(struct target *target, uint8_t *buf);
 
 	int (*authdata_read)(struct target *target, uint32_t *value);
 	int (*authdata_write)(struct target *target, uint32_t value);
@@ -150,35 +150,39 @@ static inline struct riscv_info_t *riscv_info(struct target const *const target)
 	return target->arch_info;
 }
 
-#define RISCV_INFO(R) struct riscv_info_t *R = riscv_info(target);
-
 extern struct scan_field select_dtmcontrol;
 extern struct scan_field select_dbus;
 extern struct scan_field select_idcode;
 
 /** OpenOCD Interface */
 /** @{*/
-int riscv_openocd_poll(struct target *target);
+int
+riscv_openocd_poll(struct target *target);
 
-int riscv_openocd_halt(struct target *target);
+int
+riscv_openocd_halt(struct target *target);
 
-int riscv_openocd_resume(
-	struct target *target,
+int
+riscv_openocd_resume(struct target *target,
 	int current,
 	target_addr_t address,
 	int handle_breakpoints,
-	int debug_execution
-);
+	int debug_execution);
 
-int riscv_openocd_step(
-	struct target *target,
+int
+riscv_openocd_step(struct target *target,
 	int current,
 	target_addr_t address,
-	int handle_breakpoints
-);
+	int handle_breakpoints);
 
-int riscv_openocd_assert_reset(struct target *target);
-int riscv_openocd_deassert_reset(struct target *target);
+#if 0
+int
+riscv_openocd_assert_reset(struct target *target);
+
+int
+riscv_openocd_deassert_reset(struct target *target);
+#endif
+
 /** @} */
 
 /** RISC-V Interface */
@@ -188,10 +192,14 @@ int riscv_openocd_deassert_reset(struct target *target);
  * all the enabled harts, which when running in RTOS mode is all the harts on
  * the system. */
  /** @{ */
-int riscv_halt_all_harts(struct target *target);
-int riscv_halt_one_hart(struct target *target, int hartid);
-int riscv_resume_all_harts(struct target *target);
-int riscv_resume_one_hart(struct target *target, int hartid);
+int
+riscv_halt_all_harts(struct target *target);
+int
+riscv_halt_one_hart(struct target *target, int hartid);
+int
+riscv_resume_all_harts(struct target *target);
+int
+riscv_resume_one_hart(struct target *target, int hartid);
 /** @} */
 
 /** Steps the hart that's currently selected in the RTOS, or if there is no RTOS
@@ -257,9 +265,9 @@ riscv_insn_t riscv_read_debug_buffer(struct target *target, int index);
 int riscv_write_debug_buffer(struct target *target, int index, riscv_insn_t insn);
 int riscv_execute_debug_buffer(struct target *target);
 
-void riscv_fill_dmi_nop_u64(struct target *target, char *buf);
-void riscv_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t d);
-void riscv_fill_dmi_read_u64(struct target *target, char *buf, int a);
+void riscv_fill_dmi_nop_u64(struct target *target, uint8_t *buf);
+void riscv_fill_dmi_write_u64(struct target *target, uint8_t *buf, int a, uint64_t d);
+void riscv_fill_dmi_read_u64(struct target *target, uint8_t *buf, int a);
 int riscv_dmi_write_u64_bits(struct target *target);
 
 /** Invalidates the register cache. */

@@ -374,17 +374,17 @@ static void trigger_from_breakpoint(struct trigger *const trigger,
 static int maybe_add_trigger_t1(struct target *const target, unsigned const hartid,
 		struct trigger *const trigger, uint64_t tdata1)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
-	const uint32_t bpcontrol_x = 1 << 0;
-	const uint32_t bpcontrol_w = 1 << 1;
-	const uint32_t bpcontrol_r = 1 << 2;
-	const uint32_t bpcontrol_u = 1 << 3;
-	const uint32_t bpcontrol_s = 1 << 4;
-	const uint32_t bpcontrol_h = 1 << 5;
-	const uint32_t bpcontrol_m = 1 << 6;
-	const uint32_t bpcontrol_bpmatch = 0xf << 7;
-	const uint32_t bpcontrol_bpaction = 0xff << 11;
+	static uint32_t const bpcontrol_x = 1 << 0;
+	static uint32_t const bpcontrol_w = 1 << 1;
+	static uint32_t const bpcontrol_r = 1 << 2;
+	static uint32_t const bpcontrol_u = 1 << 3;
+	static uint32_t const bpcontrol_s = 1 << 4;
+	static uint32_t const bpcontrol_h = 1 << 5;
+	static uint32_t const bpcontrol_m = 1 << 6;
+	static uint32_t const bpcontrol_bpmatch = 0xf << 7;
+	static uint32_t const bpcontrol_bpaction = 0xff << 11;
 
 	if (tdata1 & (bpcontrol_r | bpcontrol_w | bpcontrol_x)) {
 		/* Trigger is already in use, presumably by user code. */
@@ -431,7 +431,7 @@ static int maybe_add_trigger_t1(struct target *const target, unsigned const hart
 static int maybe_add_trigger_t2(struct target *const target, unsigned const hartid,
 		struct trigger *const trigger, uint64_t tdata1)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	/* tselect is already set */
 	if (tdata1 & (MCONTROL_EXECUTE | MCONTROL_STORE | MCONTROL_LOAD)) {
@@ -491,7 +491,7 @@ static int maybe_add_trigger_t2(struct target *const target, unsigned const hart
 
 static int add_trigger(struct target *const target, struct trigger *const trigger)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	if (riscv_enumerate_triggers(target) != ERROR_OK)
 		return ERROR_FAIL;
@@ -586,7 +586,7 @@ static int add_trigger(struct target *const target, struct trigger *const trigge
 	return ERROR_OK;
 }
 
-int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
+int riscv_add_breakpoint(struct target *const target, struct breakpoint *breakpoint)
 {
 	assert(breakpoint);
 	if (breakpoint->type == BKPT_SOFT) {
@@ -640,7 +640,7 @@ int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 
 static int remove_trigger(struct target *const target, struct trigger *const trigger)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	if (riscv_enumerate_triggers(target) != ERROR_OK)
 		return ERROR_FAIL;
@@ -688,7 +688,7 @@ static int remove_trigger(struct target *const target, struct trigger *const tri
 	return ERROR_OK;
 }
 
-int riscv_remove_breakpoint(struct target *target,
+int riscv_remove_breakpoint(struct target *const target,
 		struct breakpoint *breakpoint)
 {
 	assert(breakpoint);
@@ -739,7 +739,7 @@ static void trigger_from_watchpoint(struct trigger *const trigger,
 	trigger->unique_id = watchpoint->unique_id;
 }
 
-int riscv_add_watchpoint(struct target *target, struct watchpoint *watchpoint)
+int riscv_add_watchpoint(struct target *const target, struct watchpoint *watchpoint)
 {
 	struct trigger trigger;
 	trigger_from_watchpoint(&trigger, watchpoint);
@@ -755,7 +755,7 @@ int riscv_add_watchpoint(struct target *target, struct watchpoint *watchpoint)
 	return ERROR_OK;
 }
 
-int riscv_remove_watchpoint(struct target *target,
+int riscv_remove_watchpoint(struct target *const target,
 		struct watchpoint *watchpoint)
 {
 	struct trigger trigger;
@@ -777,7 +777,7 @@ int riscv_remove_watchpoint(struct target *target,
  * The GDB server uses this information to tell GDB what data address has
  * been hit, which enables GDB to print the hit variable along with its old
  * and new value. */
-int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoint)
+int riscv_hit_watchpoint(struct target *const target, struct watchpoint **hit_watchpoint)
 {
 	assert(target);
 	struct watchpoint *wp = target->watchpoints;
@@ -887,8 +887,9 @@ static int old_or_new_riscv_step(struct target *const target,
 	target_addr_t const address,
 	int const handle_breakpoints)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 	LOG_DEBUG("%s: handle_breakpoints=%d", target->cmd_name, handle_breakpoints);
+
 	if (r->is_halted == NULL)
 		return oldriscv_step(target, current, address, handle_breakpoints);
 	else
@@ -931,7 +932,8 @@ static int oldriscv_poll(struct target *const target)
 
 static int old_or_new_riscv_poll(struct target *const target)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+
 	if (r->is_halted == NULL)
 		return oldriscv_poll(target);
 	else
@@ -940,7 +942,8 @@ static int old_or_new_riscv_poll(struct target *const target)
 
 static int old_or_new_riscv_halt(struct target *const target)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+
 	if (r->is_halted == NULL)
 		return oldriscv_halt(target);
 	else
@@ -976,7 +979,7 @@ static int old_or_new_riscv_resume(struct target *const target,
 	int const handle_breakpoints,
 	int debug_execution)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 	assert(target);
 	LOG_DEBUG("%s: handle_breakpoints=%d",
 			target->cmd_name,
@@ -990,7 +993,7 @@ static int old_or_new_riscv_resume(struct target *const target,
 
 static int riscv_select_current_hart(struct target *const target)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	if (riscv_rtos_enabled(target)) {
 		if (r->rtos_hartid == -1)
@@ -1060,7 +1063,7 @@ static int riscv_get_gdb_reg_list(struct target *const target,
 		struct reg **reg_list[], int *const reg_list_size,
 		enum target_register_class const reg_class)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 	assert(target);
 	LOG_DEBUG("%s: reg_class=%d",
 			target->cmd_name,
@@ -1285,7 +1288,8 @@ enum riscv_poll_hart_e {
 static enum riscv_poll_hart_e
 riscv_poll_hart(struct target *const target, int const hartid)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+
 	if (riscv_set_current_hartid(target, hartid) != ERROR_OK)
 		return RPH_ERROR;
 
@@ -1410,7 +1414,7 @@ int riscv_openocd_poll(struct target *const target)
 
 int riscv_openocd_halt(struct target *const target)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	assert(target);
 	LOG_DEBUG("%s: halting all harts", target->cmd_name);
@@ -1566,7 +1570,7 @@ COMMAND_HANDLER(riscv_test_compliance)
 {
 	struct target *const target = get_current_target(CMD_CTX);
 
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	if (CMD_ARGC > 0) {
 		LOG_ERROR("%s: Command does not take any parameters.", target->cmd_name);
@@ -1711,7 +1715,8 @@ COMMAND_HANDLER(riscv_authdata_read)
 		return ERROR_FAIL;
 	}
 
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+
 	if (!r) {
 		LOG_ERROR("%s: riscv_info is NULL!", target->cmd_name);
 		return ERROR_FAIL;
@@ -1739,7 +1744,7 @@ COMMAND_HANDLER(riscv_authdata_write)
 	}
 
 	struct target *const target = get_current_target(CMD_CTX);
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	uint32_t value;
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], value);
@@ -1766,7 +1771,7 @@ COMMAND_HANDLER(riscv_dmi_read)
 		return ERROR_FAIL;
 	}
 
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	if (!r) {
 		LOG_ERROR("%s: riscv_info is NULL!", target->cmd_name);
@@ -1798,7 +1803,7 @@ COMMAND_HANDLER(riscv_dmi_write)
 	}
 
 	struct target *const target = get_current_target(CMD_CTX);
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	uint32_t address;
 	uint32_t value;
@@ -1821,7 +1826,7 @@ COMMAND_HANDLER(riscv_test_sba_config_reg)
 	}
 
 	struct target *const target = get_current_target(CMD_CTX);
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	target_addr_t legal_address;
 	uint32_t num_words;
@@ -2058,8 +2063,9 @@ int riscv_halt_all_harts(struct target *const target)
 
 int riscv_halt_one_hart(struct target *const target, int const hartid)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 	LOG_DEBUG("%s: halting hart %d", target->cmd_name, hartid);
+
 	if (riscv_set_current_hartid(target, hartid) != ERROR_OK)
 		return ERROR_FAIL;
 	if (riscv_is_halted(target)) {
@@ -2085,7 +2091,7 @@ int riscv_resume_all_harts(struct target *const target)
 
 int riscv_resume_one_hart(struct target *const target, int const hartid)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 	LOG_DEBUG("%s: resuming hart %d", target->cmd_name, hartid);
 	if (riscv_set_current_hartid(target, hartid) != ERROR_OK)
 		return ERROR_FAIL;
@@ -2100,7 +2106,7 @@ int riscv_resume_one_hart(struct target *const target, int const hartid)
 
 int riscv_step_rtos_hart(struct target *const target)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 	int hartid = r->current_hartid;
 
 	if (riscv_rtos_enabled(target)) {
@@ -2140,7 +2146,7 @@ int riscv_step_rtos_hart(struct target *const target)
 
 bool riscv_supports_extension(struct target *const target, int const hartid, char const letter)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 	unsigned num;
 
 	if (letter >= 'a' && letter <= 'z')
@@ -2160,7 +2166,7 @@ int riscv_xlen(const struct target *const target)
 
 int riscv_xlen_of_hart(const struct target *const target, int const hartid)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 	assert(r->xlen[hartid] != -1);
 	return r->xlen[hartid];
 }
@@ -2172,7 +2178,8 @@ bool riscv_rtos_enabled(const struct target *const target)
 
 int riscv_set_current_hartid(struct target *const target, int const hartid)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+
 	if (!r->select_current_hart)
 		return ERROR_OK;
 
@@ -2195,7 +2202,7 @@ int riscv_set_current_hartid(struct target *const target, int const hartid)
 
 void riscv_invalidate_register_cache(struct target *const target)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	register_cache_invalidate(target->reg_cache);
 	for (size_t i = 0; i < target->reg_cache->num_regs; ++i) {
@@ -2206,36 +2213,42 @@ void riscv_invalidate_register_cache(struct target *const target)
 	r->registers_initialized = true;
 }
 
-int riscv_current_hartid(const struct target *target)
+int riscv_current_hartid(const struct target *const target)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r);
 	return r->current_hartid;
 }
 
-void riscv_set_all_rtos_harts(struct target *target)
+void riscv_set_all_rtos_harts(struct target *const target)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r);
 	r->rtos_hartid = -1;
 }
 
-void riscv_set_rtos_hartid(struct target *target, int hartid)
+void riscv_set_rtos_hartid(struct target *const target, int const hartid)
 {
 	LOG_DEBUG("%s: setting RTOS hartid %d", target->cmd_name, hartid);
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r);
 	r->rtos_hartid = hartid;
 }
 
-int riscv_count_harts(struct target *target)
+int riscv_count_harts(struct target *const target)
 {
 	if (target == NULL)
 		return 1;
-	RISCV_INFO(r);
+
+	struct riscv_info_t *const r = riscv_info(target);
+
 	if (r == NULL)
 		return 1;
+
 	return r->hart_count;
 }
 
-bool riscv_has_register(struct target *target, int hartid, int regid)
+bool riscv_has_register(struct target *const target, int hartid, int regid)
 {
 	return 1;
 }
@@ -2244,113 +2257,133 @@ bool riscv_has_register(struct target *target, int hartid, int regid)
  * This function is called when the debug user wants to change the value of a
  * register. The new value may be cached, and may not be written until the hart
  * is resumed. */
-int riscv_set_register(struct target *target, enum gdb_regno r, riscv_reg_t v)
+int
+riscv_set_register(struct target *const target,
+	enum gdb_regno const r,
+	riscv_reg_t const v)
 {
 	return riscv_set_register_on_hart(target, riscv_current_hartid(target), r, v);
 }
 
-int riscv_set_register_on_hart(struct target *target, int hartid,
+int riscv_set_register_on_hart(struct target *const target, int hartid,
 		enum gdb_regno regid, uint64_t value)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 	LOG_DEBUG("%s: [%d] %s <- %" PRIx64, target->cmd_name, hartid, gdb_regno_name(regid), value);
+	assert(r);
 	assert(r->set_register);
 	return r->set_register(target, hartid, regid, value);
 }
 
-int riscv_get_register(struct target *target, riscv_reg_t *value,
+int riscv_get_register(struct target *const target, riscv_reg_t *value,
 		enum gdb_regno r)
 {
 	return riscv_get_register_on_hart(target, value,
 			riscv_current_hartid(target), r);
 }
 
-int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
+int riscv_get_register_on_hart(struct target *const target, riscv_reg_t *value,
 		int hartid, enum gdb_regno regid)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	if (hartid != riscv_current_hartid(target))
 		riscv_invalidate_register_cache(target);
 
-	int result = r->get_register(target, value, hartid, regid);
+	int const result = r->get_register(target, value, hartid, regid);
 
 	if (hartid != riscv_current_hartid(target))
 		riscv_invalidate_register_cache(target);
 
+	assert(value);
 	LOG_DEBUG("%s: [%d] %s: %" PRIx64, target->cmd_name, hartid, gdb_regno_name(regid), *value);
 	return result;
 }
 
-bool riscv_is_halted(struct target *target)
+bool
+riscv_is_halted(struct target *const target)
 {
-	RISCV_INFO(r);
-	assert(r->is_halted);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r && r->is_halted);
 	return r->is_halted(target);
 }
 
-enum riscv_halt_reason riscv_halt_reason(struct target *target, int hartid)
+enum riscv_halt_reason riscv_halt_reason(struct target *const target, int hartid)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+
 	if (riscv_set_current_hartid(target, hartid) != ERROR_OK)
 		return RISCV_HALT_ERROR;
+
 	if (!riscv_is_halted(target)) {
 		LOG_ERROR("%s: Hart is not halted!", target->cmd_name);
 		return RISCV_HALT_UNKNOWN;
 	}
+
 	return r->halt_reason(target);
 }
 
-size_t riscv_debug_buffer_size(struct target *target)
+size_t riscv_debug_buffer_size(struct target *const target)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r);
 	return r->debug_buffer_size[riscv_current_hartid(target)];
 }
 
-int riscv_write_debug_buffer(struct target *target, int index, riscv_insn_t insn)
+int
+riscv_write_debug_buffer(struct target *const target,
+	int const index,
+	riscv_insn_t const insn)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r && r->write_debug_buffer);
 	r->write_debug_buffer(target, index, insn);
 	return ERROR_OK;
 }
 
-riscv_insn_t riscv_read_debug_buffer(struct target *target, int index)
+riscv_insn_t riscv_read_debug_buffer(struct target *const target, int const index)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r && r->read_debug_buffer);
 	return r->read_debug_buffer(target, index);
 }
 
-int riscv_execute_debug_buffer(struct target *target)
+int riscv_execute_debug_buffer(struct target *const target)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r && r->execute_debug_buffer);
 	return r->execute_debug_buffer(target);
 }
 
-void riscv_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t d)
+void riscv_fill_dmi_write_u64(struct target *const target, uint8_t *const buf, int a, uint64_t d)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r && r->fill_dmi_write_u64);
 	r->fill_dmi_write_u64(target, buf, a, d);
 }
 
-void riscv_fill_dmi_read_u64(struct target *target, char *buf, int a)
+void riscv_fill_dmi_read_u64(struct target *const target, uint8_t *buf, int a)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r && r->fill_dmi_read_u64);
 	r->fill_dmi_read_u64(target, buf, a);
 }
 
-void riscv_fill_dmi_nop_u64(struct target *target, char *buf)
+void riscv_fill_dmi_nop_u64(struct target *const target, uint8_t *const buf)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r && r->fill_dmi_nop_u64);
 	r->fill_dmi_nop_u64(target, buf);
 }
 
-int riscv_dmi_write_u64_bits(struct target *target)
+int riscv_dmi_write_u64_bits(struct target *const target)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r && r->dmi_write_u64_bits);
 	return r->dmi_write_u64_bits(target);
 }
 
-bool riscv_hart_enabled(struct target *target, int hartid)
+bool riscv_hart_enabled(struct target *const target, int hartid)
 {
 	/* FIXME: Add a hart mask to the RTOS. */
 	if (riscv_rtos_enabled(target))
@@ -2366,9 +2399,10 @@ bool riscv_hart_enabled(struct target *target, int hartid)
  * Disable any hardware triggers that have dmode set. We can't have set them
  * ourselves. Maybe they're left over from some killed debug session.
  * */
-int riscv_enumerate_triggers(struct target *target)
+int riscv_enumerate_triggers(struct target *const target)
 {
-	RISCV_INFO(r);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r);
 
 	if (r->triggers_enumerated)
 		return ERROR_OK;
@@ -2427,7 +2461,8 @@ int riscv_enumerate_triggers(struct target *target)
 	return ERROR_OK;
 }
 
-const char *gdb_regno_name(enum gdb_regno regno)
+const char *
+gdb_regno_name(enum gdb_regno regno)
 {
 	static char buf[32];
 
@@ -2480,7 +2515,7 @@ const char *gdb_regno_name(enum gdb_regno regno)
 static int register_get(struct reg *reg)
 {
 	riscv_reg_info_t *reg_info = reg->arch_info;
-	struct target *target = reg_info->target;
+	struct target *const target = reg_info->target;
 	uint64_t value;
 	int result = riscv_get_register(target, &value, reg->number);
 	if (result != ERROR_OK)
@@ -2492,7 +2527,7 @@ static int register_get(struct reg *reg)
 static int register_set(struct reg *reg, uint8_t *buf)
 {
 	riscv_reg_info_t *reg_info = reg->arch_info;
-	struct target *target = reg_info->target;
+	struct target *const target = reg_info->target;
 
 	uint64_t value = buf_get_u64(buf, 0, reg->size);
 
@@ -2520,13 +2555,14 @@ static int cmp_csr_info(const void *p1, const void *p2)
 	return (int) (((struct csr_info *)p1)->number) - (int) (((struct csr_info *)p2)->number);
 }
 
-int riscv_init_registers(struct target *target)
+int riscv_init_registers(struct target *const restrict target)
 {
-	RISCV_INFO(info);
+	struct riscv_info_t *const restrict info = riscv_info(target);
 
 	if (target->reg_cache) {
 		if (target->reg_cache->reg_list)
 			free(target->reg_cache->reg_list);
+
 		free(target->reg_cache);
 	}
 
@@ -2536,9 +2572,11 @@ int riscv_init_registers(struct target *target)
 
 	if (expose_custom) {
 		for (unsigned i = 0; expose_custom[i].low <= expose_custom[i].high; ++i) {
-			for (unsigned number = expose_custom[i].low;
+			for (
+				unsigned number = expose_custom[i].low;
 				number <= expose_custom[i].high;
-				++number)
+				++number
+				)
 				++target->reg_cache->num_regs;
 		}
 	}
@@ -2553,8 +2591,10 @@ int riscv_init_registers(struct target *target)
 	const unsigned max_reg_name_len = 12;
 	if (info->reg_names)
 		free(info->reg_names);
+
 	info->reg_names =
 		calloc(target->reg_cache->num_regs, max_reg_name_len);
+
 	char *reg_name = info->reg_names;
 
 	static struct reg_feature const feature_cpu = {
@@ -2609,7 +2649,8 @@ int riscv_init_registers(struct target *target)
 	 * it would be nice not to have yet another set of numbers to translate
 	 * between). */
 	for (uint32_t number = 0; number < target->reg_cache->num_regs; ++number) {
-		struct reg *r = &target->reg_cache->reg_list[number];
+		assert(target && target->reg_cache && target->reg_cache->reg_list && number < target->reg_cache->num_regs);
+		struct reg *const r = &target->reg_cache->reg_list[number];
 		r->dirty = false;
 		r->valid = false;
 		r->exist = true;
@@ -2617,11 +2658,13 @@ int riscv_init_registers(struct target *target)
 		r->arch_info = shared_reg_info;
 		r->number = number;
 		r->size = riscv_xlen(target);
+
 		/* r->size is set in riscv_invalidate_register_cache, maybe because the
 		 * target is in theory allowed to change XLEN on us. But I expect a lot
 		 * of other things to break in that case as well. */
 		if (number <= GDB_REGNO_XPR31) {
 			r->caller_save = true;
+
 			switch (number) {
 				case GDB_REGNO_ZERO:
 					r->name = "zero";
@@ -2753,20 +2796,24 @@ int riscv_init_registers(struct target *target)
 			}
 
 			r->group = "general";
-			r->feature = &feature_cpu;
+			/** @todo This should probably be const. */
+			r->feature = (struct reg_feature *)&feature_cpu;
 		} else if (number == GDB_REGNO_PC) {
 			r->caller_save = true;
 			sprintf(reg_name, "pc");
 			r->group = "general";
-			r->feature = &feature_cpu;
+			/** @todo This should probably be const. */
+			r->feature = (struct reg_feature *)&feature_cpu;
 		} else if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
 			r->caller_save = true;
 
 			if (riscv_supports_extension(target, riscv_current_hartid(target), 'D')) {
-				r->reg_data_type = &type_ieee_double;
+				/** @todo This should probably be const. */
+				r->reg_data_type = (struct reg_data_type *)&type_ieee_double;
 				r->size = 64;
 			} else if (riscv_supports_extension(target, riscv_current_hartid(target), 'F')) {
-				r->reg_data_type = &type_ieee_single;
+				/** @todo This should probably be const. */
+				r->reg_data_type = (struct reg_data_type *)&type_ieee_single;
 				r->size = 32;
 			} else {
 				r->exist = false;
@@ -2904,10 +2951,12 @@ int riscv_init_registers(struct target *target)
 			}
 
 			r->group = "float";
-			r->feature = &feature_fpu;
+			/** @todo This should probably be const. */
+			r->feature = (struct reg_feature *)&feature_fpu;
 		} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
 			r->group = "csr";
-			r->feature = &feature_csr;
+			/** @todo This should probably be const. */
+			r->feature = (struct reg_feature *)&feature_csr;
 			unsigned csr_number = number - GDB_REGNO_CSR0;
 
 			while (csr_info[csr_info_index].number < csr_number && csr_info_index < DIM(csr_info) - 1)
@@ -2929,10 +2978,11 @@ int riscv_init_registers(struct target *target)
 				case CSR_FFLAGS:
 				case CSR_FRM:
 				case CSR_FCSR:
-					r->exist = riscv_supports_extension(target,
-							riscv_current_hartid(target), 'F');
+					r->exist =
+						riscv_supports_extension(target, riscv_current_hartid(target), 'F');
 					r->group = "float";
-					r->feature = &feature_fpu;
+					/** @todo This should probably be const. */
+					r->feature = (struct reg_feature *)&feature_fpu;
 					break;
 
 				case CSR_SSTATUS:
@@ -3038,7 +3088,8 @@ int riscv_init_registers(struct target *target)
 		} else if (number == GDB_REGNO_PRIV) {
 			sprintf(reg_name, "priv");
 			r->group = "general";
-			r->feature = &feature_virtual;
+			/** @todo This should probably be const. */
+			r->feature = (struct reg_feature *)&feature_virtual;
 			r->size = 8;
 
 		} else {
@@ -3050,7 +3101,8 @@ int riscv_init_registers(struct target *target)
 			unsigned custom_number = range->low + custom_within_range;
 
 			r->group = "custom";
-			r->feature = &feature_custom;
+			/** @todo This should probably be const. */
+			r->feature = (struct reg_feature *)&feature_custom;
 			r->arch_info = calloc(1, sizeof(riscv_reg_info_t));
 			assert(r->arch_info);
 			((riscv_reg_info_t *)r->arch_info)->target = target;
