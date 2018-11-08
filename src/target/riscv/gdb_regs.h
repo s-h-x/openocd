@@ -1,7 +1,7 @@
 #ifndef TARGET_RISCV_GDB_REGS_H_
 #define TARGET_RISCV_GDB_REGS_H_
 
-/* gdb's register list is defined in riscv_gdb_reg_names gdb/riscv-tdep.c in
+/** gdb's register list is defined in riscv_gdb_reg_names gdb/riscv-tdep.c in
  * its source tree. We must interpret the numbers the same here. */
 enum gdb_regno {
 	GDB_REGNO_ZERO = 0,        /* Read-only register, always 0.  */
@@ -88,6 +88,7 @@ enum gdb_regno {
 	GDB_REGNO_COUNT
 };
 
-const char *gdb_regno_name(enum gdb_regno regno);
+char const *
+gdb_regno_name(enum gdb_regno regno);
 
 #endif  /* TARGET_RISCV_GDB_REGS_H_ */
