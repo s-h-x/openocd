@@ -7,6 +7,8 @@ struct riscv_program;
 #include "opcodes.h"
 #include "gdb_regs.h"
 
+#define DIM(x) (sizeof (x) / sizeof (x)[0])
+
 /* The register cache is statically allocated. */
 #define RISCV_MAX_HARTS 32
 #define RISCV_MAX_REGISTERS 5000

@@ -84,8 +84,6 @@ static int	riscv013_test_compliance(struct target *target);
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
 
-#define DIM(x)		(sizeof(x)/sizeof(*x))
-
 #define CSR_DCSR_CAUSE_SWBP		1
 #define CSR_DCSR_CAUSE_TRIGGER	2
 #define CSR_DCSR_CAUSE_DEBUGINT	3
@@ -810,8 +808,11 @@ static int write_abstract_arg(struct target *target, unsigned index,
 /**
  * @par size in bits
  */
-static uint32_t access_register_command(struct target *target, uint32_t number,
-		unsigned size, uint32_t flags)
+static uint32_t
+access_register_command(struct target *target,
+	uint32_t const number,
+	unsigned const size,
+	uint32_t const flags)
 {
 	uint32_t command = set_field(0, DMI_COMMAND_CMDTYPE, 0);
 
@@ -827,21 +828,21 @@ static uint32_t access_register_command(struct target *target, uint32_t number,
 	}
 
 	if (number <= GDB_REGNO_XPR31) {
-		command = set_field(command, AC_ACCESS_REGISTER_REGNO,
-				0x1000 + number - GDB_REGNO_ZERO);
+		command =
+			set_field(command, AC_ACCESS_REGISTER_REGNO, 0x1000 + number - GDB_REGNO_ZERO);
 	} else if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
-		command = set_field(command, AC_ACCESS_REGISTER_REGNO,
-				0x1020 + number - GDB_REGNO_FPR0);
+		command =
+			set_field(command, AC_ACCESS_REGISTER_REGNO, 0x1020 + number - GDB_REGNO_FPR0);
 	} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
-		command = set_field(command, AC_ACCESS_REGISTER_REGNO,
-				number - GDB_REGNO_CSR0);
+		command =
+			set_field(command, AC_ACCESS_REGISTER_REGNO, number - GDB_REGNO_CSR0);
 	} else if (number >= GDB_REGNO_COUNT) {
 		/* Custom register. */
 		assert(target && target->reg_cache && target->reg_cache->reg_list && number < target->reg_cache->num_regs);
 		riscv_reg_info_t *const reg_info = target->reg_cache->reg_list[number].arch_info;
 		assert(reg_info);
-		command = set_field(command, AC_ACCESS_REGISTER_REGNO,
-				0xc000 + reg_info->custom_number);
+		command =
+			set_field(command, AC_ACCESS_REGISTER_REGNO, 0xc000 + reg_info->custom_number);
 	}
 
 	command |= flags;
@@ -849,18 +850,24 @@ static uint32_t access_register_command(struct target *target, uint32_t number,
 	return command;
 }
 
-static int register_read_abstract(struct target *target, uint64_t *value,
-		uint32_t number, unsigned size)
+static int
+register_read_abstract(struct target *target,
+	uint64_t *const value,
+	uint32_t const number, unsigned const size)
 {
 	riscv013_info_t *const info = get_info(target);
 	assert(info);
 
-	if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31 &&
-			!info->abstract_read_fpr_supported)
+	if (
+		number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31 &&
+		!info->abstract_read_fpr_supported
+		)
 		return ERROR_FAIL;
 
-	if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095 &&
-			!info->abstract_read_csr_supported)
+	if (
+		number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095 &&
+		!info->abstract_read_csr_supported
+		)
 		return ERROR_FAIL;
 
 	uint32_t command = access_register_command(target, number, size,
@@ -868,6 +875,7 @@ static int register_read_abstract(struct target *target, uint64_t *value,
 
 	{
 		int const result = execute_abstract_command(target, command);
+
 		if (result != ERROR_OK) {
 			if (info->cmderr == CMDERR_NOT_SUPPORTED) {
 				if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
@@ -878,6 +886,7 @@ static int register_read_abstract(struct target *target, uint64_t *value,
 					LOG_INFO("%s: Disabling abstract command reads from CSRs.", target->cmd_name);
 				}
 			}
+
 			return result;
 		}
 	}
@@ -888,21 +897,23 @@ static int register_read_abstract(struct target *target, uint64_t *value,
 	return ERROR_OK;
 }
 
-static int register_write_abstract(struct target *target, uint32_t number,
-		uint64_t value, unsigned size)
+static int
+register_write_abstract(struct target *const target,
+	uint32_t const number,
+	uint64_t const value,
+	unsigned const size)
 {
 	riscv013_info_t *const info = get_info(target);
 	assert(info);
 
-	if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31 &&
-			!info->abstract_write_fpr_supported)
+	if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31 && !info->abstract_write_fpr_supported)
 		return ERROR_FAIL;
 
-	if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095 &&
-			!info->abstract_write_csr_supported)
+	if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095 && !info->abstract_write_csr_supported)
 		return ERROR_FAIL;
 
-	uint32_t const command = access_register_command(target, number, size,
+	uint32_t const command =
+		access_register_command(target, number, size,
 			AC_ACCESS_REGISTER_TRANSFER |
 			AC_ACCESS_REGISTER_WRITE);
 
@@ -928,7 +939,8 @@ static int register_write_abstract(struct target *target, uint32_t number,
 	return ERROR_OK;
 }
 
-static int examine_progbuf(struct target *target)
+static int
+examine_progbuf(struct target *const target)
 {
 	riscv013_info_t *info = get_info(target);
 	assert(info);
@@ -976,12 +988,14 @@ static int examine_progbuf(struct target *target)
 		return ERROR_FAIL;
 
 	if (written == (uint32_t)info->progbuf_address) {
-		LOG_INFO("%s: progbuf is writable at 0x%" PRIx64, target->cmd_name,
-				info->progbuf_address);
+		LOG_INFO("%s: progbuf is writable at 0x%" PRIx64,
+			target->cmd_name,
+			info->progbuf_address);
 		info->progbuf_writable = YNM_YES;
 	} else {
-		LOG_INFO("%s: progbuf is not writeable at 0x%" PRIx64, target->cmd_name,
-				info->progbuf_address);
+		LOG_INFO("%s: progbuf is not writeable at 0x%" PRIx64,
+			target->cmd_name,
+			info->progbuf_address);
 		info->progbuf_writable = YNM_NO;
 	}
 
@@ -998,10 +1012,13 @@ typedef enum memory_space_t memory_space_t;
 struct scratch_mem_t {
 	/* How can the debugger access this memory? */
 	memory_space_t memory_space;
+
 	/* Memory address to access the scratch memory from the hart. */
 	riscv_addr_t hart_address;
+
 	/* Memory address to access the scratch memory from the debugger. */
 	riscv_addr_t debug_address;
+
 	struct working_area *area;
 };
 typedef struct scratch_mem_t scratch_mem_t;
@@ -1009,10 +1026,11 @@ typedef struct scratch_mem_t scratch_mem_t;
 /**
  * Find some scratch memory to be used with the given program.
  */
-static int scratch_reserve(struct target *target,
-		scratch_mem_t *scratch,
-		struct riscv_program *program,
-		unsigned size_bytes)
+static int
+scratch_reserve(struct target *const target,
+	scratch_mem_t *const scratch,
+	struct riscv_program *const program,
+	unsigned const size_bytes)
 {
 	riscv_addr_t alignment = 1;
 	while (alignment < size_bytes)
@@ -1048,32 +1066,32 @@ static int scratch_reserve(struct target *target,
 	/* Allow for ebreak at the end of the program. */
 	assert(program);
 	unsigned const program_size = (program->instruction_count + 1) * 4;
-	scratch->hart_address = (info->progbuf_address + program_size + alignment - 1) &
-		~(alignment - 1);
+	scratch->hart_address = (info->progbuf_address + program_size + alignment - 1) & ~(alignment - 1);
 
-	if ((size_bytes + scratch->hart_address - info->progbuf_address + 3) / 4 >=
-			info->progbufsize) {
+	if ((size_bytes + scratch->hart_address - info->progbuf_address + 3) / 4 >= info->progbufsize) {
 		scratch->memory_space = SPACE_DMI_PROGBUF;
 		scratch->debug_address = (scratch->hart_address - info->progbuf_address) / 4;
 		return ERROR_OK;
 	}
 
-	if (target_alloc_working_area(target, size_bytes + alignment - 1,
-				&scratch->area) == ERROR_OK) {
-		scratch->hart_address = (scratch->area->address + alignment - 1) &
-			~(alignment - 1);
+	if (target_alloc_working_area(target, size_bytes + alignment - 1, &scratch->area) == ERROR_OK) {
+		scratch->hart_address = (scratch->area->address + alignment - 1) & ~(alignment - 1);
 		scratch->memory_space = SPACE_DMI_RAM;
 		scratch->debug_address = scratch->hart_address;
 		return ERROR_OK;
 	}
 
-	LOG_ERROR("%s: Couldn't find %d bytes of scratch RAM to use. Please configure "
-			"a work area with 'configure -work-area-phys'.", target->cmd_name, size_bytes);
+	/** @todo Need to conform to spec minimal requirements */
+	LOG_ERROR("%s: Couldn't find %d bytes of scratch RAM to use."
+		" Please configure a work area with 'configure -work-area-phys'.",
+		target->cmd_name,
+		size_bytes);
 	return ERROR_FAIL;
 }
 
-static int scratch_release(struct target *target,
-		scratch_mem_t *scratch)
+static int
+scratch_release(struct target *const target,
+	scratch_mem_t *const scratch)
 {
 	assert(scratch);
 	if (scratch->area)
@@ -1082,56 +1100,59 @@ static int scratch_release(struct target *target,
 	return ERROR_OK;
 }
 
-static int scratch_read64(struct target *target, scratch_mem_t *scratch,
-		uint64_t *value)
+static int
+scratch_read64(struct target *const target,
+	scratch_mem_t *const scratch,
+	uint64_t *const value)
 {
 	uint32_t v;
 	assert(scratch);
 
 	switch (scratch->memory_space) {
-		case SPACE_DMI_DATA:
-			if (dmi_read(target, &v, DMI_DATA0 + scratch->debug_address) != ERROR_OK)
+	case SPACE_DMI_DATA:
+		if (dmi_read(target, &v, DMI_DATA0 + scratch->debug_address) != ERROR_OK)
+			return ERROR_FAIL;
+
+		assert(value);
+		*value = v;
+
+		if (dmi_read(target, &v, DMI_DATA1 + scratch->debug_address) != ERROR_OK)
+			return ERROR_FAIL;
+
+		*value |= ((uint64_t)v) << 32;
+		break;
+
+	case SPACE_DMI_PROGBUF:
+		if (dmi_read(target, &v, DMI_PROGBUF0 + scratch->debug_address) != ERROR_OK)
+			return ERROR_FAIL;
+
+		assert(value);
+		*value = v;
+
+		if (dmi_read(target, &v, DMI_PROGBUF1 + scratch->debug_address) != ERROR_OK)
+			return ERROR_FAIL;
+
+		*value |= ((uint64_t)v) << 32;
+		break;
+
+	case SPACE_DMI_RAM:
+		{
+			uint8_t buffer[8];
+			if (read_memory(target, scratch->debug_address, 4, 2, buffer) != ERROR_OK)
 				return ERROR_FAIL;
 
 			assert(value);
-			*value = v;
-
-			if (dmi_read(target, &v, DMI_DATA1 + scratch->debug_address) != ERROR_OK)
-				return ERROR_FAIL;
-
-			*value |= ((uint64_t) v) << 32;
-			break;
-
-		case SPACE_DMI_PROGBUF:
-			if (dmi_read(target, &v, DMI_PROGBUF0 + scratch->debug_address) != ERROR_OK)
-				return ERROR_FAIL;
-
-			assert(value);
-			*value = v;
-
-			if (dmi_read(target, &v, DMI_PROGBUF1 + scratch->debug_address) != ERROR_OK)
-				return ERROR_FAIL;
-
-			*value |= ((uint64_t) v) << 32;
-			break;
-
-		case SPACE_DMI_RAM:
-			{
-				uint8_t buffer[8];
-				if (read_memory(target, scratch->debug_address, 4, 2, buffer) != ERROR_OK)
-					return ERROR_FAIL;
-
-				assert(value);
-				*value = buffer[0] |
-					(((uint64_t) buffer[1]) << 8) |
-					(((uint64_t) buffer[2]) << 16) |
-					(((uint64_t) buffer[3]) << 24) |
-					(((uint64_t) buffer[4]) << 32) |
-					(((uint64_t) buffer[5]) << 40) |
-					(((uint64_t) buffer[6]) << 48) |
-					(((uint64_t) buffer[7]) << 56);
-			}
-			break;
+			*value =
+				(uint64_t)buffer[0] << 0 * CHAR_BIT |
+				(uint64_t)buffer[1] << 1 * CHAR_BIT |
+				(uint64_t)buffer[2] << 2 * CHAR_BIT |
+				(uint64_t)buffer[3] << 3 * CHAR_BIT |
+				(uint64_t)buffer[4] << 4 * CHAR_BIT |
+				(uint64_t)buffer[5] << 5 * CHAR_BIT |
+				(uint64_t)buffer[6] << 6 * CHAR_BIT |
+				(uint64_t)buffer[7] << 7 * CHAR_BIT;
+		}
+		break;
 	}
 
 	return ERROR_OK;

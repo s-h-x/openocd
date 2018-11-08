@@ -63,18 +63,18 @@
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
 
-#define DIM(x)		(sizeof(x)/sizeof(*x))
-
-/* Constants for legacy SiFive hardware breakpoints. */
-#define CSR_BPCONTROL_X			(1<<0)
-#define CSR_BPCONTROL_W			(1<<1)
-#define CSR_BPCONTROL_R			(1<<2)
-#define CSR_BPCONTROL_U			(1<<3)
-#define CSR_BPCONTROL_S			(1<<4)
-#define CSR_BPCONTROL_H			(1<<5)
-#define CSR_BPCONTROL_M			(1<<6)
-#define CSR_BPCONTROL_BPMATCH	(0xf<<7)
-#define CSR_BPCONTROL_BPACTION	(0xff<<11)
+/** Constants for legacy SiFive hardware breakpoints. */
+enum CSR_BPCONTROL_e {
+	CSR_BPCONTROL_X			= (1<<0),
+	CSR_BPCONTROL_W			= (1<<1),
+	CSR_BPCONTROL_R			= (1<<2),
+	CSR_BPCONTROL_U			= (1<<3),
+	CSR_BPCONTROL_S			= (1<<4),
+	CSR_BPCONTROL_H			= (1<<5),
+	CSR_BPCONTROL_M			= (1<<6),
+	CSR_BPCONTROL_BPMATCH	= (0xf<<7),
+	CSR_BPCONTROL_BPACTION	= (0xff<<11),
+};
 
 #define DEBUG_ROM_START         0x800
 #define DEBUG_ROM_RESUME	(DEBUG_ROM_START + 4)
@@ -95,6 +95,7 @@
 #define DBUS						0x11
 #define DBUS_OP_START				0
 #define DBUS_OP_SIZE				2
+
 enum dbus_op {
 	DBUS_OP_NOP = 0,
 	DBUS_OP_READ = 1,
@@ -132,26 +133,26 @@ enum slot slot_t;
 /** @{ */
 
 #define DMCONTROL				0x10
-#define DMCONTROL_INTERRUPT		(((uint64_t)1)<<33)
-#define DMCONTROL_HALTNOT		(((uint64_t)1)<<32)
-#define DMCONTROL_BUSERROR		(7<<19)
-#define DMCONTROL_SERIAL		(3<<16)
-#define DMCONTROL_AUTOINCREMENT	(1<<15)
-#define DMCONTROL_ACCESS		(7<<12)
-#define DMCONTROL_HARTID		(0x3ff<<2)
-#define DMCONTROL_NDRESET		(1<<1)
+#define DMCONTROL_INTERRUPT		(UINT64_C(1) << 33)
+#define DMCONTROL_HALTNOT		(UINT64_C(1) << 32)
+#define DMCONTROL_BUSERROR		(7 << 19)
+#define DMCONTROL_SERIAL		(3 << 16)
+#define DMCONTROL_AUTOINCREMENT	(1 << 15)
+#define DMCONTROL_ACCESS		(7 << 12)
+#define DMCONTROL_HARTID		(0x3ff << 2)
+#define DMCONTROL_NDRESET		(1 << 1)
 #define DMCONTROL_FULLRESET		1
 
 #define DMINFO					0x11
-#define DMINFO_ABUSSIZE			(0x7fU<<25)
-#define DMINFO_SERIALCOUNT		(0xf<<21)
-#define DMINFO_ACCESS128		(1<<20)
-#define DMINFO_ACCESS64			(1<<19)
-#define DMINFO_ACCESS32			(1<<18)
-#define DMINFO_ACCESS16			(1<<17)
-#define DMINFO_ACCESS8			(1<<16)
-#define DMINFO_DRAMSIZE			(0x3f<<10)
-#define DMINFO_AUTHENTICATED	(1<<5)
+#define DMINFO_ABUSSIZE			(0x7fU << 25)
+#define DMINFO_SERIALCOUNT		(0xf << 21)
+#define DMINFO_ACCESS128		(1 << 20)
+#define DMINFO_ACCESS64			(1 << 19)
+#define DMINFO_ACCESS32			(1 << 18)
+#define DMINFO_ACCESS16			(1 << 17)
+#define DMINFO_ACCESS8			(1 << 16)
+#define DMINFO_DRAMSIZE			(0x3f << 10)
+#define DMINFO_AUTHENTICATED	(1 << 5)
 #define DMINFO_AUTHBUSY			(1<<4)
 #define DMINFO_AUTHTYPE			(3<<2)
 #define DMINFO_VERSION			3
