@@ -1089,10 +1089,10 @@ DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_gro
 
 /** @brief Common DR scan of DAP_CMD multiplexed port.
 
-@par[in]  p_target current target pointer
-@par[in]  DAP_OPCODE 4-bits: R/W bit and 3-bits next level multiplexer selector
-@par[in]  DAP_OPCODE_EXT 32-bits payload
-@par[out] p_result pointer to place for input payload
+@param[in]  p_target current target pointer
+@param[in]  DAP_OPCODE 4-bits: R/W bit and 3-bits next level multiplexer selector
+@param[in]  DAP_OPCODE_EXT 32-bits payload
+@param[out] p_result pointer to place for input payload
 */
 static error_code
 sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT, uint32_t* p_result)
@@ -1245,8 +1245,8 @@ sc_rv32_DC__unlock(target const* const p_target, uint32_t* p_lock_context)
 
 To prepare type of access to 2-nd level multiplexed REGTRANS register
 
-@par[in] write read (false) or write (true) transaction type code
-@par[in] index multiplexed register index
+@param[in] write read (false) or write (true) transaction type code
+@param[in] index multiplexed register index
 */
 static inline uint8_t
 REGTRANS_scan_type(bool const write, uint8_t const index)
@@ -1259,9 +1259,9 @@ REGTRANS_scan_type(bool const write, uint8_t const index)
 
 /** @brief Common method to set DAP_CTRL upper level multiplexer control register
 
-@par[in] p_target pointer to this target
-@par[in] dap_unit multiplexed unit of multiplexed group
-@par[in] dap_group multiplexed group
+@param[in] p_target pointer to this target
+@param[in] dap_unit multiplexed unit of multiplexed group
+@param[in] dap_group multiplexed group
 
 @todo Describe details
 */
@@ -1319,10 +1319,10 @@ sc_rv32_DAP_CTRL_REG_set(target const* const p_target, type_dbgc_unit_id_e const
 
 /** @brief Common REGTRANS write operation
 
-@par[inout] p_target pointer to this target
-@par[in] func_unit functional unit
-@par[in] func_group functional group
-@par[in] index REGTRANS register index in func_unit/func_group
+@param[inout] p_target pointer to this target
+@param[in] func_unit functional unit
+@param[in] func_group functional group
+@param[in] index REGTRANS register index in func_unit/func_group
 */
 static error_code
 REGTRANS_write(target const* const p_target, type_dbgc_unit_id_e func_unit, uint8_t const func_group, uint8_t const index, uint32_t const data)
@@ -1341,10 +1341,10 @@ REGTRANS_write(target const* const p_target, type_dbgc_unit_id_e func_unit, uint
 
 /** @brief Common REGTRANS read operation
 
-@par[inout] p_target pointer to this target
-@par[in] func_unit functional unit
-@par[in] func_group functional group
-@par[in] index REGTRANS register index in func_unit/func_group
+@param[inout] p_target pointer to this target
+@param[in] func_unit functional unit
+@param[in] func_group functional group
+@param[in] index REGTRANS register index in func_unit/func_group
 */
 static error_code
 REGTRANS_read(target const* const p_target, type_dbgc_unit_id_e const func_unit, uint8_t const func_group, uint8_t const index, uint32_t* p_value)
@@ -1371,8 +1371,8 @@ REGTRANS_read(target const* const p_target, type_dbgc_unit_id_e const func_unit,
 
 /** @brief HART REGTRANS read operation
 
-@par[inout] p_target pointer to this target
-@par[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
+@param[inout] p_target pointer to this target
+@param[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
 */
 static inline error_code
 sc_rv32_HART_REGTRANS_read(target const* const p_target, HART_REGTRANS_indexes const index, uint32_t* p_value)
@@ -1384,8 +1384,8 @@ sc_rv32_HART_REGTRANS_read(target const* const p_target, HART_REGTRANS_indexes c
 
 /** @brief HART HART_CSR_CAP read operation
 
-@par[inout] p_target pointer to this target
-@par[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
+@param[inout] p_target pointer to this target
+@param[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
 */
 static inline error_code
 sc_rv32_HART_CSR_CAP_read(target const* const p_target, HART_CSR_CAP_indexes const index, uint32_t* p_value)
@@ -1409,9 +1409,9 @@ get_ISA(target* const p_target, uint32_t* p_value)
 
 /** @brief HART REGTRANS write operation
 
-@par[inout] p_target pointer to this target
-@par[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
-@par[in] set_value 32-bits data
+@param[inout] p_target pointer to this target
+@param[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
+@param[in] set_value 32-bits data
 */
 static inline error_code
 HART_REGTRANS_write(target const* const p_target, HART_REGTRANS_indexes const index, uint32_t const set_value)
@@ -1423,9 +1423,9 @@ HART_REGTRANS_write(target const* const p_target, HART_REGTRANS_indexes const in
 
 /** @brief HART REGTRANS write operation with re-read writing value.
 
-@par[inout] p_target pointer to this target
-@par[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
-@par[in] set_value 32-bits data
+@param[inout] p_target pointer to this target
+@param[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
+@param[in] set_value 32-bits data
 */
 static error_code
 sc_rv32_HART_REGTRANS_write_and_check(target const* const p_target, HART_REGTRANS_indexes const index, uint32_t const set_value)
@@ -1457,8 +1457,8 @@ sc_rv32_HART_REGTRANS_write_and_check(target const* const p_target, HART_REGTRAN
 
 /** @brief CORE REGTRANS read operation
 
-@par[inout] p_target pointer to this target
-@par[in] index REGTRANS register index in CORE/CORE_REGTRANS
+@param[inout] p_target pointer to this target
+@param[in] index REGTRANS register index in CORE/CORE_REGTRANS
 */
 static inline error_code
 sc_rv32_core_REGTRANS_read(target const* const p_target, CORE_REGTRANS_indexes const index, uint32_t* p_value)
@@ -1468,9 +1468,9 @@ sc_rv32_core_REGTRANS_read(target const* const p_target, CORE_REGTRANS_indexes c
 
 /** @brief Core REGTRANS write operation
 
-@par[inout] p_target pointer to this target
-@par[in] index REGTRANS register index in CORE/CORE_REGTRANS
-@par[in] set_value 32-bits data
+@param[inout] p_target pointer to this target
+@param[in] index REGTRANS register index in CORE/CORE_REGTRANS
+@param[in] set_value 32-bits data
 */
 static inline error_code
 sc_rv32_CORE_REGTRANS_write(target const* const p_target, CORE_REGTRANS_indexes const index, uint32_t const data)
@@ -1481,7 +1481,7 @@ sc_rv32_CORE_REGTRANS_write(target const* const p_target, CORE_REGTRANS_indexes 
 
 /** @brief Setup HART before group HART_DBGCMD transactions.
 
-@par[inout] p_target pointer to this target
+@param[inout] p_target pointer to this target
 */
 static inline error_code
 sc_rv32_EXEC__setup(target const* const p_target)
