@@ -586,9 +586,12 @@ static int add_trigger(struct target *const target, struct trigger *const trigge
 	return ERROR_OK;
 }
 
-int riscv_add_breakpoint(struct target *const target, struct breakpoint *breakpoint)
+static int
+riscv_add_breakpoint(struct target *const target,
+	struct breakpoint *const breakpoint)
 {
 	assert(breakpoint);
+
 	if (breakpoint->type == BKPT_SOFT) {
 		/** @todo check RVC for size/alignment */
 		if (!(breakpoint->length == 4 || breakpoint->length == 2)) {
