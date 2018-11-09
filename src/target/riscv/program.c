@@ -12,7 +12,9 @@
 #include "encoding.h"
 
 /* Program interface. */
-int riscv_program_init(struct riscv_program *p, struct target *const target)
+int
+riscv_program_init(struct riscv_program *const p,
+	struct target *const target)
 {
 	memset(p, 0, sizeof(*p));
 	p->target = target;
