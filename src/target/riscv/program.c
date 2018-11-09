@@ -39,9 +39,13 @@ int riscv_program_write(struct riscv_program *program)
 			i,
 			program->debug_buffer[i]);
 
-		if (ERROR_OK != riscv_write_debug_buffer(program->target, i, program->debug_buffer[i]))
-			return ERROR_FAIL;
+		int const result =
+			riscv_write_debug_buffer(program->target, i, program->debug_buffer[i]);
+
+		if (ERROR_OK != result)
+			return result;
 	}
+
 	return ERROR_OK;
 }
 
@@ -54,29 +58,43 @@ int riscv_program_exec(struct riscv_program *p, struct target *t)
 	for (size_t i = GDB_REGNO_ZERO + 1; i <= GDB_REGNO_XPR31; ++i) {
 		if (p->writes_xreg[i]) {
 			LOG_DEBUG("%s: Saving register %d as used by program", t->cmd_name, (int)(i));
-			int result = riscv_get_register(t, &saved_registers[i], i);
-			if (result != ERROR_OK)
+			int const result = riscv_get_register(t, &saved_registers[i], i);
+
+			if (ERROR_OK != result)
 				return result;
 		}
 	}
 
-	if (riscv_program_ebreak(p) != ERROR_OK) {
-		LOG_ERROR("%s: Unable to write ebreak", t->cmd_name);
-		for (size_t i = 0; i < riscv_debug_buffer_size(p->target); ++i)
-			LOG_ERROR("%s: ram[%02" PRIxPTR "]: DASM(0x%08" PRIx32 ") [0x%08" PRIx32 "]",
-				t->cmd_name,
-				i,
-				p->debug_buffer[i],
-				p->debug_buffer[i]);
-		return ERROR_FAIL;
+	{
+		int const result = riscv_program_ebreak(p);
+
+		if (ERROR_OK != result) {
+			LOG_ERROR("%s: Unable to write ebreak", t->cmd_name);
+			for (size_t i = 0; i < riscv_debug_buffer_size(p->target); ++i)
+				LOG_ERROR("%s: ram[%02" PRIxPTR "]: DASM(0x%08" PRIx32 ") [0x%08" PRIx32 "]",
+					t->cmd_name,
+					i,
+					p->debug_buffer[i],
+					p->debug_buffer[i]);
+			return result;
+		}
+
 	}
 
-	if (riscv_program_write(p) != ERROR_OK)
-		return ERROR_FAIL;
+	{
+		int const result = riscv_program_write(p);
 
-	if (riscv_execute_debug_buffer(t) != ERROR_OK) {
-		LOG_DEBUG("%s: Unable to execute program %p", t->cmd_name, p);
-		return ERROR_FAIL;
+		if (ERROR_OK != result)
+			return result;
+	}
+
+	{
+		int const result = riscv_execute_debug_buffer(t);
+
+		if (ERROR_OK != result) {
+			LOG_DEBUG("%s: Unable to execute program %p", t->cmd_name, p);
+			return result;
+		}
 	}
 
 	for (size_t i = 0; i < riscv_debug_buffer_size(p->target); ++i)
@@ -147,8 +165,7 @@ int riscv_program_ebreak(struct riscv_program *p)
 	struct target *const target = p->target;
 	struct riscv_info_t *const r = riscv_info(target);
 
-	if (p->instruction_count == riscv_debug_buffer_size(p->target) &&
-			r->impebreak) {
+	if (p->instruction_count == riscv_debug_buffer_size(p->target) && r->impebreak) {
 		return ERROR_OK;
 	}
 
@@ -160,18 +177,20 @@ int riscv_program_addi(struct riscv_program *p, enum gdb_regno d, enum gdb_regno
 	return riscv_program_insert(p, addi(d, s, u));
 }
 
-int riscv_program_insert(struct riscv_program *p, riscv_insn_t i)
+int
+riscv_program_insert(struct riscv_program *p, riscv_insn_t i)
 {
 	assert(p && p->target);
 	if (p->instruction_count >= riscv_debug_buffer_size(p->target)) {
-		LOG_ERROR("%s: Unable to insert instruction:" "\n"
-				"  instruction_count=%d" "\n"
+		LOG_ERROR("%s: Unable to insert instruction:"
+				"  instruction_count=%d"
 				"  buffer size      =%d",
 				p->target->cmd_name,
 				(int)p->instruction_count,
 				(int)riscv_debug_buffer_size(p->target)
 		);
-		return ERROR_FAIL;
+
+		return ERROR_BUF_TOO_SMALL;
 	}
 
 	p->debug_buffer[p->instruction_count] = i;

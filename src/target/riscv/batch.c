@@ -96,9 +96,10 @@ int riscv_batch_run(struct riscv_batch *batch)
 			jtag_add_runtest(batch->idle_count, TAP_IDLE);
 	}
 
-	if (jtag_execute_queue() != ERROR_OK) {
+	int const result = jtag_execute_queue();
+	if (ERROR_OK != result) {
 		LOG_ERROR("%s: Unable to execute JTAG queue", batch->target->cmd_name);
-		return ERROR_FAIL;
+		return result;
 	}
 
 	for (size_t i = 0; i < batch->used_scans; ++i)
@@ -163,7 +164,7 @@ void riscv_batch_add_nop(struct riscv_batch *batch)
 	assert(batch->used_scans < batch->allocated_scans);
 	struct scan_field *field = batch->fields + batch->used_scans;
 	field->num_bits = riscv_dmi_write_u64_bits(batch->target);
-	uint8_t * p_tmp = batch->data_out + batch->used_scans * sizeof(uint64_t);
+	uint8_t *p_tmp = batch->data_out + batch->used_scans * sizeof(uint64_t);
 	field->in_value  = batch->data_in  + batch->used_scans * sizeof(uint64_t);
 	field->out_value = p_tmp;
 	riscv_fill_dmi_nop_u64(batch->target, p_tmp);

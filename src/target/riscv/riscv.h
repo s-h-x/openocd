@@ -195,15 +195,11 @@ riscv_openocd_deassert_reset(struct target *target);
 int
 riscv_halt_all_harts(struct target *target);
 int
-riscv_halt_one_hart(struct target *target, int hartid);
-int
 riscv_resume_all_harts(struct target *target);
-int
-riscv_resume_one_hart(struct target *target, int hartid);
 /** @} */
 
 /** Steps the hart that's currently selected in the RTOS, or if there is no RTOS
- * then the only hart. */
+* then the only hart. */
 int riscv_step_rtos_hart(struct target *target);
 
 bool riscv_supports_extension(struct target *target, int hartid, char letter);

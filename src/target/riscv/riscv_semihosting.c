@@ -49,7 +49,8 @@
 * Called via semihosting->setup() later, after the target is known,
 * usually on the first semihosting command.
 */
-static int riscv_semihosting_setup(struct target *const target, int enable)
+static int
+riscv_semihosting_setup(struct target *const target, int enable)
 {
 	LOG_DEBUG("%s: enable=%d", target->cmd_name, enable);
 
@@ -115,12 +116,11 @@ riscv_semihosting(struct target *const target, int *const retval)
 
 	uint8_t tmp[12];
 
-	assert(retval);
-
 	/* Read the current instruction, including the bracketing */
+	assert(retval);
 	*retval = target_read_memory(target, dpc - 4, 2, 6, tmp);
 
-	if (*retval != ERROR_OK)
+	if (ERROR_OK != *retval)
 		return 0;
 
 	/*
@@ -131,9 +131,9 @@ riscv_semihosting(struct target *const target, int *const retval)
 	 * 00100073              ebreak
 	 * 40705013              srai    zero,zero,0x7
 	 */
-	uint32_t pre = target_buffer_get_u32(target, tmp);
-	uint32_t ebreak = target_buffer_get_u32(target, tmp + 4);
-	uint32_t post = target_buffer_get_u32(target, tmp + 8);
+	uint32_t const pre = target_buffer_get_u32(target, tmp);
+	uint32_t const ebreak = target_buffer_get_u32(target, tmp + 4);
+	uint32_t const post = target_buffer_get_u32(target, tmp + 8);
 	LOG_DEBUG("%s: check %08x %08x %08x from 0x%" PRIx64 "-4", target->cmd_name, pre, ebreak, post, dpc);
 
 	if (pre != 0x01f01013 || ebreak != 0x00100073 || post != 0x40705013)
@@ -163,7 +163,7 @@ riscv_semihosting(struct target *const target, int *const retval)
 		/* Check for ARM operation numbers. */
 		if (0 <= semihosting->op && semihosting->op <= 0x31) {
 			*retval = semihosting_common(target);
-			if (*retval != ERROR_OK) {
+			if (ERROR_OK != *retval) {
 				LOG_ERROR("%s: Failed semihosting operation", target->cmd_name);
 				return 0;
 			}
@@ -180,7 +180,7 @@ riscv_semihosting(struct target *const target, int *const retval)
 	if (semihosting->is_resumable && !semihosting->hit_fileio) {
 		/* Resume right after the EBREAK 4 bytes instruction. */
 		*retval = target_resume(target, 0, dpc+4, 0, 0);
-		if (*retval != ERROR_OK) {
+		if (ERROR_OK != *retval) {
 			LOG_ERROR("%s: Failed to resume target", target->cmd_name);
 			return 0;
 		}

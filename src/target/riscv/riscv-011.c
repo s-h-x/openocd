@@ -303,14 +303,17 @@ static uint32_t dtmcontrol_scan(struct target *const target, uint32_t out)
 	/* Always return to dbus. */
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
-	int const retval = jtag_execute_queue();
-	if (retval != ERROR_OK) {
-		LOG_ERROR("%s: failed jtag scan: %d",
-			target->cmd_name,
-			retval);
-		return retval;
-	}
+	{
+		int const err = jtag_execute_queue();
 
+		if (ERROR_OK != err) {
+			LOG_ERROR("%s: failed jtag scan: %d",
+				target->cmd_name,
+				err);
+			return err;
+		}
+
+	}
 	uint32_t const in = buf_get_u32(field.in_value, 0, 32);
 	LOG_DEBUG("%s: DTMCONTROL: 0x%x -> 0x%x", target->cmd_name, out, in);
 
@@ -319,26 +322,31 @@ static uint32_t dtmcontrol_scan(struct target *const target, uint32_t out)
 
 static uint32_t idcode_scan(struct target *const target)
 {
-	struct scan_field field;
-	uint8_t in_value[4];
-
 	jtag_add_ir_scan(target->tap, &select_idcode, TAP_IDLE);
 
-	field.num_bits = 32;
-	field.out_value = NULL;
-	field.in_value = in_value;
+	uint8_t in_value[4];
+	struct scan_field const field = {
+		.num_bits = 32,
+		.out_value = NULL,
+		.in_value = in_value,
+	};
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
-	int retval = jtag_execute_queue();
-	if (retval != ERROR_OK) {
-		LOG_ERROR("%s: failed jtag scan: %d", target->cmd_name, retval);
-		return retval;
+	{
+		int const err = jtag_execute_queue();
+
+		if (ERROR_OK != err) {
+			LOG_ERROR("%s: failed jtag scan: %d",
+				target->cmd_name,
+				err);
+			return err;
+		}
 	}
 
 	/* Always return to dbus. */
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
-	uint32_t in = buf_get_u32(field.in_value, 0, 32);
+	uint32_t const in = buf_get_u32(field.in_value, 0, 32);
 	LOG_DEBUG("%s: IDCODE: 0x0 -> 0x%x", target->cmd_name, in);
 
 	return in;
@@ -420,8 +428,13 @@ dump_field(struct scan_field const *field)
 			in_address);
 }
 
-static dbus_status_t dbus_scan(struct target *const target, uint16_t *address_in,
-		uint64_t *data_in, dbus_op_t op, uint16_t address_out, uint64_t data_out)
+static dbus_status_t
+dbus_scan(struct target *const target,
+	uint16_t *const address_in,
+	uint64_t *const data_in,
+	dbus_op_t const op,
+	uint16_t const address_out,
+	uint64_t const data_out)
 {
 	riscv011_info_t *info = get_info(target);
 	uint8_t in[8] = {0};
@@ -441,15 +454,19 @@ static dbus_status_t dbus_scan(struct target *const target, uint16_t *address_in
 	/* Assume dbus is already selected. */
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
-	int idle_count = info->dtmcontrol_idle + info->dbus_busy_delay;
+	int const idle_count =
+		info->dtmcontrol_idle + info->dbus_busy_delay;
 
 	if (idle_count)
 		jtag_add_runtest(idle_count, TAP_IDLE);
 
-	int retval = jtag_execute_queue();
-	if (retval != ERROR_OK) {
-		LOG_ERROR("%s: dbus_scan failed jtag scan", target->cmd_name);
-		return DBUS_STATUS_FAILED;
+	{
+		int const err = jtag_execute_queue();
+
+		if (err != ERROR_OK) {
+			LOG_ERROR("%s: dbus_scan failed jtag scan", target->cmd_name);
+			return DBUS_STATUS_FAILED;
+		}
 	}
 
 	if (data_in)
@@ -564,11 +581,13 @@ static void scans_dump(scans_t *scans)
 
 static int scans_execute(scans_t *scans)
 {
-	int const retval = jtag_execute_queue();
+	{
+		int const err = jtag_execute_queue();
 
-	if (retval != ERROR_OK) {
-		LOG_ERROR("failed jtag scan: %d", retval);
-		return retval;
+		if (ERROR_OK != err) {
+			LOG_ERROR("failed jtag scan: %d", err);
+			return err;
+		}
 	}
 
 	scans_dump(scans);
@@ -577,11 +596,14 @@ static int scans_execute(scans_t *scans)
 }
 
 /** Add a 32-bit dbus write to the scans structure. */
-static void scans_add_write32(scans_t *scans, uint16_t address, uint32_t data,
-		bool set_interrupt)
+static void
+scans_add_write32(scans_t *const scans,
+	uint16_t const address,
+	uint32_t const data,
+	bool set_interrupt)
 {
-	const unsigned i = scans->next_scan;
-	int data_offset = scans->scan_size * i;
+	unsigned const i = scans->next_scan;
+	int const data_offset = scans->scan_size * i;
 	add_dbus_scan(scans->target, &scans->field[i], scans->out + data_offset,
 			scans->in + data_offset, DBUS_OP_WRITE, address,
 			(set_interrupt ? DMCONTROL_INTERRUPT : 0) | DMCONTROL_HALTNOT | data);
@@ -717,7 +739,9 @@ static bits_t read_bits(struct target *const target)
 	return result;
 }
 
-static int wait_for_debugint_clear(struct target *const target, bool ignore_first)
+static int
+wait_for_debugint_clear(struct target *const target,
+	bool const ignore_first)
 {
 	time_t const start = time(NULL);
 
@@ -733,41 +757,51 @@ static int wait_for_debugint_clear(struct target *const target, bool ignore_firs
 		bits_t bits = read_bits(target);
 		if (!bits.interrupt)
 			return ERROR_OK;
-		if (time(NULL) - start > riscv_command_timeout_sec) {
+
+		if (time(NULL) > start + riscv_command_timeout_sec) {
 			LOG_ERROR("%s: Timed out waiting for debug int to clear."
 					"Increase timeout with riscv set_command_timeout_sec.",
 					target->cmd_name);
-			return ERROR_FAIL;
+			return ERROR_TARGET_TIMEOUT;
 		}
 	}
 }
 
-static int dram_check32(struct target *const target, unsigned index,
-		uint32_t expected)
+static int
+dram_check32(struct target *const target,
+	unsigned const index,
+	uint32_t const expected)
 {
-	uint16_t address = dram_address(index);
-	uint32_t actual = dbus_read(target, address);
+	uint16_t const address = dram_address(index);
+	uint32_t const actual = dbus_read(target, address);
+
 	if (expected != actual) {
 		LOG_ERROR("%s: Wrote 0x%x to Debug RAM at %d, but read back 0x%x",
 				target->cmd_name,
 				expected,
 				index,
 				actual);
-		return ERROR_FAIL;
+		return ERROR_TARGET_FAILURE;
 	}
+
 	return ERROR_OK;
 }
 
-static void cache_set32(struct target *const target, unsigned index, uint32_t data)
+static void
+cache_set32(struct target *const target,
+	unsigned const index,
+	uint32_t const data)
 {
-	riscv011_info_t *info = get_info(target);
-	if (info->dram_cache[index].valid &&
-			info->dram_cache[index].data == data) {
+	riscv011_info_t *const info = get_info(target);
+	assert(info);
+
+	if (info->dram_cache[index].valid && info->dram_cache[index].data == data) {
 		/* This is already preset on the target. */
 		LOG_DEBUG("%s: cache[0x%x] = 0x%08x: DASM(0x%x) (hit)",
 				target->cmd_name, index, data, data);
 		return;
 	}
+
 	LOG_DEBUG("%s: cache[0x%x] = 0x%08x: DASM(0x%x)",
 			target->cmd_name, index, data, data);
 	info->dram_cache[index].data = data;
@@ -775,22 +809,31 @@ static void cache_set32(struct target *const target, unsigned index, uint32_t da
 	info->dram_cache[index].dirty = true;
 }
 
-static void cache_set(struct target *const target, slot_t slot, uint64_t data)
+static void
+cache_set(struct target *const target,
+	slot_t const slot,
+	uint64_t const data)
 {
-	unsigned offset = slot_offset(target, slot);
+	unsigned const offset = slot_offset(target, slot);
 	cache_set32(target, offset, data);
+
 	if (riscv_xlen(target) > 32)
 		cache_set32(target, offset + 1, data >> 32);
 }
 
-static void cache_set_jump(struct target *const target, unsigned index)
+static void
+cache_set_jump(struct target *const target,
+	unsigned const index)
 {
 	cache_set32(target, index,
 			jal(0, (uint32_t) (DEBUG_ROM_RESUME - (DEBUG_RAM_START + 4*index))));
 }
 
-static void cache_set_load(struct target *const target, unsigned index,
-		unsigned reg, slot_t slot)
+static void
+cache_set_load(struct target *const target,
+	unsigned const index,
+	unsigned const reg,
+	slot_t const slot)
 {
 	uint16_t offset = DEBUG_RAM_START + 4 * slot_offset(target, slot);
 	cache_set32(target, index, load(target, reg, ZERO, offset));
