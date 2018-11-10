@@ -575,9 +575,6 @@ static void
 riscv013_clear_abstract_error(struct target *const target);
 
 /* Implementations of the functions in riscv_info_t. */
-static int riscv013_select_current_hart(struct target *const target);
-static int riscv013_halt_current_hart(struct target *const target);
-static void riscv013_fill_dmi_nop_u64(struct target *const target, uint8_t *buf);
 static int register_read(struct target *const target, uint64_t *value, uint32_t number);
 static int register_read_direct(struct target *const target, uint64_t *value, uint32_t number);
 static int register_write_direct(struct target *const target, unsigned number,
@@ -1617,6 +1614,76 @@ deinit_target(struct target *const target)
 	free(info->version_specific);
 	/** @todo free register arch_info */
 	info->version_specific = NULL;
+}
+
+static int
+riscv013_select_current_hart(struct target *const target)
+{
+	struct riscv_info_t *const r = riscv_info(target);
+
+	dm013_info_t *dm = get_dm(target);
+	assert(r);
+
+	if (r->current_hartid == dm->current_hartid)
+		return ERROR_OK;
+
+	uint32_t dmcontrol;
+
+	/** @todo can't we just "dmcontrol = DMI_DMACTIVE"? */
+	if (dmi_read(target, &dmcontrol, DMI_DMCONTROL) != ERROR_OK)
+		return ERROR_FAIL;
+
+	dmcontrol = set_hartsel(dmcontrol, r->current_hartid);
+	int const result = dmi_write(target, DMI_DMCONTROL, dmcontrol);
+
+	assert(dm);
+	dm->current_hartid = r->current_hartid;
+	return result;
+}
+
+static int
+riscv013_halt_current_hart(struct target *const target)
+{
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r);
+	LOG_DEBUG("%s: halting hart %d", target->cmd_name, r->current_hartid);
+
+	if (riscv_is_halted(target))
+		LOG_ERROR("%s: Hart %d is already halted!", target->cmd_name, r->current_hartid);
+
+	/* Issue the halt command, and then wait for the current hart to halt. */
+	uint32_t dmcontrol;
+
+	if (dmi_read(target, &dmcontrol, DMI_DMCONTROL) != ERROR_OK)
+		return ERROR_FAIL;
+
+	dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_HALTREQ, 1);
+	dmi_write(target, DMI_DMCONTROL, dmcontrol);
+
+	for (size_t i = 0; i < 256; ++i) {
+		if (riscv_is_halted(target))
+			break;
+	}
+
+	if (!riscv_is_halted(target)) {
+		uint32_t dmstatus;
+
+		if (dmstatus_read(target, &dmstatus, true) != ERROR_OK)
+			return ERROR_FAIL;
+
+		if (dmi_read(target, &dmcontrol, DMI_DMCONTROL) != ERROR_OK)
+			return ERROR_FAIL;
+
+		LOG_ERROR("%s: unable to halt hart %d", target->cmd_name, r->current_hartid);
+		LOG_ERROR("%s:   dmcontrol=0x%08x", target->cmd_name, dmcontrol);
+		LOG_ERROR("%s:   dmstatus =0x%08x", target->cmd_name, dmstatus);
+		return ERROR_FAIL;
+	}
+
+	dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_HALTREQ, 0);
+	dmi_write(target, DMI_DMCONTROL, dmcontrol);
+
+	return ERROR_OK;
 }
 
 static int
@@ -3208,76 +3275,6 @@ riscv013_set_register(struct target *const target, int hid, int rid, uint64_t va
 }
 
 static int
-riscv013_select_current_hart(struct target *const target)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-
-	dm013_info_t *dm = get_dm(target);
-	assert(r);
-
-	if (r->current_hartid == dm->current_hartid)
-		return ERROR_OK;
-
-	uint32_t dmcontrol;
-
-	/** @todo can't we just "dmcontrol = DMI_DMACTIVE"? */
-	if (dmi_read(target, &dmcontrol, DMI_DMCONTROL) != ERROR_OK)
-		return ERROR_FAIL;
-
-	dmcontrol = set_hartsel(dmcontrol, r->current_hartid);
-	int const result = dmi_write(target, DMI_DMCONTROL, dmcontrol);
-
-	assert(dm);
-	dm->current_hartid = r->current_hartid;
-	return result;
-}
-
-static int
-riscv013_halt_current_hart(struct target *const target)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	LOG_DEBUG("%s: halting hart %d", target->cmd_name, r->current_hartid);
-
-	if (riscv_is_halted(target))
-		LOG_ERROR("%s: Hart %d is already halted!", target->cmd_name, r->current_hartid);
-
-	/* Issue the halt command, and then wait for the current hart to halt. */
-	uint32_t dmcontrol;
-
-	if (dmi_read(target, &dmcontrol, DMI_DMCONTROL) != ERROR_OK)
-		return ERROR_FAIL;
-
-	dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_HALTREQ, 1);
-	dmi_write(target, DMI_DMCONTROL, dmcontrol);
-
-	for (size_t i = 0; i < 256; ++i) {
-		if (riscv_is_halted(target))
-			break;
-	}
-
-	if (!riscv_is_halted(target)) {
-		uint32_t dmstatus;
-
-		if (dmstatus_read(target, &dmstatus, true) != ERROR_OK)
-			return ERROR_FAIL;
-
-		if (dmi_read(target, &dmcontrol, DMI_DMCONTROL) != ERROR_OK)
-			return ERROR_FAIL;
-
-		LOG_ERROR("%s: unable to halt hart %d", target->cmd_name, r->current_hartid);
-		LOG_ERROR("%s:   dmcontrol=0x%08x", target->cmd_name, dmcontrol);
-		LOG_ERROR("%s:   dmstatus =0x%08x", target->cmd_name, dmstatus);
-		return ERROR_FAIL;
-	}
-
-	dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_HALTREQ, 0);
-	dmi_write(target, DMI_DMCONTROL, dmcontrol);
-
-	return ERROR_OK;
-}
-
-static int
 riscv013_on_halt(struct target *const target)
 {
 	return ERROR_OK;
@@ -3401,7 +3398,7 @@ riscv013_fill_dmi_read_u64(struct target *const target,
 	buf_set_u64(buf, DTM_DMI_ADDRESS_OFFSET, info->abits, a);
 }
 
-void
+static void
 riscv013_fill_dmi_nop_u64(struct target *const target,
 	uint8_t *const buf)
 {
