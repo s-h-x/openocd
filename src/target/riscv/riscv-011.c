@@ -3,7 +3,8 @@
  * spec, but SiFive made some silicon that uses it.
  */
 
-#include "asm.h"
+#include "riscv.h"
+#include "opcodes.h"
 
 #include "target/algorithm.h"
 #include "target/target_type.h"
@@ -222,6 +223,53 @@ static int get_register(struct target *const target, riscv_reg_t *value, int har
 /* Utility functions. */
 
 #define DEBUG_LENGTH	264
+
+/** Version-independent functions that we don't want in the main address space. */
+/** @{ */
+static inline uint32_t
+load(struct target const *const target,
+	unsigned const rd,
+	unsigned const base,
+	uint16_t const offset)
+{
+	switch (riscv_xlen(target)) {
+	case 32:
+		return lw(rd, base, offset);
+
+	case 64:
+		return ld(rd, base, offset);
+
+	default:
+		break;
+	}
+
+	assert(0);
+	/* Silence -Werror=return-type */
+	return 0;
+}
+
+static inline uint32_t
+store(struct target const *const target,
+	unsigned const src,
+	unsigned const base,
+	uint16_t const offset)
+{
+	switch (riscv_xlen(target)) {
+	case 32:
+		return sw(src, base, offset);
+
+	case 64:
+		return sd(src, base, offset);
+
+	default:
+		break;
+	}
+
+	assert(0);
+	/* Silence -Werror=return-type */
+	return 0;
+}
+/** @} */
 
 static riscv011_info_t *get_info(const struct target *const target)
 {

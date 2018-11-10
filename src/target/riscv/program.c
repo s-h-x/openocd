@@ -1,5 +1,7 @@
 ﻿#include "program.h"
-#include "asm.h"
+
+#include "riscv.h"
+#include "opcodes.h"
 
 #include "target/register.h"
 #include "helper/log.h"

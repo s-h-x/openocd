@@ -4,7 +4,8 @@
  * latest draft.
  */
 
-#include "asm.h"
+#include "riscv.h"
+#include "opcodes.h"
 #include "program.h"
 #include "batch.h"
 #include "debug_defines.h"
