@@ -1,11 +1,11 @@
 #ifndef TARGET_RISCV_RISCV_H_
 #define TARGET_RISCV_RISCV_H_
 
-struct riscv_program;
-
-#include <stdint.h>
-#include "opcodes.h"
 #include "gdb_regs.h"
+
+#include "target/target.h"
+
+#include <stdbool.h>
 
 #define DIM(x) (sizeof (x) / sizeof (x)[0])
 
@@ -18,6 +18,7 @@ struct riscv_program;
 #define DEFAULT_COMMAND_TIMEOUT_SEC		2
 #define DEFAULT_RESET_TIMEOUT_SEC		30
 
+struct riscv_program;
 extern struct target_type const riscv011_target;
 extern struct target_type const riscv013_target;
 
@@ -174,14 +175,6 @@ riscv_openocd_step(struct target *target,
 	int current,
 	target_addr_t address,
 	int handle_breakpoints);
-
-#if 0
-int
-riscv_openocd_assert_reset(struct target *target);
-
-int
-riscv_openocd_deassert_reset(struct target *target);
-#endif
 
 /** @} */
 

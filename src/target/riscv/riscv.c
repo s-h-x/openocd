@@ -1,21 +1,13 @@
-#include <assert.h>
-#include <stdlib.h>
-#include <time.h>
+﻿#include "riscv.h"
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include "opcodes.h"
 
-#include "target/target.h"
 #include "target/algorithm.h"
 #include "target/target_type.h"
-#include "log.h"
 #include "jtag/jtag.h"
 #include "target/register.h"
 #include "target/breakpoints.h"
 #include "helper/time_support.h"
-#include "riscv.h"
-#include "gdb_regs.h"
 #include "rtos/rtos.h"
 
 /*
@@ -684,7 +676,6 @@ riscv_add_breakpoint(struct target *const target,
 			target->cmd_name);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
-	
 
 	breakpoint->set = true;
 	return ERROR_OK;
@@ -1454,7 +1445,7 @@ riscv_run_algorithm(struct target *const target, int const num_mem_params,
 }
 
 /** Should run code on the target to perform CRC of memory.
-	
+
 	@todo Not yet implemented.
 */
 static int

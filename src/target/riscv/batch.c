@@ -1,15 +1,15 @@
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #include "batch.h"
+
 #include "debug_defines.h"
 #include "riscv.h"
+
+#include "jtag/jtag.h"
 
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
 
-static void dump_field(struct scan_field const *const field)
+static void
+dump_field(struct scan_field const *const field)
 {
 	static const char *const op_string[] = {"-", "r", "w", "?"};
 	static const char *const status_string[] = {"+", "?", "F", "b"};
@@ -64,7 +64,8 @@ struct riscv_batch *
 	return out;
 }
 
-void riscv_batch_free(struct riscv_batch *batch)
+void
+riscv_batch_free(struct riscv_batch *batch)
 {
 	free(batch->data_in);
 	free(batch->data_out);
@@ -72,12 +73,14 @@ void riscv_batch_free(struct riscv_batch *batch)
 	free(batch);
 }
 
-bool riscv_batch_full(struct riscv_batch *batch)
+bool
+riscv_batch_full(struct riscv_batch *batch)
 {
 	return batch->used_scans > (batch->allocated_scans - 4);
 }
 
-int riscv_batch_run(struct riscv_batch *batch)
+int
+riscv_batch_run(struct riscv_batch *batch)
 {
 	assert(batch && batch->target);
 
@@ -108,7 +111,10 @@ int riscv_batch_run(struct riscv_batch *batch)
 	return ERROR_OK;
 }
 
-void riscv_batch_add_dmi_write(struct riscv_batch *batch, unsigned address, uint64_t data)
+void
+riscv_batch_add_dmi_write(struct riscv_batch *const batch,
+	unsigned const address,
+	uint64_t const data)
 {
 	assert(batch->used_scans < batch->allocated_scans);
 	struct scan_field *field = batch->fields + batch->used_scans;
@@ -122,7 +128,9 @@ void riscv_batch_add_dmi_write(struct riscv_batch *batch, unsigned address, uint
 	++batch->used_scans;
 }
 
-size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address)
+size_t
+riscv_batch_add_dmi_read(struct riscv_batch *const batch,
+	unsigned const address)
 {
 	assert(batch && batch->used_scans < batch->allocated_scans);
 	struct scan_field *const field = batch->fields + batch->used_scans;
@@ -143,20 +151,23 @@ size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address)
 	return ++batch->read_keys_used;
 }
 
-uint64_t riscv_batch_get_dmi_read(struct riscv_batch *batch, size_t key)
+uint64_t
+riscv_batch_get_dmi_read(struct riscv_batch const *const batch,
+	size_t const key)
 {
 	assert(key < batch->read_keys_used);
 	size_t index = batch->read_keys[key];
 	assert(index <= batch->used_scans);
-	uint8_t *base = batch->data_in + 8 * index;
-	return base[0] |
-		((uint64_t) base[1]) << 8 |
-		((uint64_t) base[2]) << 16 |
-		((uint64_t) base[3]) << 24 |
-		((uint64_t) base[4]) << 32 |
-		((uint64_t) base[5]) << 40 |
-		((uint64_t) base[6]) << 48 |
-		((uint64_t) base[7]) << 56;
+	uint8_t const *const base = batch->data_in + 8 * index;
+	return
+		(uint64_t)base[0] << 0 * CHAR_BIT |
+		(uint64_t)base[1] << 1 * CHAR_BIT |
+		(uint64_t)base[2] << 2 * CHAR_BIT |
+		(uint64_t)base[3] << 3 * CHAR_BIT |
+		(uint64_t)base[4] << 4 * CHAR_BIT |
+		(uint64_t)base[5] << 5 * CHAR_BIT |
+		(uint64_t)base[6] << 6 * CHAR_BIT |
+		(uint64_t)base[7] << 7 * CHAR_BIT;
 }
 
 void riscv_batch_add_nop(struct riscv_batch *batch)

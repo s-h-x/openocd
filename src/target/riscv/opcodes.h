@@ -2,6 +2,7 @@
 #define TARGET_RISCV_OPCODES_H_
 
 #include "encoding.h"
+#include <stdint.h>
 
 #define ZERO	0
 #define T0      5

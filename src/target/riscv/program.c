@@ -1,15 +1,9 @@
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+﻿#include "program.h"
+#include "asm.h"
 
-#include "target/target.h"
 #include "target/register.h"
-#include "riscv.h"
-#include "program.h"
 #include "helper/log.h"
 
-#include "asm.h"
-#include "encoding.h"
 
 /* Program interface. */
 int
@@ -30,7 +24,8 @@ riscv_program_init(struct riscv_program *const p,
 	return ERROR_OK;
 }
 
-int riscv_program_write(struct riscv_program *program)
+int
+riscv_program_write(struct riscv_program *program)
 {
 	assert(program && program->target);
 
@@ -157,19 +152,20 @@ int riscv_program_fence_i(struct riscv_program *p)
 	return riscv_program_insert(p, fence_i());
 }
 
-int riscv_program_fence(struct riscv_program *p)
+int
+riscv_program_fence(struct riscv_program *p)
 {
 	return riscv_program_insert(p, fence());
 }
 
-int riscv_program_ebreak(struct riscv_program *p)
+int
+riscv_program_ebreak(struct riscv_program *p)
 {
 	struct target *const target = p->target;
 	struct riscv_info_t *const r = riscv_info(target);
 
-	if (p->instruction_count == riscv_debug_buffer_size(p->target) && r->impebreak) {
+	if (p->instruction_count == riscv_debug_buffer_size(p->target) && r->impebreak)
 		return ERROR_OK;
-	}
 
 	return riscv_program_insert(p, ebreak());
 }

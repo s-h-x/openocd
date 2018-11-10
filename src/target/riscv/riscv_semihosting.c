@@ -35,15 +35,10 @@
  * from ARM Ltd.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
-#include "log.h"
-
-#include "target/target.h"
-#include "target/semihosting_common.h"
 #include "riscv.h"
+
+#include "target/semihosting_common.h"
+#include "helper/log.h"
 
 /**
 * Called via semihosting->setup() later, after the target is known,

@@ -2,13 +2,15 @@
 #define TARGET_RISCV_ASM_H_
 
 #include "riscv.h"
-
-#include <assert.h>
+#include "opcodes.h"
 
 /** Version-independent functions that we don't want in the main address space. */
 /** @{ */
 static uint32_t __attribute__((unused))
-load(struct target const *const target, unsigned const rd, unsigned const base, uint16_t const offset)
+load(struct target const *const target,
+	unsigned const rd,
+	unsigned const base,
+	uint16_t const offset)
 {
 	switch (riscv_xlen(target)) {
 	case 32:
@@ -27,7 +29,10 @@ load(struct target const *const target, unsigned const rd, unsigned const base, 
 }
 
 static uint32_t __attribute__((unused))
-store(struct target const *const target, unsigned const src, unsigned const base, uint16_t const offset)
+store(struct target const *const target,
+	unsigned const src,
+	unsigned const base,
+	uint16_t const offset)
 {
 	switch (riscv_xlen(target)) {
 	case 32:

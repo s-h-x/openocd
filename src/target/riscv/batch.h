@@ -2,7 +2,6 @@
 #define TARGET_RISCV_SCANS_H_
 
 #include "target/target.h"
-#include "jtag/jtag.h"
 
 enum riscv_scan_type_e {
 	RISCV_SCAN_TYPE_INVALID,
@@ -56,7 +55,7 @@ void riscv_batch_add_dmi_write(struct riscv_batch *batch, unsigned address, uint
 /* DMI reads must be handled in two parts: the first one schedules a read and
  * provides a key, the second one actually obtains the value of that read .*/
 size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address);
-uint64_t riscv_batch_get_dmi_read(struct riscv_batch *batch, size_t key);
+uint64_t riscv_batch_get_dmi_read(struct riscv_batch const *batch, size_t key);
 
 /* Scans in a NOP. */
 void riscv_batch_add_nop(struct riscv_batch *batch);

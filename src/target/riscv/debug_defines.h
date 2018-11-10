@@ -142,9 +142,9 @@
 * returning errors.
 *
 * 3: An operation was attempted while a DMI request is still in
-* progress. The data scanned into \Rdmi in this access will be
+* progress. The data scanned into @c dmi in this access will be
 * ignored. This status is sticky and can be cleared by writing
-* \Fdmireset in \Rdtmcs. If a debugger sees this status, it
+* @c dmireset in @c dtmcs. If a debugger sees this status, it
 * needs to give the target more TCK edges between Update-DR and
 * Capture-DR. The simplest way to do that is to add extra transitions
 * in Run-Test/Idle.
@@ -170,13 +170,13 @@
 #define CSR_DCSR_XDEBUGVER_LENGTH           4
 #define CSR_DCSR_XDEBUGVER                  (0xfU << CSR_DCSR_XDEBUGVER_OFFSET)
 /*
-* When 1, {\tt ebreak} instructions in Machine Mode enter Debug Mode.
+* When 1, @c ebreak instructions in Machine Mode enter Debug Mode.
  */
 #define CSR_DCSR_EBREAKM_OFFSET             15
 #define CSR_DCSR_EBREAKM_LENGTH             1
 #define CSR_DCSR_EBREAKM                    (0x1U << CSR_DCSR_EBREAKM_OFFSET)
 /*
-* When 1, {\tt ebreak} instructions in Supervisor Mode enter Debug Mode.
+* When 1, @c ebreak instructions in Supervisor Mode enter Debug Mode.
  */
 #define CSR_DCSR_EBREAKS_OFFSET             13
 #define CSR_DCSR_EBREAKS_LENGTH             1

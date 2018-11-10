@@ -4,30 +4,18 @@
  * latest draft.
  */
 
-#include <assert.h>
-#include <stdlib.h>
-#include <time.h>
+#include "asm.h"
+#include "program.h"
+#include "batch.h"
+#include "debug_defines.h"
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
-#include "target/target.h"
+#include "jtag/jtag.h"
 #include "target/algorithm.h"
 #include "target/target_type.h"
-#include "log.h"
-#include "jtag/jtag.h"
 #include "target/register.h"
 #include "target/breakpoints.h"
 #include "helper/time_support.h"
-#include "helper/list.h"
-#include "riscv.h"
 #include "rtos/riscv_debug.h"
-#include "debug_defines.h"
-#include "rtos/rtos.h"
-#include "program.h"
-#include "asm.h"
-#include "batch.h"
 
 #define DMI_DATA1 (DMI_DATA0 + 1)
 #define DMI_PROGBUF1 (DMI_PROGBUF0 + 1)
@@ -431,7 +419,7 @@ dump_field(struct scan_field const *const field)
 /* Utility functions. */
 
 static void
-select_dmi(struct target *restrict const target)
+select_dmi(struct target const *restrict const target)
 {
 	static uint8_t const ir_dmi[1] = {DTM_DMI};
 	assert(target && target->tap);
@@ -447,7 +435,9 @@ select_dmi(struct target *restrict const target)
 	jtag_add_ir_scan(target->tap, &field, TAP_IDLE);
 }
 
-static uint32_t dtmcontrol_scan(struct target *const target, uint32_t out)
+static uint32_t
+dtmcontrol_scan(struct target *const target,
+	uint32_t out)
 {
 	assert(target);
 	/** @bug using global non-const variable */

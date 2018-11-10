@@ -3,25 +3,14 @@
  * spec, but SiFive made some silicon that uses it.
  */
 
-#include <assert.h>
-#include <stdlib.h>
-#include <time.h>
+#include "asm.h"
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
-#include "target/target.h"
 #include "target/algorithm.h"
 #include "target/target_type.h"
-#include "log.h"
 #include "jtag/jtag.h"
 #include "target/register.h"
 #include "target/breakpoints.h"
 #include "helper/time_support.h"
-#include "riscv.h"
-#include "asm.h"
-#include "gdb_regs.h"
 
 /*
  * Since almost everything can be accomplish by scanning the dbus register, all
