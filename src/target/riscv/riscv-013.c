@@ -20,48 +20,6 @@
 #define DMI_DATA1 (DMI_DATA0 + 1)
 #define DMI_PROGBUF1 (DMI_PROGBUF0 + 1)
 
-static int riscv013_on_step_or_resume(struct target *const target, bool step);
-static int riscv013_step_or_resume_current_hart(struct target *const target, bool step);
-static void riscv013_clear_abstract_error(struct target *const target);
-
-/* Implementations of the functions in riscv_info_t. */
-static int riscv013_get_register(struct target *const target,
-		riscv_reg_t *value, int hid, int rid);
-static int riscv013_set_register(struct target *const target, int hartid, int regid, uint64_t value);
-static int riscv013_select_current_hart(struct target *const target);
-static int riscv013_halt_current_hart(struct target *const target);
-static int riscv013_resume_current_hart(struct target *const target);
-static int riscv013_step_current_hart(struct target *const target);
-static int riscv013_on_halt(struct target *const target);
-static int riscv013_on_step(struct target *const target);
-static int riscv013_on_resume(struct target *const target);
-static bool riscv013_is_halted(struct target *const target);
-static enum riscv_halt_reason riscv013_halt_reason(struct target *const target);
-static int riscv013_write_debug_buffer(struct target *const target, unsigned index,
-		riscv_insn_t d);
-static riscv_insn_t riscv013_read_debug_buffer(struct target *const target, unsigned
-		index);
-static int riscv013_execute_debug_buffer(struct target *const target);
-static void riscv013_fill_dmi_write_u64(struct target *const target, uint8_t *buf, int a, uint64_t d);
-static void riscv013_fill_dmi_read_u64(struct target *const target, uint8_t *buf, int a);
-static int riscv013_dmi_write_u64_bits(struct target *const target);
-static void riscv013_fill_dmi_nop_u64(struct target *const target, uint8_t *buf);
-static int register_read(struct target *const target, uint64_t *value, uint32_t number);
-static int register_read_direct(struct target *const target, uint64_t *value, uint32_t number);
-static int register_write_direct(struct target *const target, unsigned number,
-		uint64_t value);
-static int read_memory(struct target *const target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer);
-static int write_memory(struct target *const target, target_addr_t address,
-		uint32_t size, uint32_t count, const uint8_t *buffer);
-static int riscv013_test_sba_config_reg(struct target *const target, target_addr_t legal_address,
-		uint32_t num_words, target_addr_t illegal_address, bool run_sbbusyerror_test);
-void write_memory_sba_simple(struct target *const target, target_addr_t addr, uint32_t* write_data,
-		uint32_t write_size, uint32_t sbcs);
-void read_memory_sba_simple(struct target *const target, target_addr_t addr,
-		uint32_t *rd_buf, uint32_t read_size, uint32_t sbcs);
-static int	riscv013_test_compliance(struct target *const target);
-
 /*
  * Since almost everything can be accomplish by scanning the dbus register, all
  * functions here assume dbus is already selected. The exception are functions
@@ -77,6 +35,33 @@ static int	riscv013_test_compliance(struct target *const target);
 #define CSR_DCSR_CAUSE_DEBUGINT	3
 #define CSR_DCSR_CAUSE_STEP		4
 #define CSR_DCSR_CAUSE_HALT		5
+
+#define COMPLIANCE_TEST(b, message) \
+{                                   \
+	int pass = 0;		    \
+	if (b) {		    \
+		pass = 1;	    \
+		++passed_tests;     \
+	}			    \
+	LOG_INFO("%s test %d (%s)\n", pass ? "PASSED" : "FAILED",  total_tests, message); \
+	assert(pass);		    \
+	++total_tests;		    \
+}
+
+#define COMPLIANCE_MUST_PASS(b) COMPLIANCE_TEST(ERROR_OK == (b), "Regular calls must return ERROR_OK")
+
+#define COMPLIANCE_READ(target, addr, value) COMPLIANCE_MUST_PASS(dmi_read(target, addr, value))
+#define COMPLIANCE_WRITE(target, addr, value) COMPLIANCE_MUST_PASS(dmi_write(target, addr, value))
+
+#define COMPLIANCE_CHECK_RO(target, addr)                               \
+{                                                                       \
+	uint32_t orig;                                                      \
+	uint32_t inverse;                                                   \
+	COMPLIANCE_READ(target, &orig, addr);                               \
+	COMPLIANCE_WRITE(target, addr, ~orig);                              \
+	COMPLIANCE_READ(target, &inverse, addr);                            \
+	COMPLIANCE_TEST(orig == inverse, "Register must be read-only");     \
+}
 
 /* JTAG registers. */
 
@@ -220,80 +205,28 @@ struct riscv013_info_s {
 };
 typedef struct riscv013_info_s riscv013_info_t;
 
+enum memory_space_e {
+	SPACE_DMI_DATA,
+	SPACE_DMI_PROGBUF,
+	SPACE_DMI_RAM
+};
+typedef enum memory_space_e memory_space_t;
+
+struct scratch_mem_s {
+	/* How can the debugger access this memory? */
+	memory_space_t memory_space;
+
+	/* Memory address to access the scratch memory from the hart. */
+	riscv_addr_t hart_address;
+
+	/* Memory address to access the scratch memory from the debugger. */
+	riscv_addr_t debug_address;
+
+	struct working_area *area;
+};
+typedef struct scratch_mem_s scratch_mem_t;
+
 LIST_HEAD(dm_list);
-
-static inline riscv013_info_t *
-get_info(struct target const *const target)
-{
-	assert(target);
-	struct riscv_info_t const *const info = target->arch_info;
-	assert(info);
-	return info->version_specific;
-}
-
-/**
- * @return the DM structure for this target. If there isn't one, find it in the
- * global list of DMs. If it's not in there, then create one and initialize it
- * to 0.
- */
-static dm013_info_t *get_dm(struct target *const target)
-{
-	riscv013_info_t *const info = get_info(target);
-	assert(info);
-
-	if (info->dm)
-		return info->dm;
-
-	assert(target && target->tap);
-	int abs_chain_position = target->tap->abs_chain_position;
-
-	dm013_info_t *entry;
-	dm013_info_t *dm = NULL;
-
-	list_for_each_entry(entry, &dm_list, list) {
-		if (entry->abs_chain_position == abs_chain_position) {
-			dm = entry;
-			break;
-		}
-	}
-
-	if (!dm) {
-		dm = calloc(1, sizeof(dm013_info_t));
-		dm->abs_chain_position = abs_chain_position;
-		dm->current_hartid = -1;
-		INIT_LIST_HEAD(&dm->target_list);
-		list_add(&dm->list, &dm_list);
-	}
-
-	info->dm = dm;
-	target_list_t *target_entry;
-
-	list_for_each_entry(target_entry, &dm->target_list, list) {
-		if (target_entry->target == target)
-			return dm;
-	}
-
-	target_entry = calloc(1, sizeof(*target_entry));
-	assert(target_entry);
-	target_entry->target = target;
-	list_add(&target_entry->list, &dm->target_list);
-
-	return dm;
-}
-
-static uint32_t set_hartsel(uint32_t initial, uint32_t index)
-{
-	initial &= ~DMI_DMCONTROL_HARTSELLO;
-	initial &= ~DMI_DMCONTROL_HARTSELHI;
-
-	uint32_t const index_lo = index & ((1 << DMI_DMCONTROL_HARTSELLO_LENGTH) - 1);
-	initial |= index_lo << DMI_DMCONTROL_HARTSELLO_OFFSET;
-	uint32_t const index_hi = index >> DMI_DMCONTROL_HARTSELLO_LENGTH;
-	assert(index_hi < 1 << DMI_DMCONTROL_HARTSELHI_LENGTH);
-	initial |= index_hi << DMI_DMCONTROL_HARTSELHI_OFFSET;
-
-	return initial;
-}
 
 static void
 decode_dmi(char *text,
@@ -416,7 +349,69 @@ dump_field(struct scan_field const *const field)
 	}
 }
 
-/* Utility functions. */
+static inline riscv013_info_t *
+get_info(struct target const *const target)
+{
+	assert(target);
+	struct riscv_info_t const *const info = target->arch_info;
+	assert(info);
+	return info->version_specific;
+}
+
+/**
+ * exec: If this is set, assume the scan results in an execution, so more
+ * run-test/idle cycles may be required.
+ */
+static dmi_status_t
+dmi_scan(struct target *const target,
+	uint32_t *const address_in,
+	uint32_t *const data_in,
+	dmi_op_t const op,
+	uint32_t const address_out,
+	uint32_t const data_out,
+	bool const exec)
+{
+	riscv013_info_t *const info = get_info(target);
+	uint8_t in[8] = {0};
+	uint8_t out[8];
+	assert(info);
+	struct scan_field field = {
+		.num_bits = info->abits + DTM_DMI_OP_LENGTH + DTM_DMI_DATA_LENGTH,
+		.out_value = out,
+		.in_value = in
+	};
+
+	assert(info->abits != 0);
+
+	buf_set_u32(out, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH, op);
+	buf_set_u32(out, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH, data_out);
+	buf_set_u32(out, DTM_DMI_ADDRESS_OFFSET, info->abits, address_out);
+
+	/* Assume dbus is already selected. */
+	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
+
+	{
+		int const idle_count = info->dmi_busy_delay + (exec ? info->ac_busy_delay : 0);
+
+		if (idle_count)
+			jtag_add_runtest(idle_count, TAP_IDLE);
+	}
+
+	if (ERROR_OK != jtag_execute_queue()) {
+		LOG_ERROR("%s: dmi_scan failed jtag scan", target->cmd_name);
+		return DMI_STATUS_FAILED;
+	}
+
+	if (data_in)
+		*data_in = buf_get_u32(in, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH);
+
+	if (address_in)
+		*address_in = buf_get_u32(in, DTM_DMI_ADDRESS_OFFSET, info->abits);
+
+	dump_field(&field);
+
+	return buf_get_u32(in, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH);
+}
 
 static void
 select_dmi(struct target const *restrict const target)
@@ -484,65 +479,10 @@ increase_dmi_busy_delay(struct target *const target)
 	dtmcontrol_scan(target, DTM_DTMCS_DMIRESET);
 }
 
-/**
- * exec: If this is set, assume the scan results in an execution, so more
- * run-test/idle cycles may be required.
- */
-static dmi_status_t
-dmi_scan(struct target *const target,
-	uint32_t *const address_in,
-	uint32_t *const data_in,
-	dmi_op_t const op,
-	uint32_t const address_out,
-	uint32_t const data_out,
-	bool const exec)
-{
-	riscv013_info_t *const info = get_info(target);
-	uint8_t in[8] = {0};
-	uint8_t out[8];
-	assert(info);
-	struct scan_field field = {
-		.num_bits = info->abits + DTM_DMI_OP_LENGTH + DTM_DMI_DATA_LENGTH,
-		.out_value = out,
-		.in_value = in
-	};
-
-	assert(info->abits != 0);
-
-	buf_set_u32(out, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH, op);
-	buf_set_u32(out, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH, data_out);
-	buf_set_u32(out, DTM_DMI_ADDRESS_OFFSET, info->abits, address_out);
-
-	/* Assume dbus is already selected. */
-	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
-
-	{
-		int const idle_count = info->dmi_busy_delay + (exec ? info->ac_busy_delay : 0);
-
-		if (idle_count)
-			jtag_add_runtest(idle_count, TAP_IDLE);
-	}
-
-	if (ERROR_OK != jtag_execute_queue()) {
-		LOG_ERROR("%s: dmi_scan failed jtag scan", target->cmd_name);
-		return DMI_STATUS_FAILED;
-	}
-
-	if (data_in)
-		*data_in = buf_get_u32(in, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH);
-
-	if (address_in)
-		*address_in = buf_get_u32(in, DTM_DMI_ADDRESS_OFFSET, info->abits);
-
-	dump_field(&field);
-
-	return buf_get_u32(in, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH);
-}
-
 static int
 dmi_op_timeout(struct target *restrict const target,
 	uint32_t *restrict const data_in,
-	int const dmi_op,
+	int const dmi_op_code,
 	uint32_t const address,
 	uint32_t const data_out,
 	int const timeout_sec)
@@ -553,7 +493,7 @@ dmi_op_timeout(struct target *restrict const target,
 
 	char const *op_name;
 
-	switch (dmi_op) {
+	switch (dmi_op_code) {
 		case DMI_OP_NOP:
 			op_name = "nop";
 			break;
@@ -567,7 +507,7 @@ dmi_op_timeout(struct target *restrict const target,
 			break;
 
 		default:
-			LOG_ERROR("%s: Invalid DMI operation: %d", target->cmd_name, dmi_op);
+			LOG_ERROR("%s: Invalid DMI operation: %d", target->cmd_name, dmi_op_code);
 			return ERROR_TARGET_INVALID;
 	}
 
@@ -578,7 +518,7 @@ dmi_op_timeout(struct target *restrict const target,
 		 * stays busy, it is actually due to the previous access. */
 		dmi_status_t status;
 		while (DMI_STATUS_SUCCESS !=
-			(status = dmi_scan(target, NULL, NULL, dmi_op, address, data_out, false))) {
+			(status = dmi_scan(target, NULL, NULL, dmi_op_code, address, data_out, false))) {
 			if (status == DMI_STATUS_BUSY) {
 				increase_dmi_busy_delay(target);
 			} else {
@@ -629,6 +569,92 @@ dmi_op_timeout(struct target *restrict const target,
 
 	return ERROR_OK;
 }
+
+static void
+riscv013_clear_abstract_error(struct target *const target);
+
+/* Implementations of the functions in riscv_info_t. */
+static int riscv013_select_current_hart(struct target *const target);
+static int riscv013_halt_current_hart(struct target *const target);
+static void riscv013_fill_dmi_nop_u64(struct target *const target, uint8_t *buf);
+static int register_read(struct target *const target, uint64_t *value, uint32_t number);
+static int register_read_direct(struct target *const target, uint64_t *value, uint32_t number);
+static int register_write_direct(struct target *const target, unsigned number,
+		uint64_t value);
+static int read_memory(struct target *const target, target_addr_t address,
+		uint32_t size, uint32_t count, uint8_t *buffer);
+static int write_memory(struct target *const target, target_addr_t address,
+		uint32_t size, uint32_t count, const uint8_t *buffer);
+static void write_memory_sba_simple(struct target *const target, target_addr_t addr, uint32_t* write_data,
+		uint32_t write_size, uint32_t sbcs);
+static void read_memory_sba_simple(struct target *const target, target_addr_t addr,
+		uint32_t *rd_buf, uint32_t read_size, uint32_t sbcs);
+
+/**
+ * @return the DM structure for this target. If there isn't one, find it in the
+ * global list of DMs. If it's not in there, then create one and initialize it
+ * to 0.
+ */
+static dm013_info_t *get_dm(struct target *const target)
+{
+	riscv013_info_t *const info = get_info(target);
+	assert(info);
+
+	if (info->dm)
+		return info->dm;
+
+	assert(target && target->tap);
+	int abs_chain_position = target->tap->abs_chain_position;
+
+	dm013_info_t *entry;
+	dm013_info_t *dm = NULL;
+
+	list_for_each_entry(entry, &dm_list, list) {
+		if (entry->abs_chain_position == abs_chain_position) {
+			dm = entry;
+			break;
+		}
+	}
+
+	if (!dm) {
+		dm = calloc(1, sizeof(dm013_info_t));
+		dm->abs_chain_position = abs_chain_position;
+		dm->current_hartid = -1;
+		INIT_LIST_HEAD(&dm->target_list);
+		list_add(&dm->list, &dm_list);
+	}
+
+	info->dm = dm;
+	target_list_t *target_entry;
+
+	list_for_each_entry(target_entry, &dm->target_list, list) {
+		if (target_entry->target == target)
+			return dm;
+	}
+
+	target_entry = calloc(1, sizeof(*target_entry));
+	assert(target_entry);
+	target_entry->target = target;
+	list_add(&target_entry->list, &dm->target_list);
+
+	return dm;
+}
+
+static uint32_t set_hartsel(uint32_t initial, uint32_t index)
+{
+	initial &= ~DMI_DMCONTROL_HARTSELLO;
+	initial &= ~DMI_DMCONTROL_HARTSELHI;
+
+	uint32_t const index_lo = index & ((1 << DMI_DMCONTROL_HARTSELLO_LENGTH) - 1);
+	initial |= index_lo << DMI_DMCONTROL_HARTSELLO_OFFSET;
+	uint32_t const index_hi = index >> DMI_DMCONTROL_HARTSELLO_LENGTH;
+	assert(index_hi < 1 << DMI_DMCONTROL_HARTSELHI_LENGTH);
+	initial |= index_hi << DMI_DMCONTROL_HARTSELHI_OFFSET;
+
+	return initial;
+}
+
+/* Utility functions. */
 
 static int
 dmi_op(struct target *const target,
@@ -705,7 +731,8 @@ dmstatus_read(struct target *const target,
 			riscv_command_timeout_sec);
 }
 
-static void increase_ac_busy_delay(struct target *const target)
+static void
+increase_ac_busy_delay(struct target *const target)
 {
 	riscv013_info_t *const info = get_info(target);
 	assert(info);
@@ -715,26 +742,8 @@ static void increase_ac_busy_delay(struct target *const target)
 			info->ac_busy_delay);
 }
 
-#if 0
-static uint32_t abstract_register_size(unsigned width)
-{
-	switch (width) {
-		case 32:
-			return set_field(0, AC_ACCESS_REGISTER_SIZE, 2);
-		case 64:
-			return set_field(0, AC_ACCESS_REGISTER_SIZE, 3);
-			break;
-		case 128:
-			return set_field(0, AC_ACCESS_REGISTER_SIZE, 4);
-			break;
-		default:
-			LOG_ERROR("Unsupported register width: %d", width);
-			return 0;
-	}
-}
-#endif
-
-static int wait_for_idle(struct target *const target,
+static int
+wait_for_idle(struct target *const target,
 	uint32_t *abstractcs)
 {
 	riscv013_info_t *const info = get_info(target);
@@ -1065,27 +1074,6 @@ examine_progbuf(struct target *const target)
 
 	return ERROR_OK;
 }
-
-enum memory_space_e {
-	SPACE_DMI_DATA,
-	SPACE_DMI_PROGBUF,
-	SPACE_DMI_RAM
-};
-typedef enum memory_space_e memory_space_t;
-
-struct scratch_mem_s {
-	/* How can the debugger access this memory? */
-	memory_space_t memory_space;
-
-	/* Memory address to access the scratch memory from the hart. */
-	riscv_addr_t hart_address;
-
-	/* Memory address to access the scratch memory from the debugger. */
-	riscv_addr_t debug_address;
-
-	struct working_area *area;
-};
-typedef struct scratch_mem_s scratch_mem_t;
 
 /**
  * Find some scratch memory to be used with the given program.
@@ -1930,66 +1918,6 @@ riscv013_authdata_write(struct target *const target,
 
 		return result;
 	}
-
-	return ERROR_OK;
-}
-
-static int
-init_target(struct command_context *cmd_ctx,
-	struct target *const target)
-{
-	assert(target);
-	LOG_DEBUG("%s: init", target->cmd_name);
-	struct riscv_info_t *const generic_info = target->arch_info;
-	assert(generic_info);
-
-	generic_info->get_register = &riscv013_get_register;
-	generic_info->set_register = &riscv013_set_register;
-	generic_info->select_current_hart = &riscv013_select_current_hart;
-	generic_info->is_halted = &riscv013_is_halted;
-	generic_info->halt_current_hart = &riscv013_halt_current_hart;
-	generic_info->resume_current_hart = &riscv013_resume_current_hart;
-	generic_info->step_current_hart = &riscv013_step_current_hart;
-	generic_info->on_halt = &riscv013_on_halt;
-	generic_info->on_resume = &riscv013_on_resume;
-	generic_info->on_step = &riscv013_on_step;
-	generic_info->halt_reason = &riscv013_halt_reason;
-	generic_info->read_debug_buffer = &riscv013_read_debug_buffer;
-	generic_info->write_debug_buffer = &riscv013_write_debug_buffer;
-	generic_info->execute_debug_buffer = &riscv013_execute_debug_buffer;
-	generic_info->fill_dmi_write_u64 = &riscv013_fill_dmi_write_u64;
-	generic_info->fill_dmi_read_u64 = &riscv013_fill_dmi_read_u64;
-	generic_info->fill_dmi_nop_u64 = &riscv013_fill_dmi_nop_u64;
-	generic_info->dmi_write_u64_bits = &riscv013_dmi_write_u64_bits;
-	generic_info->authdata_read = &riscv013_authdata_read;
-	generic_info->authdata_write = &riscv013_authdata_write;
-	generic_info->dmi_read = &dmi_read;
-	generic_info->dmi_write = &dmi_write;
-	generic_info->test_sba_config_reg = &riscv013_test_sba_config_reg;
-	generic_info->test_compliance = &riscv013_test_compliance;
-	generic_info->version_specific = calloc(1, sizeof(riscv013_info_t));
-
-	if (!generic_info->version_specific)
-		return ERROR_TARGET_INIT_FAILED;
-
-	riscv013_info_t *const info = get_info(target);
-	assert(info);
-
-	info->progbufsize = -1;
-	info->dmi_busy_delay = 0;
-	info->bus_master_read_delay = 0;
-	info->bus_master_write_delay = 0;
-	info->ac_busy_delay = 0;
-
-	/* Assume all these abstract commands are supported until we learn
-	 * otherwise. */
-	/** @todo The spec allows eg. one CSR to be able to be accessed abstractly
-	 * while another one isn't. We don't track that this closely here, but in
-	 * the future we probably should. */
-	info->abstract_read_csr_supported = true;
-	info->abstract_write_csr_supported = true;
-	info->abstract_read_fpr_supported = true;
-	info->abstract_write_fpr_supported = true;
 
 	return ERROR_OK;
 }
@@ -3219,32 +3147,6 @@ static int write_memory(struct target *const target, target_addr_t address,
 	return ERROR_FAIL;
 }
 
-static int arch_state(struct target *const target)
-{
-	return ERROR_OK;
-}
-
-struct target_type const riscv013_target = {
-	.name = "riscv",
-
-	.init_target = init_target,
-	.deinit_target = deinit_target,
-	.examine = examine,
-
-	.poll = &riscv_openocd_poll,
-	.halt = &riscv_openocd_halt,
-	.resume = &riscv_openocd_resume,
-	.step = &riscv_openocd_step,
-
-	.assert_reset = assert_reset,
-	.deassert_reset = deassert_reset,
-
-	.read_memory = read_memory,
-	.write_memory = write_memory,
-
-	.arch_state = arch_state,
-};
-
 /* 0.13-specific implementations of various RISC-V helper functions. */
 static int riscv013_get_register(struct target *const target,
 		riscv_reg_t *value, int hid, int rid)
@@ -3375,30 +3277,6 @@ riscv013_halt_current_hart(struct target *const target)
 }
 
 static int
-riscv013_resume_current_hart(struct target *const target)
-{
-	return riscv013_step_or_resume_current_hart(target, false);
-}
-
-static int
-riscv013_step_current_hart(struct target *const target)
-{
-	return riscv013_step_or_resume_current_hart(target, true);
-}
-
-static int
-riscv013_on_resume(struct target *const target)
-{
-	return riscv013_on_step_or_resume(target, false);
-}
-
-static int
-riscv013_on_step(struct target *const target)
-{
-	return riscv013_on_step_or_resume(target, true);
-}
-
-static int
 riscv013_on_halt(struct target *const target)
 {
 	return ERROR_OK;
@@ -3470,7 +3348,7 @@ riscv013_halt_reason(struct target *const target)
 	return RISCV_HALT_UNKNOWN;
 }
 
-int
+static int
 riscv013_write_debug_buffer(struct target *const target,
 	unsigned const index,
 	riscv_insn_t const data)
@@ -3478,7 +3356,7 @@ riscv013_write_debug_buffer(struct target *const target,
 	return dmi_write(target, DMI_PROGBUF0 + index, data);
 }
 
-riscv_insn_t
+static riscv_insn_t
 riscv013_read_debug_buffer(struct target *const target,
 	unsigned const index)
 {
@@ -3487,7 +3365,7 @@ riscv013_read_debug_buffer(struct target *const target,
 	return value;
 }
 
-int
+static int
 riscv013_execute_debug_buffer(struct target *const target)
 {
 	uint32_t run_program = 0;
@@ -3499,7 +3377,7 @@ riscv013_execute_debug_buffer(struct target *const target)
 	return execute_abstract_command(target, run_program);
 }
 
-void
+static void
 riscv013_fill_dmi_write_u64(struct target *const target,
 	uint8_t *const buf,
 	int const a,
@@ -3511,7 +3389,7 @@ riscv013_fill_dmi_write_u64(struct target *const target,
 	buf_set_u64(buf, DTM_DMI_ADDRESS_OFFSET, info->abits, a);
 }
 
-void
+static void
 riscv013_fill_dmi_read_u64(struct target *const target,
 	uint8_t *const buf,
 	int a)
@@ -3577,7 +3455,8 @@ get_num_sbdata_regs(struct target *const target)
 		return 0;
 }
 
-static int riscv013_test_sba_config_reg(struct target *const target,
+static int
+riscv013_test_sba_config_reg(struct target *const target,
 	target_addr_t const legal_address,
 	uint32_t const num_words,
 	target_addr_t const illegal_address,
@@ -3868,8 +3747,12 @@ static int riscv013_test_sba_config_reg(struct target *const target,
 
 }
 
-void write_memory_sba_simple(struct target *const target, target_addr_t addr,
-		uint32_t *write_data, uint32_t write_size, uint32_t sbcs)
+static void
+write_memory_sba_simple(struct target *const target,
+	target_addr_t const addr,
+	uint32_t *const write_data,
+	uint32_t const write_size,
+	uint32_t const sbcs)
 {
 	riscv013_info_t *const info = get_info(target);
 
@@ -3898,8 +3781,12 @@ void write_memory_sba_simple(struct target *const target, target_addr_t addr,
 		dmi_write(target, DMI_SBDATA0+i, write_data[i]);
 }
 
-void read_memory_sba_simple(struct target *const target, target_addr_t addr,
-		uint32_t *rd_buf, uint32_t read_size, uint32_t sbcs)
+static void
+read_memory_sba_simple(struct target *const target,
+	target_addr_t const addr,
+	uint32_t *const rd_buf,
+	uint32_t const read_size,
+	uint32_t const sbcs)
 {
 	riscv013_info_t *const info = get_info(target);
 
@@ -3928,13 +3815,15 @@ void read_memory_sba_simple(struct target *const target, target_addr_t addr,
 		dmi_read(target, &(rd_buf[i]), DMI_SBDATA0+i);
 }
 
-int riscv013_dmi_write_u64_bits(struct target *const target)
+static int
+riscv013_dmi_write_u64_bits(struct target *const target)
 {
 	riscv013_info_t *const info = get_info(target);
 	return info->abits + DTM_DMI_DATA_LENGTH + DTM_DMI_OP_LENGTH;
 }
 
-static int maybe_execute_fence_i(struct target *const target)
+static int
+maybe_execute_fence_i(struct target *const target)
 {
 	riscv013_info_t *const info = get_info(target);
 	struct riscv_info_t *const r = riscv_info(target);
@@ -3946,8 +3835,8 @@ static int maybe_execute_fence_i(struct target *const target)
 	return ERROR_OK;
 }
 
-/* Helper Functions. */
-static int riscv013_on_step_or_resume(struct target *const target, bool step)
+static int
+riscv013_on_step_or_resume(struct target *const target, bool step)
 {
 	if (maybe_execute_fence_i(target) != ERROR_OK)
 		return ERROR_FAIL;
@@ -3955,8 +3844,10 @@ static int riscv013_on_step_or_resume(struct target *const target, bool step)
 	/* We want to twiddle some bits in the debug CSR so debugging works. */
 	riscv_reg_t dcsr;
 	int result = register_read(target, &dcsr, GDB_REGNO_DCSR);
+
 	if (result != ERROR_OK)
 		return result;
+
 	dcsr = set_field(dcsr, CSR_DCSR_STEP, step);
 	dcsr = set_field(dcsr, CSR_DCSR_EBREAKM, 1);
 	dcsr = set_field(dcsr, CSR_DCSR_EBREAKS, 1);
@@ -3964,7 +3855,20 @@ static int riscv013_on_step_or_resume(struct target *const target, bool step)
 	return riscv_set_register(target, GDB_REGNO_DCSR, dcsr);
 }
 
-static int riscv013_step_or_resume_current_hart(struct target *const target, bool step)
+static int
+riscv013_on_step(struct target *const target)
+{
+	return riscv013_on_step_or_resume(target, true);
+}
+
+static int
+riscv013_on_resume(struct target *const target)
+{
+	return riscv013_on_step_or_resume(target, false);
+}
+
+static int
+riscv013_step_or_resume_current_hart(struct target *const target, bool step)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 	assert(r);
@@ -4019,7 +3923,20 @@ static int riscv013_step_or_resume_current_hart(struct target *const target, boo
 	return ERROR_FAIL;
 }
 
-void riscv013_clear_abstract_error(struct target *const target)
+static int
+riscv013_step_current_hart(struct target *const target)
+{
+	return riscv013_step_or_resume_current_hart(target, true);
+}
+
+static int
+riscv013_resume_current_hart(struct target *const target)
+{
+	return riscv013_step_or_resume_current_hart(target, false);
+}
+
+static void
+riscv013_clear_abstract_error(struct target *const target)
 {
 	/* Wait for busy to go away. */
 	time_t start = time(NULL);
@@ -4043,34 +3960,8 @@ void riscv013_clear_abstract_error(struct target *const target)
 	dmi_write(target, DMI_ABSTRACTCS, abstractcs & DMI_ABSTRACTCS_CMDERR);
 }
 
-#define COMPLIANCE_TEST(b, message) \
-{                                   \
-	int pass = 0;		    \
-	if (b) {		    \
-		pass = 1;	    \
-		++passed_tests;     \
-	}			    \
-	LOG_INFO("%s test %d (%s)\n", pass ? "PASSED" : "FAILED",  total_tests, message); \
-	assert(pass);		    \
-	++total_tests;		    \
-}
-
-#define COMPLIANCE_MUST_PASS(b) COMPLIANCE_TEST(ERROR_OK == (b), "Regular calls must return ERROR_OK")
-
-#define COMPLIANCE_READ(target, addr, value) COMPLIANCE_MUST_PASS(dmi_read(target, addr, value))
-#define COMPLIANCE_WRITE(target, addr, value) COMPLIANCE_MUST_PASS(dmi_write(target, addr, value))
-
-#define COMPLIANCE_CHECK_RO(target, addr)                               \
-{                                                                       \
-	uint32_t orig;                                                      \
-	uint32_t inverse;                                                   \
-	COMPLIANCE_READ(target, &orig, addr);                               \
-	COMPLIANCE_WRITE(target, addr, ~orig);                              \
-	COMPLIANCE_READ(target, &inverse, addr);                            \
-	COMPLIANCE_TEST(orig == inverse, "Register must be read-only");     \
-}
-
-int riscv013_test_compliance(struct target *const target)
+static int
+riscv013_test_compliance(struct target *const target)
 {
 	LOG_INFO("%s: Testing Compliance against RISC-V Debug Spec v0.13", target->cmd_name);
 
@@ -4510,3 +4401,90 @@ int riscv013_test_compliance(struct target *const target)
 		return ERROR_FAIL;
 	}
 }
+
+static int
+arch_state(struct target *const target)
+{
+	return ERROR_OK;
+}
+
+static int
+init_target(struct command_context *cmd_ctx,
+	struct target *const target)
+{
+	assert(target);
+	LOG_DEBUG("%s: init", target->cmd_name);
+	struct riscv_info_t *const generic_info = target->arch_info;
+	assert(generic_info);
+
+	generic_info->get_register = &riscv013_get_register;
+	generic_info->set_register = &riscv013_set_register;
+	generic_info->select_current_hart = &riscv013_select_current_hart;
+	generic_info->is_halted = &riscv013_is_halted;
+	generic_info->halt_current_hart = &riscv013_halt_current_hart;
+	generic_info->resume_current_hart = &riscv013_resume_current_hart;
+	generic_info->step_current_hart = &riscv013_step_current_hart;
+	generic_info->on_halt = &riscv013_on_halt;
+	generic_info->on_resume = &riscv013_on_resume;
+	generic_info->on_step = &riscv013_on_step;
+	generic_info->halt_reason = &riscv013_halt_reason;
+	generic_info->read_debug_buffer = &riscv013_read_debug_buffer;
+	generic_info->write_debug_buffer = &riscv013_write_debug_buffer;
+	generic_info->execute_debug_buffer = &riscv013_execute_debug_buffer;
+	generic_info->fill_dmi_write_u64 = &riscv013_fill_dmi_write_u64;
+	generic_info->fill_dmi_read_u64 = &riscv013_fill_dmi_read_u64;
+	generic_info->fill_dmi_nop_u64 = &riscv013_fill_dmi_nop_u64;
+	generic_info->dmi_write_u64_bits = &riscv013_dmi_write_u64_bits;
+	generic_info->authdata_read = &riscv013_authdata_read;
+	generic_info->authdata_write = &riscv013_authdata_write;
+	generic_info->dmi_read = &dmi_read;
+	generic_info->dmi_write = &dmi_write;
+	generic_info->test_sba_config_reg = &riscv013_test_sba_config_reg;
+	generic_info->test_compliance = &riscv013_test_compliance;
+	generic_info->version_specific = calloc(1, sizeof(riscv013_info_t));
+
+	if (!generic_info->version_specific)
+		return ERROR_TARGET_INIT_FAILED;
+
+	riscv013_info_t *const info = get_info(target);
+	assert(info);
+
+	info->progbufsize = -1;
+	info->dmi_busy_delay = 0;
+	info->bus_master_read_delay = 0;
+	info->bus_master_write_delay = 0;
+	info->ac_busy_delay = 0;
+
+	/* Assume all these abstract commands are supported until we learn
+	 * otherwise. */
+	/** @todo The spec allows eg. one CSR to be able to be accessed abstractly
+	 * while another one isn't. We don't track that this closely here, but in
+	 * the future we probably should. */
+	info->abstract_read_csr_supported = true;
+	info->abstract_write_csr_supported = true;
+	info->abstract_read_fpr_supported = true;
+	info->abstract_write_fpr_supported = true;
+
+	return ERROR_OK;
+}
+
+struct target_type const riscv013_target = {
+	.name = "riscv",
+
+	.init_target = init_target,
+	.deinit_target = deinit_target,
+	.examine = examine,
+
+	.poll = &riscv_openocd_poll,
+	.halt = &riscv_openocd_halt,
+	.resume = &riscv_openocd_resume,
+	.step = &riscv_openocd_step,
+
+	.assert_reset = assert_reset,
+	.deassert_reset = deassert_reset,
+
+	.read_memory = read_memory,
+	.write_memory = write_memory,
+
+	.arch_state = arch_state,
+};
