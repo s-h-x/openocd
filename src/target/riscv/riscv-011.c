@@ -11,7 +11,6 @@
 #include "jtag/jtag.h"
 #include "target/register.h"
 #include "target/breakpoints.h"
-#include "helper/time_support.h"
 
 /*
  * Since almost everything can be accomplish by scanning the dbus register, all
