@@ -2602,59 +2602,6 @@ enum riscv_halt_reason
 	return r->halt_reason(target);
 }
 
-size_t riscv_debug_buffer_size(struct target *const target)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	return r->debug_buffer_size[riscv_current_hartid(target)];
-}
-
-int
-riscv_write_debug_buffer(struct target *const target,
-	int const index,
-	riscv_insn_t const insn)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->write_debug_buffer);
-	r->write_debug_buffer(target, index, insn);
-	return ERROR_OK;
-}
-
-riscv_insn_t riscv_read_debug_buffer(struct target *const target, int const index)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->read_debug_buffer);
-	return r->read_debug_buffer(target, index);
-}
-
-int riscv_execute_debug_buffer(struct target *const target)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->execute_debug_buffer);
-	return r->execute_debug_buffer(target);
-}
-
-void riscv_fill_dmi_write_u64(struct target *const target, uint8_t *const buf, int a, uint64_t d)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->fill_dmi_write_u64);
-	r->fill_dmi_write_u64(target, buf, a, d);
-}
-
-void riscv_fill_dmi_read_u64(struct target *const target, uint8_t *buf, int a)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->fill_dmi_read_u64);
-	r->fill_dmi_read_u64(target, buf, a);
-}
-
-void riscv_fill_dmi_nop_u64(struct target *const target, uint8_t *const buf)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->fill_dmi_nop_u64);
-	r->fill_dmi_nop_u64(target, buf);
-}
-
 bool riscv_hart_enabled(struct target *const target, int hartid)
 {
 	/* FIXME: Add a hart mask to the RTOS. */

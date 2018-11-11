@@ -25,6 +25,17 @@ riscv_program_init(struct riscv_program *const p,
 	return ERROR_OK;
 }
 
+static int
+riscv_write_debug_buffer(struct target *const target,
+	int const index,
+	riscv_insn_t const insn)
+{
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r && r->write_debug_buffer);
+	r->write_debug_buffer(target, index, insn);
+	return ERROR_OK;
+}
+
 int
 riscv_program_write(struct riscv_program *program)
 {
@@ -47,8 +58,35 @@ riscv_program_write(struct riscv_program *program)
 	return ERROR_OK;
 }
 
+static int
+riscv_execute_debug_buffer(struct target *const target)
+{
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r && r->execute_debug_buffer);
+	return r->execute_debug_buffer(target);
+}
+
+static riscv_insn_t
+riscv_read_debug_buffer(struct target *const target,
+	int const index)
+{
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r && r->read_debug_buffer);
+	return r->read_debug_buffer(target, index);
+}
+
+static size_t
+riscv_debug_buffer_size(struct target *const target)
+{
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r);
+	return r->debug_buffer_size[riscv_current_hartid(target)];
+}
+
 /** Add ebreak and execute the program. */
-int riscv_program_exec(struct riscv_program *p, struct target *t)
+int
+riscv_program_exec(struct riscv_program *const p,
+	struct target *const t)
 {
 	keep_alive();
 

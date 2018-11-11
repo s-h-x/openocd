@@ -246,18 +246,6 @@ bool riscv_is_halted(struct target *target);
 
 enum riscv_halt_reason riscv_halt_reason(struct target *target, int hartid);
 
-/** These helper functions let the generic program interface get target-specific
- * information. */
-size_t riscv_debug_buffer_size(struct target *target);
-
-riscv_insn_t riscv_read_debug_buffer(struct target *target, int index);
-int riscv_write_debug_buffer(struct target *target, int index, riscv_insn_t insn);
-int riscv_execute_debug_buffer(struct target *target);
-
-void riscv_fill_dmi_nop_u64(struct target *target, uint8_t *buf);
-void riscv_fill_dmi_write_u64(struct target *target, uint8_t *buf, int a, uint64_t d);
-void riscv_fill_dmi_read_u64(struct target *target, uint8_t *buf, int a);
-
 /** Invalidates the register cache. */
 void riscv_invalidate_register_cache(struct target *target);
 
