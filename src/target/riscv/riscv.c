@@ -246,7 +246,8 @@ dtmcontrol_scan(struct target *const target,
 	return in;
 }
 
-static struct target_type const *get_target_type(struct target *const target)
+static struct target_type const *
+get_target_type(struct target *const target)
 {
 	assert(target);
 	struct riscv_info_t const *const info = target->arch_info;
@@ -270,7 +271,8 @@ static struct target_type const *get_target_type(struct target *const target)
 }
 
 /** Initializes the shared RISC-V structure. */
-static struct riscv_info_t *riscv_info_init(struct target *const target)
+static struct riscv_info_t *
+riscv_info_init(struct target *const target)
 {
 	struct riscv_info_t *const r = calloc(1, sizeof(struct riscv_info_t));
 
@@ -320,7 +322,8 @@ riscv_init_target(struct command_context *const cmd_ctx,
 	return ERROR_OK;
 }
 
-static void riscv_deinit_target(struct target *const target)
+static void
+riscv_deinit_target(struct target *const target)
 {
 	LOG_DEBUG("%s: riscv_deinit_target()", target->cmd_name);
 	struct target_type const *const tt = get_target_type(target);
@@ -344,14 +347,16 @@ static void riscv_deinit_target(struct target *const target)
 	target->arch_info = NULL;
 }
 
-static int oldriscv_halt(struct target *const target)
+static int
+oldriscv_halt(struct target *const target)
 {
 	struct target_type const *const tt = get_target_type(target);
 	assert(tt);
 	return tt->halt(target);
 }
 
-static void trigger_from_breakpoint(struct trigger *const trigger,
+static void
+trigger_from_breakpoint(struct trigger *const trigger,
 		struct breakpoint const *const breakpoint)
 {
 	assert(trigger);
@@ -366,8 +371,11 @@ static void trigger_from_breakpoint(struct trigger *const trigger,
 	trigger->unique_id = breakpoint->unique_id;
 }
 
-static int maybe_add_trigger_t1(struct target *const target, unsigned const hartid,
-		struct trigger *const trigger, uint64_t tdata1)
+static int
+maybe_add_trigger_t1(struct target *const target,
+	unsigned const hartid,
+	struct trigger *const trigger,
+	uint64_t tdata1)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 
@@ -426,8 +434,11 @@ static int maybe_add_trigger_t1(struct target *const target, unsigned const hart
 	return ERROR_OK;
 }
 
-static int maybe_add_trigger_t2(struct target *const target, unsigned const hartid,
-		struct trigger *const trigger, uint64_t tdata1)
+static int
+maybe_add_trigger_t2(struct target *const target,
+	unsigned const hartid,
+	struct trigger *const trigger,
+	uint64_t tdata1)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 
@@ -490,7 +501,9 @@ static int maybe_add_trigger_t2(struct target *const target, unsigned const hart
 	return ret;
 }
 
-static int add_trigger(struct target *const target, struct trigger *const trigger)
+static int
+add_trigger(struct target *const target,
+	struct trigger *const trigger)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 
@@ -498,7 +511,7 @@ static int add_trigger(struct target *const target, struct trigger *const trigge
 		int const err = riscv_enumerate_triggers(target);
 
 		if (ERROR_OK != err)
-			return ERROR_FAIL;
+			return err;
 	}
 
 	/* In RTOS mode, we need to set the same trigger in the same slot on every hart,
@@ -685,10 +698,10 @@ riscv_add_breakpoint(struct target *const target,
 }
 
 static int
-remove_trigger(struct target *restrict const target,
-	struct trigger *restrict const trigger)
+remove_trigger(struct target *const target,
+	struct trigger *const trigger)
 {
-	struct riscv_info_t *restrict const r = riscv_info(target);
+	struct riscv_info_t *const r = riscv_info(target);
 
 	{
 		int const err = riscv_enumerate_triggers(target);
@@ -748,8 +761,8 @@ remove_trigger(struct target *restrict const target,
 	return ERROR_OK;
 }
 
-int
-riscv_remove_breakpoint(struct target *restrict const target,
+static int
+riscv_remove_breakpoint(struct target *const target,
 	struct breakpoint *breakpoint)
 {
 	assert(breakpoint);
@@ -1020,7 +1033,7 @@ oldriscv_poll(struct target *const target)
 }
 
 static int
-old_or_new_riscv_poll(struct target *restrict const target)
+old_or_new_riscv_poll(struct target *const target)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 	assert(r);
@@ -1028,17 +1041,17 @@ old_or_new_riscv_poll(struct target *restrict const target)
 }
 
 static int
-old_or_new_riscv_halt(struct target *restrict const target)
+old_or_new_riscv_halt(struct target *const target)
 {
-	struct riscv_info_t *restrict const r = riscv_info(target);
+	struct riscv_info_t *const r = riscv_info(target);
 	assert(r);
 	return r->is_halted ? riscv_openocd_halt(target) : oldriscv_halt(target);
 }
 
 static int
-riscv_assert_reset(struct target *restrict const target)
+riscv_assert_reset(struct target *const target)
 {
-	struct target_type const *restrict const tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	return tt->assert_reset(target);
 }
 
@@ -1052,20 +1065,20 @@ riscv_deassert_reset(struct target *const target)
 }
 
 static int
-oldriscv_resume(struct target *restrict const target,
+oldriscv_resume(struct target *const target,
 	int const current,
 	uint32_t const address,
 	int const handle_breakpoints,
 	int const debug_execution)
 {
-	struct target_type const *restrict const tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	assert(tt);
 	return
 		tt->resume(target, current, address, handle_breakpoints, debug_execution);
 }
 
 static int
-old_or_new_riscv_resume(struct target *restrict const target,
+old_or_new_riscv_resume(struct target *const target,
 	int const current,
 	target_addr_t const address,
 	int const handle_breakpoints,
@@ -1076,7 +1089,7 @@ old_or_new_riscv_resume(struct target *restrict const target,
 			target->cmd_name,
 			handle_breakpoints);
 
-	struct riscv_info_t *restrict const r = riscv_info(target);
+	struct riscv_info_t *const r = riscv_info(target);
 	assert(r);
 
 	return
@@ -1086,10 +1099,10 @@ old_or_new_riscv_resume(struct target *restrict const target,
 }
 
 static int
-riscv_select_current_hart(struct target *restrict const target)
+riscv_select_current_hart(struct target *const target)
 {
 	if (riscv_rtos_enabled(target)) {
-		struct riscv_info_t *restrict const r = riscv_info(target);
+		struct riscv_info_t *const r = riscv_info(target);
 		assert(r);
 
 		if (r->rtos_hartid == -1)
@@ -1109,7 +1122,7 @@ is_valid_size_and_alignment(target_addr_t const address,
 }
 
 static int
-riscv_read_memory(struct target *restrict const target,
+riscv_read_memory(struct target *const target,
 	target_addr_t const address,
 	uint32_t const size,
 	uint32_t const count,
@@ -1143,7 +1156,7 @@ riscv_read_memory(struct target *restrict const target,
 }
 
 static int
-riscv_write_memory(struct target *restrict const target,
+riscv_write_memory(struct target *const target,
 	target_addr_t const address,
 	uint32_t const size,
 	uint32_t const count,
@@ -1175,7 +1188,7 @@ riscv_write_memory(struct target *restrict const target,
 }
 
 static int
-riscv_get_gdb_reg_list(struct target *restrict const target,
+riscv_get_gdb_reg_list(struct target *const target,
 	struct reg **reg_list[],
 	int *const reg_list_size,
 	enum target_register_class const reg_class)
@@ -1236,9 +1249,9 @@ riscv_get_gdb_reg_list(struct target *restrict const target,
 }
 
 static int
-riscv_arch_state(struct target *restrict const target)
+riscv_arch_state(struct target *const target)
 {
-	struct target_type const *restrict const tt = get_target_type(target);
+	struct target_type const *const tt = get_target_type(target);
 	assert(tt);
 	return tt->arch_state(target);
 }
@@ -1452,7 +1465,7 @@ riscv_run_algorithm(struct target *const target, int const num_mem_params,
 	@todo Not yet implemented.
 */
 static int
-riscv_checksum_memory(struct target *restrict const target,
+riscv_checksum_memory(struct target *const target,
 	target_addr_t const address,
 	uint32_t const count,
 	uint32_t *const checksum)
@@ -1522,7 +1535,7 @@ riscv_halt_one_hart(struct target *const target, int const hartid)
 }
 
 int
-riscv_openocd_poll(struct target *restrict const target)
+riscv_openocd_poll(struct target *const target)
 {
 	assert(target);
 	LOG_DEBUG("%s: polling all harts", target->cmd_name);
@@ -1642,7 +1655,7 @@ riscv_openocd_halt(struct target *const target)
 	register_cache_invalidate(target->reg_cache);
 
 	if (riscv_rtos_enabled(target)) {
-		struct riscv_info_t *restrict const r =
+		struct riscv_info_t *const r =
 			riscv_info(target);
 		assert(r);
 
@@ -1664,7 +1677,7 @@ riscv_openocd_halt(struct target *const target)
 }
 
 int
-riscv_step_rtos_hart(struct target *restrict const target)
+riscv_step_rtos_hart(struct target *const target)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 	int hartid = r->current_hartid;
@@ -1705,7 +1718,7 @@ riscv_step_rtos_hart(struct target *restrict const target)
 }
 
 int
-riscv_openocd_resume(struct target *restrict const target,
+riscv_openocd_resume(struct target *const target,
 	int const current,
 	target_addr_t const address,
 	int const handle_breakpoints,
@@ -1774,7 +1787,7 @@ riscv_openocd_resume(struct target *restrict const target,
 }
 
 int
-riscv_openocd_step(struct target *restrict const target,
+riscv_openocd_step(struct target *const target,
 	int const current,
 	target_addr_t const address,
 	int const handle_breakpoints)
@@ -1852,7 +1865,7 @@ COMMAND_HANDLER(riscv_test_compliance)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
-	struct riscv_info_t *restrict const r = riscv_info(target);
+	struct riscv_info_t *const r = riscv_info(target);
 	assert(r);
 
 	if (r->test_compliance) {
@@ -1989,7 +2002,7 @@ COMMAND_HANDLER(riscv_authdata_read)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
-	struct target *restrict const target = get_current_target(CMD_CTX);
+	struct target *const target = get_current_target(CMD_CTX);
 
 	if (!target) {
 		LOG_ERROR("target is NULL!");
@@ -2340,8 +2353,6 @@ struct target_type riscv_target = {
 
 	.commands = riscv_command_handlers
 };
-
-/* RISC-V Interface */
 
 int
 riscv_halt_all_harts(struct target *const target)
@@ -2820,17 +2831,21 @@ static struct reg_arch_type const riscv_reg_arch_type = {
 
 struct csr_info {
 	unsigned number;
-	const char *name;
+	char const *name;
 };
 
-static int cmp_csr_info(const void *p1, const void *p2)
+static int
+cmp_csr_info(void const *p1, void const *p2)
 {
-	return (int) (((struct csr_info *)p1)->number) - (int) (((struct csr_info *)p2)->number);
+	return
+		(int)((struct csr_info *)p1)->number -
+		(int)((struct csr_info *)p2)->number;
 }
 
-int riscv_init_registers(struct target *const restrict target)
+int
+riscv_init_registers(struct target *const target)
 {
-	struct riscv_info_t *const restrict info = riscv_info(target);
+	struct riscv_info_t *const info = riscv_info(target);
 
 	if (target->reg_cache) {
 		if (target->reg_cache->reg_list)

@@ -254,8 +254,6 @@ bool riscv_hart_enabled(struct target *target, int hartid);
 
 int riscv_enumerate_triggers(struct target *target);
 
-int riscv_remove_breakpoint(struct target *target,
-		struct breakpoint *breakpoint);
 int riscv_add_watchpoint(struct target *target, struct watchpoint *watchpoint);
 int riscv_remove_watchpoint(struct target *target,
 		struct watchpoint *watchpoint);
