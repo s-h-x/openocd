@@ -257,7 +257,6 @@ int riscv_execute_debug_buffer(struct target *target);
 void riscv_fill_dmi_nop_u64(struct target *target, uint8_t *buf);
 void riscv_fill_dmi_write_u64(struct target *target, uint8_t *buf, int a, uint64_t d);
 void riscv_fill_dmi_read_u64(struct target *target, uint8_t *buf, int a);
-int riscv_dmi_write_u64_bits(struct target *target);
 
 /** Invalidates the register cache. */
 void riscv_invalidate_register_cache(struct target *target);

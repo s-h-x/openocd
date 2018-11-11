@@ -1,5 +1,4 @@
 ﻿#include "riscv.h"
-
 #include "opcodes.h"
 
 #include "target/algorithm.h"
@@ -213,7 +212,9 @@ range_t *expose_csr;
 /** Same, but for custom registers. */
 range_t *expose_custom;
 
-static uint32_t dtmcontrol_scan(struct target *const target, uint32_t const out)
+static uint32_t
+dtmcontrol_scan(struct target *const target,
+	uint32_t const out)
 {
 	assert(target);
 	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
@@ -293,7 +294,9 @@ static struct riscv_info_t *riscv_info_init(struct target *const target)
 	return r;
 }
 
-static int riscv_init_target(struct command_context *const cmd_ctx, struct target *const target)
+static int
+riscv_init_target(struct command_context *const cmd_ctx,
+	struct target *const target)
 {
 	assert(target);
 	LOG_DEBUG("%s: riscv_init_target()", target->cmd_name);
@@ -2650,13 +2653,6 @@ void riscv_fill_dmi_nop_u64(struct target *const target, uint8_t *const buf)
 	struct riscv_info_t *const r = riscv_info(target);
 	assert(r && r->fill_dmi_nop_u64);
 	r->fill_dmi_nop_u64(target, buf);
-}
-
-int riscv_dmi_write_u64_bits(struct target *const target)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->dmi_write_u64_bits);
-	return r->dmi_write_u64_bits(target);
 }
 
 bool riscv_hart_enabled(struct target *const target, int hartid)
