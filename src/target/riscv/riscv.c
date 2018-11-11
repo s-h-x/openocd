@@ -825,7 +825,9 @@ trigger_from_watchpoint(struct trigger *const trigger,
 	trigger->unique_id = watchpoint->unique_id;
 }
 
-int riscv_add_watchpoint(struct target *const target, struct watchpoint *watchpoint)
+static int
+riscv_add_watchpoint(struct target *const target,
+	struct watchpoint *const watchpoint)
 {
 	struct trigger trigger;
 	trigger_from_watchpoint(&trigger, watchpoint);
@@ -843,8 +845,9 @@ int riscv_add_watchpoint(struct target *const target, struct watchpoint *watchpo
 	return ERROR_OK;
 }
 
-int riscv_remove_watchpoint(struct target *const target,
-		struct watchpoint *watchpoint)
+static int
+riscv_remove_watchpoint(struct target *const target,
+	struct watchpoint *const watchpoint)
 {
 	struct trigger trigger;
 	trigger_from_watchpoint(&trigger, watchpoint);
@@ -867,7 +870,9 @@ int riscv_remove_watchpoint(struct target *const target,
  * The GDB server uses this information to tell GDB what data address has
  * been hit, which enables GDB to print the hit variable along with its old
  * and new value. */
-int riscv_hit_watchpoint(struct target *const target, struct watchpoint **hit_watchpoint)
+static int
+riscv_hit_watchpoint(struct target *const target,
+	struct watchpoint **const hit_watchpoint)
 {
 	assert(target);
 	struct watchpoint *wp = target->watchpoints;
@@ -890,8 +895,7 @@ int riscv_hit_watchpoint(struct target *const target, struct watchpoint **hit_wa
 	uint8_t buffer[length];
 
 	{
-		int const err =
-			target_read_buffer(target, dpc, length, buffer);
+		int const err =target_read_buffer(target, dpc, length, buffer);
 
 		if (ERROR_OK != err) {
 			LOG_ERROR("%s: Failed to read instruction at dpc 0x%" PRIx64,
@@ -1745,7 +1749,7 @@ riscv_openocd_resume(struct target *const target,
 			trigger_temporarily_cleared[i] = watchpoint->set;
 
 			if (watchpoint->set)
-				result = riscv_remove_watchpoint(target, watchpoint);
+				result = target_remove_watchpoint(target, watchpoint);
 
 			watchpoint = watchpoint->next;
 		}
@@ -1753,18 +1757,19 @@ riscv_openocd_resume(struct target *const target,
 		if (ERROR_OK == result)
 			result = riscv_step_rtos_hart(target);
 
-		watchpoint = target->watchpoints;
+		{
+			int i = 0;
+			for (watchpoint = target->watchpoints; watchpoint; watchpoint = watchpoint->next, ++i) {
+				LOG_DEBUG("%s: watchpoint %d: cleared=%d",
+					target->cmd_name,
+					i,
+					trigger_temporarily_cleared[i]);
 
-		for (int i = 0; watchpoint; ++i) {
-			LOG_DEBUG("%s: watchpoint %d: cleared=%d", target->cmd_name, i, trigger_temporarily_cleared[i]);
-			if (trigger_temporarily_cleared[i]) {
-				if (ERROR_OK == result)
-					result = riscv_add_watchpoint(target, watchpoint);
-				else
-					riscv_add_watchpoint(target, watchpoint);
+				if (trigger_temporarily_cleared[i]) {
+					int const err = target_add_watchpoint(target, watchpoint);
+					result = ERROR_OK == result ? err : result;
+				}
 			}
-
-			watchpoint = watchpoint->next;
 		}
 
 		if (ERROR_OK != result)

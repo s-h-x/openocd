@@ -254,11 +254,6 @@ bool riscv_hart_enabled(struct target *target, int hartid);
 
 int riscv_enumerate_triggers(struct target *target);
 
-int riscv_add_watchpoint(struct target *target, struct watchpoint *watchpoint);
-int riscv_remove_watchpoint(struct target *target,
-		struct watchpoint *watchpoint);
-int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_wp_address);
-
 int riscv_init_registers(struct target *target);
 
 void riscv_semihosting_init(struct target *target);

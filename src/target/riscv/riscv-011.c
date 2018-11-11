@@ -270,8 +270,10 @@ store(struct target const *const target,
 }
 /** @} */
 
-static riscv011_info_t *get_info(const struct target *const target)
+static riscv011_info_t *
+get_info(const struct target *const target)
 {
+	assert(target);
 	struct riscv_info_t const *const info = target->arch_info;
 	return info->version_specific;
 }
@@ -1534,26 +1536,25 @@ static void deinit_target(struct target *const target)
 	info->version_specific = NULL;
 }
 
-static int strict_step(struct target *const target, bool announce)
+static int
+strict_step(struct target *const target, bool announce)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv011_info_t *const info = get_info(target);
 
 	LOG_DEBUG("%s: enter", target->cmd_name);
 
-	struct watchpoint *watchpoint = target->watchpoints;
-	while (watchpoint) {
-		riscv_remove_watchpoint(target, watchpoint);
-		watchpoint = watchpoint->next;
+	for (struct watchpoint *watchpoint = target->watchpoints; watchpoint; watchpoint = watchpoint->next) {
+		target_remove_watchpoint(target, watchpoint);
 	}
 
-	int result = full_step(target, announce);
-	if (result != ERROR_OK)
-		return result;
+	{
+		int const err = full_step(target, announce);
+		if (err != ERROR_OK)
+			return err;
+	}
 
-	watchpoint = target->watchpoints;
-	while (watchpoint) {
-		riscv_add_watchpoint(target, watchpoint);
-		watchpoint = watchpoint->next;
+	for (struct watchpoint *watchpoint = target->watchpoints; watchpoint; watchpoint = watchpoint->next) {
+		target_add_watchpoint(target, watchpoint);
 	}
 
 	info->need_strict_step = false;
