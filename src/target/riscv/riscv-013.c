@@ -4,9 +4,8 @@
  * latest draft.
  */
 
-#include "riscv.h"
-#include "opcodes.h"
 #include "program.h"
+#include "opcodes.h"
 #include "batch.h"
 #include "debug_defines.h"
 
@@ -898,9 +897,7 @@ access_register_command(struct target *const target,
 			set_field(command, AC_ACCESS_REGISTER_REGNO, 0xc000 + reg_info->custom_number);
 	}
 
-	command |= flags;
-
-	return command;
+	return command | flags;
 }
 
 static int
