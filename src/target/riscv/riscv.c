@@ -1692,8 +1692,11 @@ riscv_step_rtos_hart(struct target *const target)
 		}
 	}
 
-	if (riscv_set_current_hartid(target, hartid) != ERROR_OK)
-		return ERROR_FAIL;
+	{
+		int const err = riscv_set_current_hartid(target, hartid);
+		if (ERROR_OK != err)
+			return err;
+	}
 
 	LOG_DEBUG("%s: stepping hart %d", target->cmd_name, hartid);
 
@@ -1703,17 +1706,25 @@ riscv_step_rtos_hart(struct target *const target)
 	}
 
 	riscv_invalidate_register_cache(target);
+	assert(r->on_step);
 	r->on_step(target);
 
-	if (r->step_current_hart(target) != ERROR_OK)
-		return ERROR_FAIL;
+	{
+		assert(r->step_current_hart);
+		int const err = r->step_current_hart(target);
+		if (ERROR_OK != err)
+			return err;
+	}
 
 	riscv_invalidate_register_cache(target);
-	r->on_halt(target);
+	{
+		assert(r->on_halt);
+		int const err = r->on_halt(target);
 
-	if (!riscv_is_halted(target)) {
-		LOG_ERROR("%s: Hart was not halted after single step!", target->cmd_name);
-		return ERROR_TARGET_NOT_HALTED;
+		if (!riscv_is_halted(target)) {
+			LOG_ERROR("%s: Hart was not halted after single step!", target->cmd_name);
+			return ERROR_OK != err ? err : ERROR_TARGET_NOT_HALTED;
+		}
 	}
 
 	return ERROR_OK;
