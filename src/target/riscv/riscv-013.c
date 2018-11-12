@@ -3934,14 +3934,14 @@ static void
 riscv013_clear_abstract_error(struct target *const target)
 {
 	/* Wait for busy to go away. */
-	time_t start = time(NULL);
+	time_t const start = time(NULL);
 	uint32_t abstractcs;
 	dmi_read(target, &abstractcs, DMI_ABSTRACTCS);
 
 	while (get_field(abstractcs, DMI_ABSTRACTCS_BUSY)) {
 		dmi_read(target, &abstractcs, DMI_ABSTRACTCS);
 
-		if (time(NULL) - start > riscv_command_timeout_sec) {
+		if (time(NULL) > start + riscv_command_timeout_sec) {
 			LOG_ERROR("%s: abstractcs.busy is not going low after %d seconds "
 					"(abstractcs=0x%x). The target is either really slow or "
 					"broken. You could increase the timeout with riscv "
