@@ -414,7 +414,7 @@ dmi_scan(struct target *const target,
 }
 
 static void
-select_dmi(struct target const *restrict const target)
+select_dmi(struct target const *const target)
 {
 	static uint8_t const ir_dmi[1] = {DTM_DMI};
 	assert(target && target->tap);
@@ -480,8 +480,8 @@ increase_dmi_busy_delay(struct target *const target)
 }
 
 static int
-dmi_op_timeout(struct target *restrict const target,
-	uint32_t *restrict const data_in,
+dmi_op_timeout(struct target *const target,
+	uint32_t *const data_in,
 	int const dmi_op_code,
 	uint32_t const address,
 	uint32_t const data_out,
@@ -691,8 +691,8 @@ dmi_write(struct target *const target,
 }
 
 static int
-dmstatus_read_timeout(struct target *restrict const target,
-	uint32_t *restrict const dmstatus,
+dmstatus_read_timeout(struct target *const target,
+	uint32_t *const dmstatus,
 	bool const authenticated,
 	unsigned const timeout_sec)
 {
