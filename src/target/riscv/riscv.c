@@ -971,7 +971,7 @@ riscv_hit_watchpoint(struct target *const target,
 	 *
 	 * OpenOCD will behave as if this function had never been implemented i.e.
 	 * report the halt to GDB with no address information. */
-	return ERROR_FAIL;
+	return ERROR_TARGET_INVALID;
 }
 
 
@@ -1559,7 +1559,7 @@ riscv_openocd_poll(struct target *const target)
 				break;
 
 			case RPH_ERROR:
-				return ERROR_FAIL;
+				return ERROR_TARGET_FAILURE;
 			}
 		}
 

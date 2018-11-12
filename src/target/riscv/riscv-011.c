@@ -929,7 +929,7 @@ static int cache_check(struct target *const target)
 
 	if (error) {
 		dump_debug_ram(target);
-		return ERROR_FAIL;
+		return ERROR_TARGET_FAILURE;
 	}
 
 	return ERROR_OK;
@@ -993,7 +993,7 @@ static int cache_write(struct target *const target, unsigned address, bool run)
 			case DBUS_STATUS_FAILED:
 				LOG_ERROR("%s: Debug RAM write failed. Hardware error?", target->cmd_name);
 				scans_delete(scans);
-				return ERROR_FAIL;
+				return ERROR_TARGET_FAILURE;
 
 			case DBUS_STATUS_BUSY:
 				++errors;
@@ -1002,7 +1002,7 @@ static int cache_write(struct target *const target, unsigned address, bool run)
 			default:
 				LOG_ERROR("%s: Got invalid bus access status: %d", target->cmd_name, status);
 				scans_delete(scans);
-				return ERROR_FAIL;
+				return ERROR_TARGET_FAILURE;
 		}
 	}
 
@@ -1116,7 +1116,7 @@ static int wait_for_state(struct target *const target, enum target_state state)
 			LOG_ERROR("%s: Timed out waiting for state %d. "
 					"Increase timeout with riscv set_command_timeout_sec.",
 					target->cmd_name, state);
-			return ERROR_FAIL;
+			return ERROR_TARGET_TIMEOUT;
 		}
 	}
 }
@@ -1139,7 +1139,7 @@ static int read_csr(struct target *const target, uint64_t *value, uint32_t csr)
 					exception,
 					gdb_regno_name(GDB_REGNO_CSR0 + csr));
 		*value = ~0;
-		return ERROR_FAIL;
+		return ERROR_TARGET_FAILURE;
 	}
 
 	return ERROR_OK;
@@ -1291,7 +1291,7 @@ static int resume(struct target *const target, int debug_execution, bool step)
 {
 	if (debug_execution) {
 		LOG_ERROR("%s: TODO: debug_execution is true", target->cmd_name);
-		return ERROR_FAIL;
+		return ERROR_TARGET_INVALID;
 	}
 
 	return execute_resume(target, step);
@@ -1345,7 +1345,7 @@ static int register_read(struct target *const target, riscv_reg_t *value, int re
 		cache_set_jump(target, 2);
 	} else {
 		LOG_ERROR("%s: Don't know how to read register %d", target->cmd_name, regnum);
-		return ERROR_FAIL;
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
 	if (cache_write(target, 4, true) != ERROR_OK)
@@ -1356,7 +1356,7 @@ static int register_read(struct target *const target, riscv_reg_t *value, int re
 		LOG_WARNING("%s: Got exception 0x%x when reading %s",
 					target->cmd_name, exception, gdb_regno_name(regnum));
 		*value = ~0;
-		return ERROR_FAIL;
+		return ERROR_TARGET_FAILURE;
 	}
 
 	*value = cache_get(target, SLOT0);
@@ -1420,7 +1420,7 @@ static int register_write(struct target *const target, unsigned number,
 		return ERROR_OK;
 	} else {
 		LOG_ERROR("%s: Don't know how to write register %d", target->cmd_name, number);
-		return ERROR_FAIL;
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
 	cache_set(target, SLOT0, value);
@@ -1432,7 +1432,7 @@ static int register_write(struct target *const target, unsigned number,
 		LOG_WARNING("%s: Got exception 0x%x when writing %s",
 					target->cmd_name, exception,
 					gdb_regno_name(number));
-		return ERROR_FAIL;
+		return ERROR_TARGET_FAILURE;
 	}
 
 	return ERROR_OK;
@@ -1602,12 +1602,12 @@ static int examine(struct target *const target)
 	LOG_DEBUG("%s:  idle=%d", target->cmd_name, get_field(dtmcontrol, DTMCONTROL_IDLE));
 	if (dtmcontrol == 0) {
 		LOG_ERROR("%s: dtmcontrol is 0. Check JTAG connectivity/board power.", target->cmd_name);
-		return ERROR_FAIL;
+		return ERROR_TARGET_FAILURE;
 	}
 	if (get_field(dtmcontrol, DTMCONTROL_VERSION) != 0) {
 		LOG_ERROR("%s: Unsupported DTM version %d. (dtmcontrol=0x%x)", target->cmd_name,
 				get_field(dtmcontrol, DTMCONTROL_VERSION), dtmcontrol);
-		return ERROR_FAIL;
+		return ERROR_TARGET_INVALID;
 	}
 
 	struct riscv_info_t *const r = riscv_info(target);
@@ -1642,7 +1642,7 @@ static int examine(struct target *const target)
 	if (get_field(dminfo, DMINFO_VERSION) != 1) {
 		LOG_ERROR("%s: OpenOCD only supports Debug Module version 1, not %d "
 				"(dminfo=0x%x)", target->cmd_name, get_field(dminfo, DMINFO_VERSION), dminfo);
-		return ERROR_FAIL;
+		return ERROR_TARGET_INVALID;
 	}
 
 	info->dramsize = get_field(dminfo, DMINFO_DRAMSIZE) + 1;
@@ -1650,7 +1650,7 @@ static int examine(struct target *const target)
 	if (get_field(dminfo, DMINFO_AUTHTYPE) != 0) {
 		LOG_ERROR("%s: Authentication required by RISC-V core but not "
 				"supported by OpenOCD. dminfo=0x%x", target->cmd_name, dminfo);
-		return ERROR_FAIL;
+		return ERROR_TARGET_INVALID;
 	}
 
 	/* Pretend this is a 32-bit system until we have found out the true value. */
@@ -1693,7 +1693,7 @@ static int examine(struct target *const target)
 		LOG_ERROR("%s: Failed to discover xlen; word0=0x%x, word1=0x%x, exception=0x%x", target->cmd_name,
 				word0, word1, exception);
 		dump_debug_ram(target);
-		return ERROR_FAIL;
+		return ERROR_TARGET_FAILURE;
 	}
 
 	LOG_DEBUG("%s: Discovered XLEN is %d", target->cmd_name, riscv_xlen(target));
@@ -1706,7 +1706,7 @@ static int examine(struct target *const target)
 			/* Maybe this is an old core that still has $misa at the old
 			 * address. */
 			LOG_ERROR("%s: Failed to read misa at 0x%x.", target->cmd_name, old_csr_misa);
-			return ERROR_FAIL;
+			return ERROR_TARGET_INVALID;
 		}
 	}
 
@@ -2011,7 +2011,7 @@ static int handle_halt(struct target *const target, bool announce)
 	} while (re == RE_AGAIN);
 	if (re != RE_OK) {
 		LOG_ERROR("%s: handle_halt_routine failed", target->cmd_name);
-		return ERROR_FAIL;
+		return ERROR_TARGET_FAILURE;
 	}
 
 	int cause = get_field(info->dcsr, DCSR_CAUSE);
@@ -2198,7 +2198,7 @@ static int read_memory(struct target *const target, target_addr_t address,
 			break;
 		default:
 			LOG_ERROR("%s: Unsupported size: %d", target->cmd_name, size);
-			return ERROR_FAIL;
+			return ERROR_COMMAND_ARGUMENT_INVALID;
 	}
 	cache_set_jump(target, 3);
 	cache_write(target, CACHE_NO_READ, false);
@@ -2253,7 +2253,7 @@ static int read_memory(struct target *const target, target_addr_t address,
 
 				default:
 					LOG_ERROR("%s: Got invalid bus access status: %d", target->cmd_name, status);
-					return ERROR_FAIL;
+					return ERROR_TARGET_FAILURE;
 			}
 
 			uint64_t data = scans_get_u64(scans, j, DBUS_DATA_START,
@@ -2344,7 +2344,7 @@ static int setup_write_memory(struct target *const target, uint32_t size)
 
 		default:
 			LOG_ERROR("%s: Unsupported size: %d", target->cmd_name, size);
-			return ERROR_FAIL;
+			return ERROR_COMMAND_ARGUMENT_INVALID;
 	}
 
 	cache_set32(target, 2, addi(T0, T0, size));
@@ -2440,7 +2440,7 @@ static int write_memory(struct target *const target, target_addr_t address,
 
 				default:
 					LOG_ERROR("%s: Got invalid bus access status: %d", target->cmd_name, status);
-					return ERROR_FAIL;
+					return ERROR_TARGET_FAILURE;
 			}
 
 			int interrupt = scans_get_u32(scans, j, DBUS_DATA_START + 33, 1);

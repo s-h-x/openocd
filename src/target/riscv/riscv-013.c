@@ -524,7 +524,7 @@ dmi_op_timeout(struct target *restrict const target,
 			} else {
 				LOG_ERROR("%s: failed %s at 0x%x, status=%d",
 					target->cmd_name, op_name, address, status);
-				return ERROR_FAIL;
+				return ERROR_TARGET_FAILURE;
 			}
 
 			if (time(NULL) > start + timeout_sec)
