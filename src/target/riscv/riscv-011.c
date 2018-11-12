@@ -57,18 +57,7 @@
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
 
-/* Constants for legacy SiFive hardware breakpoints. */
-enum CSR_BPCONTROL_e {
-	CSR_BPCONTROL_X			= (1<<0),
-	CSR_BPCONTROL_W			= (1<<1),
-	CSR_BPCONTROL_R			= (1<<2),
-	CSR_BPCONTROL_U			= (1<<3),
-	CSR_BPCONTROL_S			= (1<<4),
-	CSR_BPCONTROL_H			= (1<<5),
-	CSR_BPCONTROL_M			= (1<<6),
-	CSR_BPCONTROL_BPMATCH	= (0xf<<7),
-	CSR_BPCONTROL_BPACTION	= (0xff<<11),
-};
+#define CACHE_NO_READ	128
 
 #define DEBUG_ROM_START		0x800
 #define DEBUG_ROM_RESUME	(DEBUG_ROM_START + 4)
@@ -88,6 +77,19 @@ enum CSR_BPCONTROL_e {
 #define DBUS						0x11
 #define DBUS_OP_START				0
 #define DBUS_OP_SIZE				2
+
+/** Constants for legacy SiFive hardware breakpoints. */
+enum CSR_BPCONTROL_e {
+	CSR_BPCONTROL_X			= (1<<0),
+	CSR_BPCONTROL_W			= (1<<1),
+	CSR_BPCONTROL_R			= (1<<2),
+	CSR_BPCONTROL_U			= (1<<3),
+	CSR_BPCONTROL_S			= (1<<4),
+	CSR_BPCONTROL_H			= (1<<5),
+	CSR_BPCONTROL_M			= (1<<6),
+	CSR_BPCONTROL_BPMATCH	= (0xf<<7),
+	CSR_BPCONTROL_BPACTION	= (0xff<<11),
+};
 
 enum dbus_op_e {
 	DBUS_OP_NOP = 0,
@@ -212,6 +214,22 @@ struct bits_s {
 	bool interrupt;
 };
 typedef struct bits_s bits_t;
+
+struct scans_s {
+	/** Number of scans that space is reserved for. */
+	unsigned scan_count;
+
+	/** Size reserved in memory for each scan, in bytes. */
+	unsigned scan_size;
+	unsigned next_scan;
+	uint8_t *in;
+	uint8_t *out;
+	struct scan_field *field;
+	struct target const *target;
+};
+/** @bug doc/manual/style.txt: "This should be reserved for types that should be passed by value"
+*/
+typedef struct scans_s scans_t;
 
 /* Necessary prototypes. */
 static int poll_target(struct target *const target, bool announce);
@@ -565,22 +583,6 @@ static void dbus_write(struct target *const target, uint16_t address, uint64_t v
 	if (status != DBUS_STATUS_SUCCESS)
 		LOG_ERROR("%s: failed to write 0x%" PRIx64 " to 0x%x; status=%d", target->cmd_name, value, address, status);
 }
-
-struct scans_s {
-	/** Number of scans that space is reserved for. */
-	unsigned scan_count;
-
-	/** Size reserved in memory for each scan, in bytes. */
-	unsigned scan_size;
-	unsigned next_scan;
-	uint8_t *in;
-	uint8_t *out;
-	struct scan_field *field;
-	struct target const *target;
-};
-/** @bug doc/manual/style.txt: "This should be reserved for types that should be passed by value"
-*/
-typedef struct scans_s scans_t;
 
 static scans_t *
 scans_new(struct target *const target, unsigned scan_count)
@@ -939,7 +941,6 @@ static int cache_check(struct target *const target)
 
 /** Write cache to the target, and optionally run the program.
  * Then read the value at address into the cache, assuming address < 128. */
-#define CACHE_NO_READ	128
 static int cache_write(struct target *const target, unsigned address, bool run)
 {
 	LOG_DEBUG("%s: enter", target->cmd_name);
@@ -1335,8 +1336,6 @@ static int update_mstatus_actual(struct target *const target)
 	riscv_reg_t mstatus;
 	return get_register(target, &mstatus, 0, GDB_REGNO_MSTATUS);
 }
-
-/* OpenOCD target functions. */
 
 static int register_read(struct target *const target, riscv_reg_t *value, int regnum)
 {
