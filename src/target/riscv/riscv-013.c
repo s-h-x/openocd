@@ -1,4 +1,4 @@
-/** @file
+﻿/** @file
  *
  * Support for RISC-V, debug version 0.13, which is currently (2/4/17) the
  * latest draft.
@@ -513,58 +513,47 @@ dmi_op_timeout(struct target *const target,
 
 	time_t const start = time(NULL);
 
-	{
-		/* This first loop performs the request.  Note that if for some reason this
-		 * stays busy, it is actually due to the previous access. */
-		dmi_status_t status;
-		while (DMI_STATUS_SUCCESS !=
-			(status = dmi_scan(target, NULL, NULL, dmi_op_code, address, data_out, false))) {
-			if (status == DMI_STATUS_BUSY) {
-				increase_dmi_busy_delay(target);
-			} else {
-				LOG_ERROR("%s: failed %s at 0x%x, status=%d",
-					target->cmd_name, op_name, address, status);
-				return ERROR_TARGET_FAILURE;
-			}
+	/* This first loop performs the request.  Note that if for some reason this
+		* stays busy, it is actually due to the previous access. */
+	for (;;) {
+		dmi_status_t const status =
+			dmi_scan(target, NULL, NULL, dmi_op_code, address, data_out, false);
 
-			if (time(NULL) > start + timeout_sec)
-				return ERROR_TARGET_TIMEOUT;
-		}
+		if (DMI_STATUS_SUCCESS == status)
+			break;
 
-		if (DMI_STATUS_SUCCESS != status) {
-			LOG_ERROR("%s: Failed %s at 0x%x; status=%d",
+		if (DMI_STATUS_BUSY != status) {
+			LOG_ERROR("%s: failed %s at 0x%x, status=%d",
 				target->cmd_name, op_name, address, status);
 			return ERROR_TARGET_FAILURE;
 		}
-	}
 
-	/* This second loop ensures the request succeeded, and gets back data.
-	 * Note that NOP can result in a 'busy' result as well, but that would be
-	 * noticed on the next DMI access we do. */
-	dmi_status_t status;
-	while (DMI_STATUS_SUCCESS != (status = dmi_scan(target, &address_in, data_in, DMI_OP_NOP, address, 0, false))) {
-		if (status == DMI_STATUS_BUSY) {
-			increase_dmi_busy_delay(target);
-		} else {
-			LOG_ERROR("%s: failed %s (NOP) at 0x%x, status=%d", target->cmd_name, op_name, address,
-					status);
-			return ERROR_TARGET_FAILURE;
-		}
+		increase_dmi_busy_delay(target);
 
 		if (time(NULL) > start + timeout_sec)
 			return ERROR_TARGET_TIMEOUT;
 	}
 
-	if (DMI_STATUS_SUCCESS != status) {
-		if (status == DMI_STATUS_FAILED || !data_in) {
-			LOG_ERROR("%s: Failed %s (NOP) at 0x%x; status=%d",
+	/* This second loop ensures the request succeeded, and gets back data.
+	 * Note that NOP can result in a 'busy' result as well, but that would be
+	 * noticed on the next DMI access we do. */
+	for (;;) {
+		dmi_status_t const status =
+			dmi_scan(target, &address_in, data_in, DMI_OP_NOP, address, 0, false);
+
+		if (DMI_STATUS_SUCCESS == status)
+			break;
+
+		if (DMI_STATUS_BUSY != status) {
+			LOG_ERROR("%s: failed %s (NOP) at 0x%x, status=%d",
 				target->cmd_name, op_name, address, status);
-		} else {
-			LOG_ERROR("%s: Failed %s (NOP) at 0x%x; value=0x%x, status=%d",
-				target->cmd_name, op_name, address, *data_in, status);
+			return ERROR_TARGET_FAILURE;
 		}
 
-		return ERROR_TARGET_FAILURE;
+		increase_dmi_busy_delay(target);
+
+		if (time(NULL) > start + timeout_sec)
+			return ERROR_TARGET_TIMEOUT;
 	}
 
 	return ERROR_OK;
