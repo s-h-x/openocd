@@ -96,12 +96,12 @@ enum dbus_op_e {
 };
 typedef enum dbus_op_e dbus_op_t;
 
-enum dbus_status_t {
+enum dbus_status_e {
 	DBUS_STATUS_SUCCESS = 0,
 	DBUS_STATUS_FAILED = 2,
 	DBUS_STATUS_BUSY = 3
 };
-typedef enum dbus_status_t dbus_status_t;
+typedef enum dbus_status_e dbus_status_t;
 #define DBUS_DATA_START				2
 #define DBUS_DATA_SIZE				34
 #define DBUS_ADDRESS_START			36
