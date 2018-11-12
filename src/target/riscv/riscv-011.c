@@ -271,10 +271,12 @@ store(struct target const *const target,
 /** @} */
 
 static riscv011_info_t *
+__attribute__((pure))
 get_info(const struct target *const target)
 {
 	assert(target);
 	struct riscv_info_t const *const info = target->arch_info;
+	assert(info);
 	return info->version_specific;
 }
 
