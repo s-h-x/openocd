@@ -951,7 +951,7 @@ riscv_hit_watchpoint(struct target *const target,
 		LOG_DEBUG("%s: %x is not a RV32I load or store",
 				target->cmd_name,
 				instruction);
-		return ERROR_FAIL;
+		return ERROR_TARGET_INVALID;
 	}
 
 	for (; wp; wp = wp->next) {
@@ -1479,8 +1479,6 @@ riscv_checksum_memory(struct target *const target,
 	return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 }
 
-/* OpenOCD Helper Functions */
-
 enum riscv_poll_hart_e {
 	RPH_NO_CHANGE,
 	RPH_DISCOVERED_HALTED,
@@ -1588,7 +1586,7 @@ riscv_openocd_poll(struct target *const target)
 		if (out == RPH_NO_CHANGE || out == RPH_DISCOVERED_RUNNING)
 			return ERROR_OK;
 		else if (out == RPH_ERROR)
-			return ERROR_FAIL;
+			return ERROR_TARGET_FAILURE;
 
 		halted_hart = riscv_current_hartid(target);
 		LOG_DEBUG("%s:  hart %d halted", target->cmd_name, halted_hart);
@@ -1618,7 +1616,7 @@ riscv_openocd_poll(struct target *const target)
 		break;
 
 	case RISCV_HALT_ERROR:
-		return ERROR_FAIL;
+		return ERROR_TARGET_FAILURE;
 
 	/** @bug no default case */
 	}
@@ -1879,7 +1877,7 @@ COMMAND_HANDLER(riscv_test_compliance)
 		LOG_ERROR("%s: This target does not support this command"
 				" (may implement an older version of the spec).",
 				target->cmd_name);
-		return ERROR_FAIL;
+		return ERROR_TARGET_INVALID;
 	}
 }
 
@@ -2035,7 +2033,7 @@ COMMAND_HANDLER(riscv_authdata_read)
 		return ERROR_OK;
 	} else {
 		LOG_ERROR("%s: authdata_read is not implemented for this target.", target->cmd_name);
-		return ERROR_FAIL;
+		return ERROR_TARGET_INVALID;
 	}
 }
 
@@ -2058,7 +2056,7 @@ COMMAND_HANDLER(riscv_authdata_write)
 		return r->authdata_write(target, value);
 	} else {
 		LOG_ERROR("%s: authdata_write is not implemented for this target.", target->cmd_name);
-		return ERROR_FAIL;
+		return ERROR_TARGET_INVALID;
 	}
 }
 
@@ -2099,7 +2097,7 @@ COMMAND_HANDLER(riscv_dmi_read)
 		return ERROR_OK;
 	} else {
 		LOG_ERROR("%s: dmi_read is not implemented for this target.", target->cmd_name);
-		return ERROR_FAIL;
+		return ERROR_TARGET_INVALID;
 	}
 }
 
