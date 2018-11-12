@@ -234,7 +234,6 @@ struct scans_s {
 typedef struct scans_s scans_t;
 
 /* Necessary prototypes. */
-static int poll_target(struct target *const target, bool announce);
 static int riscv011_poll(struct target *const target);
 static int get_register(struct target *const target, riscv_reg_t *value, int hartid,
 		int regid);
@@ -1321,37 +1320,6 @@ static int execute_resume(struct target *const target, bool step)
 	return ERROR_OK;
 }
 
-/* Execute a step, and wait for reentry into Debug Mode. */
-static int full_step(struct target *const target, bool announce)
-{
-	{
-		int const result = execute_resume(target, true);
-		if (result != ERROR_OK)
-			return result;
-	}
-
-	time_t const start = time(NULL);
-
-	for (;;) {
-		int const result = poll_target(target, announce);
-
-		if (result != ERROR_OK)
-			return result;
-
-		if (target->state != TARGET_DEBUG_RUNNING)
-			break;
-
-		if (time(NULL) - start > riscv_command_timeout_sec) {
-			LOG_ERROR("%s: Timed out waiting for step to complete."
-					"Increase timeout with riscv set_command_timeout_sec",
-					target->cmd_name);
-			return ERROR_FAIL;
-		}
-	}
-
-	return ERROR_OK;
-}
-
 static int resume(struct target *const target, int debug_execution, bool step)
 {
 	if (debug_execution) {
@@ -1612,61 +1580,6 @@ static void deinit_target(struct target *const target)
 	struct riscv_info_t *const info = target->arch_info;
 	free(info->version_specific);
 	info->version_specific = NULL;
-}
-
-static int
-strict_step(struct target *const target, bool announce)
-{
-	riscv011_info_t *const info = get_info(target);
-
-	LOG_DEBUG("%s: enter", target->cmd_name);
-
-	for (struct watchpoint *watchpoint = target->watchpoints; watchpoint; watchpoint = watchpoint->next) {
-		target_remove_watchpoint(target, watchpoint);
-	}
-
-	{
-		int const err = full_step(target, announce);
-		if (err != ERROR_OK)
-			return err;
-	}
-
-	for (struct watchpoint *watchpoint = target->watchpoints; watchpoint; watchpoint = watchpoint->next) {
-		target_add_watchpoint(target, watchpoint);
-	}
-
-	info->need_strict_step = false;
-
-	return ERROR_OK;
-}
-
-static int step(struct target *const target, int current, target_addr_t address,
-		int handle_breakpoints)
-{
-	riscv011_info_t *info = get_info(target);
-
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
-
-	if (!current) {
-		if (riscv_xlen(target) > 32) {
-			LOG_WARNING("%s: Asked to resume at 32-bit PC on %d-bit target.",
-						target->cmd_name,
-						riscv_xlen(target));
-		}
-		int result = register_write(target, GDB_REGNO_PC, address);
-		if (result != ERROR_OK)
-			return result;
-	}
-
-	if (info->need_strict_step || handle_breakpoints) {
-		int result = strict_step(target, true);
-		if (result != ERROR_OK)
-			return result;
-	} else {
-		return full_step(target, false);
-	}
-
-	return ERROR_OK;
 }
 
 static int examine(struct target *const target)
@@ -2209,6 +2122,96 @@ static int poll_target(struct target *const target, bool announce)
 		LOG_DEBUG("%s: halting", target->cmd_name);
 	} else if (!bits.haltnot && !bits.interrupt) {
 		target->state = TARGET_RUNNING;
+	}
+
+	return ERROR_OK;
+}
+
+/* Execute a step, and wait for reentry into Debug Mode. */
+static int full_step(struct target *const target, bool announce)
+{
+	{
+		int const result = execute_resume(target, true);
+		if (result != ERROR_OK)
+			return result;
+	}
+
+	time_t const start = time(NULL);
+
+	for (;;) {
+		int const result = poll_target(target, announce);
+
+		if (result != ERROR_OK)
+			return result;
+
+		if (target->state != TARGET_DEBUG_RUNNING)
+			break;
+
+		if (time(NULL) - start > riscv_command_timeout_sec) {
+			LOG_ERROR("%s: Timed out waiting for step to complete."
+					"Increase timeout with riscv set_command_timeout_sec",
+					target->cmd_name);
+			return ERROR_TARGET_TIMEOUT;
+		}
+	}
+
+	return ERROR_OK;
+}
+
+static int
+strict_step(struct target *const target, bool announce)
+{
+	riscv011_info_t *const info = get_info(target);
+
+	LOG_DEBUG("%s: enter", target->cmd_name);
+
+	for (struct watchpoint *watchpoint = target->watchpoints; watchpoint; watchpoint = watchpoint->next) {
+		target_remove_watchpoint(target, watchpoint);
+	}
+
+	{
+		int const err = full_step(target, announce);
+		if (err != ERROR_OK)
+			return err;
+	}
+
+	for (struct watchpoint *watchpoint = target->watchpoints; watchpoint; watchpoint = watchpoint->next) {
+		target_add_watchpoint(target, watchpoint);
+	}
+
+	info->need_strict_step = false;
+
+	return ERROR_OK;
+}
+
+static int
+step(struct target *const target,
+	int const current,
+	target_addr_t const address,
+	int const handle_breakpoints)
+{
+	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+
+	if (!current) {
+		if (riscv_xlen(target) > 32) {
+			LOG_WARNING("%s: Asked to resume at 32-bit PC on %d-bit target.",
+						target->cmd_name,
+						riscv_xlen(target));
+		}
+		int result = register_write(target, GDB_REGNO_PC, address);
+		if (result != ERROR_OK)
+			return result;
+	}
+
+	riscv011_info_t *const info = get_info(target);
+	assert(info);
+
+	if (info->need_strict_step || handle_breakpoints) {
+		int const err = strict_step(target, true);
+		if (ERROR_OK != err)
+			return err;
+	} else {
+		return full_step(target, false);
 	}
 
 	return ERROR_OK;
