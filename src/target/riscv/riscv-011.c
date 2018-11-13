@@ -1565,7 +1565,7 @@ static int init_target(struct command_context *cmd_ctx,
 
 	generic_info->version_specific = calloc(1, sizeof(riscv011_info_t));
 	if (!generic_info->version_specific)
-		return ERROR_FAIL;
+		return ERROR_TARGET_INVALID;
 
 	/* Assume 32-bit until we discover the real value in examine(). */
 	generic_info->xlen[0] = 32;
@@ -2450,7 +2450,7 @@ static int read_memory(struct target *const target, target_addr_t address,
 error:
 	scans_delete(scans);
 	cache_clean(target);
-	return ERROR_FAIL;
+	return ERROR_TARGET_FAILURE;
 }
 
 static int setup_write_memory(struct target *const target, uint32_t size)
@@ -2660,7 +2660,7 @@ write_memory(struct target *const target,
 error:
 	scans_delete(scans);
 	cache_clean(target);
-	return ERROR_FAIL;
+	return ERROR_TARGET_FAILURE;
 }
 
 static int arch_state(struct target *const target)
