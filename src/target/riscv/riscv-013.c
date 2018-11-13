@@ -1673,252 +1673,6 @@ riscv013_halt_current_hart(struct target *const target)
 }
 
 static int
-examine(struct target *const target)
-{
-	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
-
-	uint32_t const dtmcontrol = dtmcontrol_scan(target, 0);
-
-	assert(target);
-	LOG_DEBUG("%s: dtmcontrol=0x%x", target->cmd_name, dtmcontrol);
-	LOG_DEBUG("%s:  dmireset=%d", target->cmd_name, get_field(dtmcontrol, DTM_DTMCS_DMIRESET));
-	LOG_DEBUG("%s:  idle=%d", target->cmd_name, get_field(dtmcontrol, DTM_DTMCS_IDLE));
-	LOG_DEBUG("%s:  dmistat=%d", target->cmd_name, get_field(dtmcontrol, DTM_DTMCS_DMISTAT));
-	LOG_DEBUG("%s:  abits=%d", target->cmd_name, get_field(dtmcontrol, DTM_DTMCS_ABITS));
-	LOG_DEBUG("%s:  version=%d", target->cmd_name, get_field(dtmcontrol, DTM_DTMCS_VERSION));
-
-	if (dtmcontrol == 0) {
-		LOG_ERROR("%s: dtmcontrol is 0. Check JTAG connectivity/board power.", target->cmd_name);
-		return ERROR_TARGET_FAILURE;
-	}
-
-	if (get_field(dtmcontrol, DTM_DTMCS_VERSION) != 1) {
-		LOG_ERROR("%s: Unsupported DTM version %d. (dtmcontrol=0x%x)",
-			target->cmd_name,
-			get_field(dtmcontrol, DTM_DTMCS_VERSION),
-			dtmcontrol);
-		return ERROR_TARGET_INVALID;
-	}
-
-	riscv013_info_t *const info = get_info(target);
-	assert(info);
-	info->abits = get_field(dtmcontrol, DTM_DTMCS_ABITS);
-	info->dtmcontrol_idle = get_field(dtmcontrol, DTM_DTMCS_IDLE);
-
-	uint32_t dmstatus;
-	{
-		int const err = dmstatus_read(target, &dmstatus, false);
-		if (ERROR_OK != err)
-			return err;
-	}
-
-	LOG_DEBUG("%s: dmstatus:  0x%08x", target->cmd_name, dmstatus);
-
-	if (get_field(dmstatus, DMI_DMSTATUS_VERSION) != 2) {
-		LOG_ERROR("%s: OpenOCD only supports Debug Module version 2, not %d "
-				"(dmstatus=0x%x)", target->cmd_name, get_field(dmstatus, DMI_DMSTATUS_VERSION), dmstatus);
-		return ERROR_TARGET_FAILURE;
-	}
-
-	/* Reset the Debug Module. */
-	dm013_info_t *dm = get_dm(target);
-	assert(dm);
-
-	if (!dm->was_reset) {
-		dmi_write(target, DMI_DMCONTROL, 0);
-		dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_DMACTIVE);
-		dm->was_reset = true;
-	}
-
-	dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_HARTSELLO |
-			DMI_DMCONTROL_HARTSELHI | DMI_DMCONTROL_DMACTIVE);
-	uint32_t dmcontrol;
-	{
-		int const err = dmi_read(target, &dmcontrol, DMI_DMCONTROL);
-		if (ERROR_OK != err)
-			return err;
-	}
-
-	if (!get_field(dmcontrol, DMI_DMCONTROL_DMACTIVE)) {
-		LOG_ERROR("%s: Debug Module did not become active. dmcontrol=0x%x", target->cmd_name,
-				dmcontrol);
-		return ERROR_TARGET_FAILURE;
-	}
-
-	uint32_t hartsel =
-		(get_field(dmcontrol, DMI_DMCONTROL_HARTSELHI) <<
-		DMI_DMCONTROL_HARTSELLO_LENGTH) |
-		get_field(dmcontrol, DMI_DMCONTROL_HARTSELLO);
-	info->hartsellen = 0;
-
-	while (hartsel & 1) {
-		++info->hartsellen;
-		hartsel >>= 1;
-	}
-	LOG_DEBUG("%s: hartsellen=%d", target->cmd_name, info->hartsellen);
-
-	uint32_t hartinfo;
-
-	{
-		int const err = dmi_read(target, &hartinfo, DMI_HARTINFO);
-		if (ERROR_OK != err)
-			return err;
-	}
-
-	info->datasize = get_field(hartinfo, DMI_HARTINFO_DATASIZE);
-	info->dataaccess = get_field(hartinfo, DMI_HARTINFO_DATAACCESS);
-	info->dataaddr = get_field(hartinfo, DMI_HARTINFO_DATAADDR);
-
-	if (!get_field(dmstatus, DMI_DMSTATUS_AUTHENTICATED)) {
-		LOG_ERROR("%s: Debugger is not authenticated to target Debug Module. "
-				"(dmstatus=0x%x). Use `riscv authdata_read` and "
-				"`riscv authdata_write` commands to authenticate.", target->cmd_name, dmstatus);
-		/* @todo If we return ERROR_FAIL here, then in a multicore setup the next
-		 * core won't be examined, which means we won't set up the
-		 * authentication commands for them, which means the config script
-		 * needs to be a lot more complex. */
-		return ERROR_OK;
-	}
-
-	{
-		int const err = dmi_read(target, &info->sbcs, DMI_SBCS);
-		if (ERROR_OK != err)
-			return err;
-	}
-
-	/* Check that abstract data registers are accessible. */
-	uint32_t abstractcs;
-
-	{
-		int const err = dmi_read(target, &abstractcs, DMI_ABSTRACTCS);
-		if (ERROR_OK != err)
-			return err;
-	}
-
-	info->datacount = get_field(abstractcs, DMI_ABSTRACTCS_DATACOUNT);
-	info->progbufsize = get_field(abstractcs, DMI_ABSTRACTCS_PROGBUFSIZE);
-
-	LOG_INFO("%s: datacount=%d progbufsize=%d", target->cmd_name, info->datacount, info->progbufsize);
-
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	r->impebreak = get_field(dmstatus, DMI_DMSTATUS_IMPEBREAK);
-
-	if (info->progbufsize + r->impebreak < 2) {
-		LOG_WARNING("%s: We won't be able to execute fence instructions on this "
-				"target. Memory may not always appear consistent. "
-				"(progbufsize=%d, impebreak=%d)", target->cmd_name, info->progbufsize,
-				r->impebreak);
-	}
-
-	/* Before doing anything else we must first enumerate the harts. */
-
-	/* Don't call any riscv_* functions until after we've counted the number of
-	 * cores and initialized registers. */
-	for (int i = 0; i < MIN(RISCV_MAX_HARTS, 1 << info->hartsellen); ++i) {
-		if (!riscv_rtos_enabled(target) && i != target->coreid)
-			continue;
-
-		r->current_hartid = i;
-
-		{
-			int const err = riscv013_select_current_hart(target);
-			if (ERROR_OK != err)
-				return err;
-		}
-
-		uint32_t s;
-
-		{
-			int const err = dmstatus_read(target, &s, true);
-			if (ERROR_OK != err)
-				return err;
-		}
-
-		if (get_field(s, DMI_DMSTATUS_ANYNONEXISTENT))
-			break;
-
-		r->hart_count = i + 1;
-
-		if (get_field(s, DMI_DMSTATUS_ANYHAVERESET))
-			dmi_write(target, DMI_DMCONTROL,
-					set_hartsel(DMI_DMCONTROL_DMACTIVE | DMI_DMCONTROL_ACKHAVERESET, i));
-
-		if (!riscv_is_halted(target)) {
-			int const err = riscv013_halt_current_hart(target);
-			if (ERROR_OK != err) {
-				LOG_ERROR("%s: Fatal: Hart %d failed to halt during examine()", target->cmd_name, i);
-				return err;
-			}
-		}
-
-		/* Without knowing anything else we can at least mess with the
-		 * program buffer. */
-		r->debug_buffer_size[i] = info->progbufsize;
-
-		{
-			int const result = register_read_abstract(target, NULL, GDB_REGNO_S0, 64);
-			/** @todo Support 128 */
-			r->xlen[i] = result == ERROR_OK ? 64 : 32;
-		}
-
-		{
-			int const err = register_read(target, &r->misa[i], GDB_REGNO_MISA);
-			if (ERROR_OK != err) {
-				LOG_ERROR("%s: Fatal: Failed to read MISA from hart %d.", target->cmd_name, i);
-				return err;
-			}
-		}
-
-		{
-			/* Now init registers based on what we discovered. */
-			int const err = riscv_init_registers(target);
-			if (ERROR_OK != err)
-				return err;
-		}
-
-		/* Display this as early as possible to help people who are using
-		 * really slow simulators. */
-		LOG_DEBUG("%s: hart %d: XLEN=%d, misa=0x%" PRIx64,
-			target->cmd_name, i, r->xlen[i], r->misa[i]);
-	}
-
-	LOG_DEBUG("%s: Enumerated %d harts", target->cmd_name, r->hart_count);
-
-	if (r->hart_count == 0) {
-		LOG_ERROR("%s: No harts found!", target->cmd_name);
-		return ERROR_TARGET_INVALID;
-	}
-
-	/* Resumes all the harts, so the debugger can later pause them. */
-	/** @todo Only do this if the harts were halted to start with. */
-	riscv_resume_all_harts(target);
-	target->state = TARGET_RUNNING;
-
-	target_set_examined(target);
-
-	if (target->rtos)
-		riscv_update_threads(target->rtos);
-
-	/* Some regression suites rely on seeing 'Examined RISC-V core' to know
-	 * when they can connect with gdb/telnet.
-	 * We will need to update those suites if we want to change that text. */
-	LOG_INFO("%s: Examined RISC-V core; found %d harts", target->cmd_name,
-			riscv_count_harts(target));
-
-	for (int i = 0; i < riscv_count_harts(target); ++i) {
-		if (riscv_hart_enabled(target, i)) {
-			LOG_INFO("%s: hart %d: XLEN=%d, misa=0x%" PRIx64, target->cmd_name, i, r->xlen[i],
-					r->misa[i]);
-		} else {
-			LOG_INFO("%s: hart %d: currently disabled", target->cmd_name, i);
-		}
-	}
-
-	return ERROR_OK;
-}
-
-static int
 riscv013_authdata_read(struct target *const target, uint32_t *value)
 {
 	{
@@ -1928,52 +1682,6 @@ riscv013_authdata_read(struct target *const target, uint32_t *value)
 	}
 
 	return dmi_read(target, value, DMI_AUTHDATA);
-}
-
-static int
-riscv013_authdata_write(struct target *const target,
-	uint32_t value)
-{
-	uint32_t before;
-
-	{
-		int const err = wait_for_authbusy(target, &before);
-		if (ERROR_OK != err)
-			return err;
-	}
-
-	{
-		int const err = dmi_write(target, DMI_AUTHDATA, value);
-		if (ERROR_OK != err)
-			return err;
-	}
-
-	uint32_t after;
-
-	{
-		int const err = wait_for_authbusy(target, &after);
-		if (ERROR_OK != err)
-			return err;
-	}
-
-	if (!get_field(before, DMI_DMSTATUS_AUTHENTICATED) &&
-		get_field(after, DMI_DMSTATUS_AUTHENTICATED)
-		) {
-		LOG_INFO("%s: authdata_write resulted in successful authentication", target->cmd_name);
-		int result = ERROR_OK;
-		dm013_info_t *dm = get_dm(target);
-		target_list_t *entry;
-
-		list_for_each_entry(entry, &dm->target_list, list) {
-			int const err = examine(entry->target);
-			if (ERROR_OK == result && ERROR_OK != err)
-				result = err;
-		}
-
-		return result;
-	}
-
-	return ERROR_OK;
 }
 
 static int assert_reset(struct target *const target)
@@ -4389,6 +4097,297 @@ riscv013_test_compliance(struct target *const target)
 static int
 arch_state(struct target *const target)
 {
+	return ERROR_OK;
+}
+
+static int
+examine(struct target *const target)
+{
+	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
+
+	uint32_t const dtmcontrol = dtmcontrol_scan(target, 0);
+
+	assert(target);
+	LOG_DEBUG("%s: dtmcontrol=0x%x", target->cmd_name, dtmcontrol);
+	LOG_DEBUG("%s:  dmireset=%d", target->cmd_name, get_field(dtmcontrol, DTM_DTMCS_DMIRESET));
+	LOG_DEBUG("%s:  idle=%d", target->cmd_name, get_field(dtmcontrol, DTM_DTMCS_IDLE));
+	LOG_DEBUG("%s:  dmistat=%d", target->cmd_name, get_field(dtmcontrol, DTM_DTMCS_DMISTAT));
+	LOG_DEBUG("%s:  abits=%d", target->cmd_name, get_field(dtmcontrol, DTM_DTMCS_ABITS));
+	LOG_DEBUG("%s:  version=%d", target->cmd_name, get_field(dtmcontrol, DTM_DTMCS_VERSION));
+
+	if (dtmcontrol == 0) {
+		LOG_ERROR("%s: dtmcontrol is 0. Check JTAG connectivity/board power.", target->cmd_name);
+		return ERROR_TARGET_FAILURE;
+	}
+
+	if (get_field(dtmcontrol, DTM_DTMCS_VERSION) != 1) {
+		LOG_ERROR("%s: Unsupported DTM version %d. (dtmcontrol=0x%x)",
+			target->cmd_name,
+			get_field(dtmcontrol, DTM_DTMCS_VERSION),
+			dtmcontrol);
+		return ERROR_TARGET_INVALID;
+	}
+
+	riscv013_info_t *const info = get_info(target);
+	assert(info);
+	info->abits = get_field(dtmcontrol, DTM_DTMCS_ABITS);
+	info->dtmcontrol_idle = get_field(dtmcontrol, DTM_DTMCS_IDLE);
+
+	uint32_t dmstatus;
+	{
+		int const err = dmstatus_read(target, &dmstatus, false);
+		if (ERROR_OK != err)
+			return err;
+	}
+
+	LOG_DEBUG("%s: dmstatus:  0x%08x", target->cmd_name, dmstatus);
+
+	if (get_field(dmstatus, DMI_DMSTATUS_VERSION) != 2) {
+		LOG_ERROR("%s: OpenOCD only supports Debug Module version 2, not %d "
+				"(dmstatus=0x%x)", target->cmd_name, get_field(dmstatus, DMI_DMSTATUS_VERSION), dmstatus);
+		return ERROR_TARGET_FAILURE;
+	}
+
+	/* Reset the Debug Module. */
+	dm013_info_t *dm = get_dm(target);
+	assert(dm);
+
+	if (!dm->was_reset) {
+		dmi_write(target, DMI_DMCONTROL, 0);
+		dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_DMACTIVE);
+		dm->was_reset = true;
+	}
+
+	dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_HARTSELLO |
+			DMI_DMCONTROL_HARTSELHI | DMI_DMCONTROL_DMACTIVE);
+	uint32_t dmcontrol;
+	{
+		int const err = dmi_read(target, &dmcontrol, DMI_DMCONTROL);
+		if (ERROR_OK != err)
+			return err;
+	}
+
+	if (!get_field(dmcontrol, DMI_DMCONTROL_DMACTIVE)) {
+		LOG_ERROR("%s: Debug Module did not become active. dmcontrol=0x%x", target->cmd_name,
+				dmcontrol);
+		return ERROR_TARGET_FAILURE;
+	}
+
+	uint32_t hartsel =
+		(get_field(dmcontrol, DMI_DMCONTROL_HARTSELHI) <<
+		DMI_DMCONTROL_HARTSELLO_LENGTH) |
+		get_field(dmcontrol, DMI_DMCONTROL_HARTSELLO);
+	info->hartsellen = 0;
+
+	while (hartsel & 1) {
+		++info->hartsellen;
+		hartsel >>= 1;
+	}
+	LOG_DEBUG("%s: hartsellen=%d", target->cmd_name, info->hartsellen);
+
+	uint32_t hartinfo;
+
+	{
+		int const err = dmi_read(target, &hartinfo, DMI_HARTINFO);
+		if (ERROR_OK != err)
+			return err;
+	}
+
+	info->datasize = get_field(hartinfo, DMI_HARTINFO_DATASIZE);
+	info->dataaccess = get_field(hartinfo, DMI_HARTINFO_DATAACCESS);
+	info->dataaddr = get_field(hartinfo, DMI_HARTINFO_DATAADDR);
+
+	if (!get_field(dmstatus, DMI_DMSTATUS_AUTHENTICATED)) {
+		LOG_ERROR("%s: Debugger is not authenticated to target Debug Module. "
+				"(dmstatus=0x%x). Use `riscv authdata_read` and "
+				"`riscv authdata_write` commands to authenticate.", target->cmd_name, dmstatus);
+		/* @todo If we return ERROR_FAIL here, then in a multicore setup the next
+		 * core won't be examined, which means we won't set up the
+		 * authentication commands for them, which means the config script
+		 * needs to be a lot more complex. */
+		return ERROR_OK;
+	}
+
+	{
+		int const err = dmi_read(target, &info->sbcs, DMI_SBCS);
+		if (ERROR_OK != err)
+			return err;
+	}
+
+	/* Check that abstract data registers are accessible. */
+	uint32_t abstractcs;
+
+	{
+		int const err = dmi_read(target, &abstractcs, DMI_ABSTRACTCS);
+		if (ERROR_OK != err)
+			return err;
+	}
+
+	info->datacount = get_field(abstractcs, DMI_ABSTRACTCS_DATACOUNT);
+	info->progbufsize = get_field(abstractcs, DMI_ABSTRACTCS_PROGBUFSIZE);
+
+	LOG_INFO("%s: datacount=%d progbufsize=%d", target->cmd_name, info->datacount, info->progbufsize);
+
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r);
+	r->impebreak = get_field(dmstatus, DMI_DMSTATUS_IMPEBREAK);
+
+	if (info->progbufsize + r->impebreak < 2) {
+		LOG_WARNING("%s: We won't be able to execute fence instructions on this "
+				"target. Memory may not always appear consistent. "
+				"(progbufsize=%d, impebreak=%d)", target->cmd_name, info->progbufsize,
+				r->impebreak);
+	}
+
+	/* Before doing anything else we must first enumerate the harts. */
+
+	/* Don't call any riscv_* functions until after we've counted the number of
+	 * cores and initialized registers. */
+	for (int i = 0; i < MIN(RISCV_MAX_HARTS, 1 << info->hartsellen); ++i) {
+		if (!riscv_rtos_enabled(target) && i != target->coreid)
+			continue;
+
+		r->current_hartid = i;
+
+		{
+			int const err = riscv013_select_current_hart(target);
+			if (ERROR_OK != err)
+				return err;
+		}
+
+		uint32_t s;
+
+		{
+			int const err = dmstatus_read(target, &s, true);
+			if (ERROR_OK != err)
+				return err;
+		}
+
+		if (get_field(s, DMI_DMSTATUS_ANYNONEXISTENT))
+			break;
+
+		r->hart_count = i + 1;
+
+		if (get_field(s, DMI_DMSTATUS_ANYHAVERESET))
+			dmi_write(target, DMI_DMCONTROL,
+					set_hartsel(DMI_DMCONTROL_DMACTIVE | DMI_DMCONTROL_ACKHAVERESET, i));
+
+		bool halted = riscv_is_halted(target);
+		if (!halted) {
+			int const err = riscv013_halt_current_hart(target);
+			if (ERROR_OK != err) {
+				LOG_ERROR("%s: Fatal: Hart %d failed to halt during examine()", target->cmd_name, i);
+				return err;
+			}
+		}
+
+		/* Without knowing anything else we can at least mess with the
+		 * program buffer. */
+		r->debug_buffer_size[i] = info->progbufsize;
+
+		{
+			int const result = register_read_abstract(target, NULL, GDB_REGNO_S0, 64);
+			/** @todo Support 128 */
+			r->xlen[i] = result == ERROR_OK ? 64 : 32;
+		}
+
+		{
+			int const err = register_read(target, &r->misa[i], GDB_REGNO_MISA);
+			if (ERROR_OK != err) {
+				LOG_ERROR("%s: Fatal: Failed to read MISA from hart %d.", target->cmd_name, i);
+				return err;
+			}
+		}
+
+		{
+			/* Now init registers based on what we discovered. */
+			int const err = riscv_init_registers(target);
+			if (ERROR_OK != err)
+				return err;
+		}
+
+		/* Display this as early as possible to help people who are using
+		 * really slow simulators. */
+		LOG_DEBUG("%s: hart %d: XLEN=%d, misa=0x%" PRIx64,
+			target->cmd_name, i, r->xlen[i], r->misa[i]);
+
+		if (!halted)
+			riscv013_resume_current_hart(target);
+	}
+
+	LOG_DEBUG("%s: Enumerated %d harts", target->cmd_name, r->hart_count);
+
+	if (r->hart_count == 0) {
+		LOG_ERROR("%s: No harts found!", target->cmd_name);
+		return ERROR_TARGET_INVALID;
+	}
+
+	target_set_examined(target);
+
+	if (target->rtos)
+		riscv_update_threads(target->rtos);
+
+	/* Some regression suites rely on seeing 'Examined RISC-V core' to know
+	 * when they can connect with gdb/telnet.
+	 * We will need to update those suites if we want to change that text. */
+	LOG_INFO("%s: Examined RISC-V core; found %d harts", target->cmd_name,
+			riscv_count_harts(target));
+
+	for (int i = 0; i < riscv_count_harts(target); ++i) {
+		if (riscv_hart_enabled(target, i)) {
+			LOG_INFO("%s: hart %d: XLEN=%d, misa=0x%" PRIx64, target->cmd_name, i, r->xlen[i],
+					r->misa[i]);
+		} else {
+			LOG_INFO("%s: hart %d: currently disabled", target->cmd_name, i);
+		}
+	}
+
+	return ERROR_OK;
+}
+
+static int
+riscv013_authdata_write(struct target *const target,
+	uint32_t value)
+{
+	uint32_t before;
+
+	{
+		int const err = wait_for_authbusy(target, &before);
+		if (ERROR_OK != err)
+			return err;
+	}
+
+	{
+		int const err = dmi_write(target, DMI_AUTHDATA, value);
+		if (ERROR_OK != err)
+			return err;
+	}
+
+	uint32_t after;
+
+	{
+		int const err = wait_for_authbusy(target, &after);
+		if (ERROR_OK != err)
+			return err;
+	}
+
+	if (!get_field(before, DMI_DMSTATUS_AUTHENTICATED) &&
+		get_field(after, DMI_DMSTATUS_AUTHENTICATED)
+		) {
+		LOG_INFO("%s: authdata_write resulted in successful authentication", target->cmd_name);
+		int result = ERROR_OK;
+		dm013_info_t *dm = get_dm(target);
+		target_list_t *entry;
+
+		list_for_each_entry(entry, &dm->target_list, list) {
+			int const err = examine(entry->target);
+			if (ERROR_OK == result && ERROR_OK != err)
+				result = err;
+		}
+
+		return result;
+	}
+
 	return ERROR_OK;
 }
 
