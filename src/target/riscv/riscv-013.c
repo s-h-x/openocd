@@ -581,7 +581,9 @@ static void read_memory_sba_simple(struct target *const target, target_addr_t ad
  * global list of DMs. If it's not in there, then create one and initialize it
  * to 0.
  */
-static dm013_info_t *get_dm(struct target *const target)
+static dm013_info_t *
+__attribute__((warn_unused_result))
+get_dm(struct target *const target)
 {
 	riscv013_info_t *const info = get_info(target);
 	assert(info);
@@ -618,7 +620,7 @@ static dm013_info_t *get_dm(struct target *const target)
 			return dm;
 	}
 
-	target_entry = calloc(1, sizeof(*target_entry));
+	target_entry = calloc(1, sizeof *target_entry);
 	assert(target_entry);
 	target_entry->target = target;
 	list_add(&target_entry->list, &dm->target_list);
@@ -639,8 +641,6 @@ static uint32_t set_hartsel(uint32_t initial, uint32_t index)
 
 	return initial;
 }
-
-/* Utility functions. */
 
 static int
 dmi_op(struct target *const target,
