@@ -16,168 +16,52 @@
  * currently in IR. They should set IR to dbus explicitly.
  */
 
-/*
- * Code structure
- *
- * At the bottom of the stack are the OpenOCD JTAG functions:
- *      jtag_add_[id]r_scan
- *      jtag_execute_query
- *      jtag_add_runtest
- *
- * There are a few functions to just instantly shift a register and get its
- * value:
- *      dtmcontrol_scan
- *      idcode_scan
- *      dbus_scan
- *
- * Because doing one scan and waiting for the result is slow, most functions
- * batch up a bunch of dbus writes and then execute them all at once. They use
- * the scans "class" for this:
- *      scans_new
- *      scans_delete
- *      scans_execute
- *      scans_add_...
- * Usually you new(), call a bunch of add functions, then execute() and look
- * at the results by calling scans_get...()
- *
- * Optimized functions will directly use the scans class above, but slightly
- * lazier code will use the cache functions that in turn use the scans
- * functions:
- *      cache_get...
- *      cache_set...
- *      cache_write
- * cache_set... update a local structure, which is then synced to the target
- * with cache_write(). Only Debug RAM words that are actually changed are sent
- * to the target. Afterwards use cache_get... to read results.
+/** @file
+	Code structure
+	
+	At the bottom of the stack are the OpenOCD JTAG functions:
+		- jtag_add_[id]r_scan
+		- jtag_execute_query
+		- jtag_add_runtest
+	
+	There are a few functions to just instantly shift a register and get its
+	value:
+		- dtmcontrol_scan
+		- idcode_scan
+		- dbus_scan
+	
+	Because doing one scan and waiting for the result is slow, most functions
+	batch up a bunch of dbus writes and then execute them all at once. They use
+	the scans "class" for this:
+		- scans_new
+		- scans_delete
+		- scans_execute
+		- scans_add_...
+
+	Usually you new(), call a bunch of add functions, then execute() and look
+	at the results by calling scans_get...()
+	
+	Optimized functions will directly use the scans class above, but slightly
+	lazier code will use the cache functions that in turn use the scans
+	functions:
+		- cache_get...
+		- cache_set...
+		- cache_write
+
+	cache_set... update a local structure, which is then synced to the target
+	with cache_write(). Only Debug RAM words that are actually changed are sent
+	to the target. Afterwards use cache_get... to read results.
  */
 
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
 
-/** Constants for legacy SiFive hardware breakpoints. */
-enum CSR_BPCONTROL_e {
-	CSR_BPCONTROL_X			= (1<<0),
-	CSR_BPCONTROL_W			= (1<<1),
-	CSR_BPCONTROL_R			= (1<<2),
-	CSR_BPCONTROL_U			= (1<<3),
-	CSR_BPCONTROL_S			= (1<<4),
-	CSR_BPCONTROL_H			= (1<<5),
-	CSR_BPCONTROL_M			= (1<<6),
-	CSR_BPCONTROL_BPMATCH	= (0xf<<7),
-	CSR_BPCONTROL_BPACTION	= (0xff<<11),
-};
-
-#define DEBUG_ROM_START         0x800
-#define DEBUG_ROM_RESUME	(DEBUG_ROM_START + 4)
-#define DEBUG_ROM_EXCEPTION	(DEBUG_ROM_START + 8)
-#define DEBUG_RAM_START         0x400
-
-#define SETHALTNOT				0x10c
-
 /** JTAG registers. */
 /** @{ */
-
 #define DTMCONTROL					0x10
-#define DTMCONTROL_DBUS_RESET		(1<<16)
-#define DTMCONTROL_IDLE				(7<<10)
-#define DTMCONTROL_ADDRBITS			(0xf<<4)
 #define DTMCONTROL_VERSION			(0xf)
-
 #define DBUS						0x11
-#define DBUS_OP_START				0
-#define DBUS_OP_SIZE				2
-
-enum dbus_op_e {
-	DBUS_OP_NOP = 0,
-	DBUS_OP_READ = 1,
-	DBUS_OP_WRITE = 2
-};
-typedef enum dbus_op_e dbus_op_t;
-
-enum dbus_status_e {
-	DBUS_STATUS_SUCCESS = 0,
-	DBUS_STATUS_FAILED = 2,
-	DBUS_STATUS_BUSY = 3
-};
-typedef enum dbus_status_e dbus_status_t;
-
-#define DBUS_DATA_START				2
-#define DBUS_DATA_SIZE				34
-#define DBUS_ADDRESS_START			36
 /** @} */
-
-enum riscv_error_e {
-	RE_OK,
-	RE_FAIL,
-	RE_AGAIN
-};
-typedef enum riscv_error_e riscv_error_t;
-
-enum slot_e {
-	SLOT0,
-	SLOT1,
-	SLOT_LAST,
-};
-enum slot_e slot_t;
-
-/** Debug Bus registers. */
-/** @{ */
-
-#define DMCONTROL				0x10
-#define DMCONTROL_INTERRUPT		(UINT64_C(1) << 33)
-#define DMCONTROL_HALTNOT		(UINT64_C(1) << 32)
-#define DMCONTROL_BUSERROR		(7 << 19)
-#define DMCONTROL_SERIAL		(3 << 16)
-#define DMCONTROL_AUTOINCREMENT	(1 << 15)
-#define DMCONTROL_ACCESS		(7 << 12)
-#define DMCONTROL_HARTID		(0x3ff << 2)
-#define DMCONTROL_NDRESET		(1 << 1)
-#define DMCONTROL_FULLRESET		1
-
-#define DMINFO					0x11
-#define DMINFO_ABUSSIZE			(0x7fU << 25)
-#define DMINFO_SERIALCOUNT		(0xf << 21)
-#define DMINFO_ACCESS128		(1 << 20)
-#define DMINFO_ACCESS64			(1 << 19)
-#define DMINFO_ACCESS32			(1 << 18)
-#define DMINFO_ACCESS16			(1 << 17)
-#define DMINFO_ACCESS8			(1 << 16)
-#define DMINFO_DRAMSIZE			(0x3f << 10)
-#define DMINFO_AUTHENTICATED	(1 << 5)
-#define DMINFO_AUTHBUSY			(1<<4)
-#define DMINFO_AUTHTYPE			(3<<2)
-#define DMINFO_VERSION			3
-/** @} */
-
-/** Info about the core being debugged. */
-/** @{ */
-
-#define DBUS_ADDRESS_UNKNOWN	0xffff
-
-#define MAX_HWBPS			16
-#define DRAM_CACHE_SIZE		16
-/** @} */
-
-static uint8_t const ir_dtmcontrol[1] = {DTMCONTROL};
-
-struct scan_field select_dtmcontrol = {
-	.in_value = NULL,
-	.out_value = ir_dtmcontrol
-};
-
-static uint8_t const ir_dbus[1] = {DBUS};
-
-struct scan_field select_dbus = {
-	.in_value = NULL,
-	.out_value = ir_dbus
-};
-
-static uint8_t const ir_idcode[1] = {0x1};
-
-struct scan_field select_idcode = {
-	.in_value = NULL,
-	.out_value = ir_idcode
-};
 
 struct trigger {
 	uint64_t address;
@@ -188,6 +72,31 @@ struct trigger {
 	int unique_id;
 };
 
+struct range_s {
+	uint16_t low;
+	uint16_t high;
+};
+typedef struct range_s range_t;
+
+static uint8_t const ir_dtmcontrol[1] = {DTMCONTROL};
+static uint8_t const ir_dbus[1] = {DBUS};
+static uint8_t const ir_idcode[1] = {0x1};
+struct scan_field select_dtmcontrol = {
+	.in_value = NULL,
+	.out_value = ir_dtmcontrol
+};
+
+struct scan_field select_dbus = {
+	.in_value = NULL,
+	.out_value = ir_dbus
+};
+
+struct scan_field select_idcode = {
+	.in_value = NULL,
+	.out_value = ir_idcode
+};
+
+
 /** Wall-clock timeout for a command/access. Settable via RISC-V Target commands.*/
 int riscv_command_timeout_sec = DEFAULT_COMMAND_TIMEOUT_SEC;
 
@@ -196,12 +105,6 @@ int riscv_reset_timeout_sec = DEFAULT_RESET_TIMEOUT_SEC;
 
 /** @bug uninitialized */
 bool riscv_prefer_sba;
-
-struct range_s {
-	uint16_t low;
-	uint16_t high;
-};
-typedef struct range_s range_t;
 
 /** In addition to the ones in the standard spec, we'll also expose additional
  * CSRs in this list.
@@ -230,23 +133,29 @@ dtmcontrol_scan(struct target *const target,
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
 	/* Always return to dbus. */
+	/** @bug Non robust strategy */
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
 	{
-		int const retval = jtag_execute_queue();
+		int const err = jtag_execute_queue();
 
-		if (ERROR_OK != retval) {
-			LOG_ERROR("%s: failed jtag scan: %d", target->cmd_name, retval);
-			return retval;
+		if (ERROR_OK != err) {
+			LOG_ERROR("%s: failed jtag scan: %d",
+				target->cmd_name, err);
+			/** @todo Propagate error code */
+			/** @bug Invalid result on error */
+			return 0xBADC0DE;
 		}
 	}
 
 	uint32_t const in = buf_get_u32(field.in_value, 0, 32);
-	LOG_DEBUG("%s: DTMCONTROL: 0x%x -> 0x%x", target->cmd_name, out, in);
+	LOG_DEBUG("%s: DTMCONTROL: 0x%" PRIx32 " -> 0x%" PRIx32,
+		target->cmd_name, out, in);
 	return in;
 }
 
 static struct target_type const *
+__attribute__((warn_unused_result))
 get_target_type(struct target *const target)
 {
 	assert(target);
@@ -272,12 +181,15 @@ get_target_type(struct target *const target)
 
 /** Initializes the shared RISC-V structure. */
 static struct riscv_info_t *
+__attribute__((warn_unused_result))
 riscv_info_init(struct target *const target)
 {
 	struct riscv_info_t *const r = calloc(1, sizeof(struct riscv_info_t));
 
-	if (!r)
+	if (!r) {
+		LOG_ERROR("%s: Fatal: No free memory!", target->cmd_name);
 		return NULL;
+	}
 
 	memset(r, 0, sizeof(*r));
 	r->dtm_version = 1;
@@ -286,11 +198,11 @@ riscv_info_init(struct target *const target)
 
 	memset(r->trigger_unique_id, 0xff, sizeof(r->trigger_unique_id));
 
-	for (size_t h = 0; h < RISCV_MAX_HARTS; ++h) {
-		r->xlen[h] = -1;
+	for (size_t hart = 0; hart < RISCV_MAX_HARTS; ++hart) {
+		r->xlen[hart] = -1;
 
 		for (size_t e = 0; e < RISCV_MAX_REGISTERS; ++e)
-			r->valid_saved_registers[h][e] = false;
+			r->valid_saved_registers[hart][e] = false;
 	}
 
 	return r;
@@ -351,7 +263,7 @@ static int
 oldriscv_halt(struct target *const target)
 {
 	struct target_type const *const tt = get_target_type(target);
-	assert(tt);
+	assert(tt && tt->halt);
 	return tt->halt(target);
 }
 
@@ -359,11 +271,10 @@ static void
 trigger_from_breakpoint(struct trigger *const trigger,
 		struct breakpoint const *const breakpoint)
 {
-	assert(trigger);
-	assert(breakpoint);
+	assert(trigger && breakpoint);
 	trigger->address = breakpoint->address;
 	trigger->length = breakpoint->length;
-	trigger->mask = ~0LL;
+	trigger->mask = ~UINT64_C(0);
 	trigger->read = false;
 	trigger->write = false;
 	trigger->execute = true;
@@ -377,8 +288,6 @@ maybe_add_trigger_t1(struct target *const target,
 	struct trigger *const trigger,
 	uint64_t tdata1)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-
 	static uint32_t const bpcontrol_x = 1 << 0;
 	static uint32_t const bpcontrol_w = 1 << 1;
 	static uint32_t const bpcontrol_r = 1 << 2;
@@ -395,6 +304,8 @@ maybe_add_trigger_t1(struct target *const target,
 	}
 
 	assert(trigger);
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r);
 	tdata1 = set_field(tdata1, bpcontrol_r, trigger->read);
 	tdata1 = set_field(tdata1, bpcontrol_w, trigger->write);
 	tdata1 = set_field(tdata1, bpcontrol_x, trigger->execute);
@@ -443,15 +354,14 @@ maybe_add_trigger_t2(struct target *const target,
 	struct riscv_info_t *const r = riscv_info(target);
 
 	/* tselect is already set */
-	if (tdata1 & (MCONTROL_EXECUTE | MCONTROL_STORE | MCONTROL_LOAD)) {
+	if (0 != (tdata1 & (MCONTROL_EXECUTE | MCONTROL_STORE | MCONTROL_LOAD))) {
 		/* Trigger is already in use, presumably by user code. */
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
 	/* address/data match trigger */
 	tdata1 |= MCONTROL_DMODE(riscv_xlen(target));
-	tdata1 = set_field(tdata1, MCONTROL_ACTION,
-			MCONTROL_ACTION_DEBUG_MODE);
+	tdata1 = set_field(tdata1, MCONTROL_ACTION, MCONTROL_ACTION_DEBUG_MODE);
 	tdata1 = set_field(tdata1, MCONTROL_MATCH, MCONTROL_MATCH_EQUAL);
 	tdata1 |= MCONTROL_M;
 
@@ -474,14 +384,18 @@ maybe_add_trigger_t2(struct target *const target,
 	if (trigger->write)
 		tdata1 |= MCONTROL_STORE;
 
-	riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, tdata1);
+	{
+		int const err = riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, tdata1);
+		if (ERROR_OK != err)
+			return err;
+	}
 
 	uint64_t tdata1_rb;
 	{
-		int const result = riscv_get_register_on_hart(target, &tdata1_rb, hartid, GDB_REGNO_TDATA1);
-
-		if (ERROR_OK != result)
-			return result;
+		int const err =
+			riscv_get_register_on_hart(target, &tdata1_rb, hartid, GDB_REGNO_TDATA1);
+		if (ERROR_OK != err)
+			return err;
 	}
 
 	LOG_DEBUG("%s: tdata1=0x%" PRIx64, target->cmd_name, tdata1_rb);
@@ -495,10 +409,7 @@ maybe_add_trigger_t2(struct target *const target,
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
-	int const ret =
-		riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA2, trigger->address);
-
-	return ret;
+	return riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA2, trigger->address);
 }
 
 static int
@@ -509,15 +420,15 @@ add_trigger(struct target *const target,
 
 	{
 		int const err = riscv_enumerate_triggers(target);
-
 		if (ERROR_OK != err)
 			return err;
 	}
 
-	/* In RTOS mode, we need to set the same trigger in the same slot on every hart,
-	to keep up the illusion that each hart is a thread running on the same core. */
-
-	/* Otherwise, we just set the trigger on the one hart this target deals with. */
+	/** @details In RTOS mode, we need to set the same trigger in the same slot on every hart,
+	to keep up the illusion that each hart is a thread running on the same core. 
+	
+	Otherwise, we just set the trigger on the one hart this target deals with.
+	*/
 
 	riscv_reg_t tselect[RISCV_MAX_HARTS];
 
@@ -1241,8 +1152,10 @@ riscv_get_gdb_reg_list(struct target *const target,
 	}
 
 	*reg_list = calloc(*reg_list_size, sizeof(struct reg *));
-	if (!*reg_list)
+	if (!*reg_list) {
+		LOG_ERROR("%s: Fatal: No free memory!", target->cmd_name);
 		return ERROR_FAIL;
+	}
 
 	for (int i = 0; i < *reg_list_size; ++i) {
 		assert(!target->reg_cache->reg_list[i].valid || target->reg_cache->reg_list[i].size > 0);
@@ -1980,6 +1893,7 @@ parse_ranges(range_t **const ranges,
 				free(*ranges);
 			/** @todo check for free */
 			*ranges = calloc(range + 2, sizeof(range_t));
+			assert(*ranges);
 		} else {
 			(*ranges)[range].low = 1;
 			(*ranges)[range].high = 0;
@@ -2415,20 +2329,18 @@ riscv_resume_one_hart(struct target *const target, int const hartid)
 int
 riscv_resume_all_harts(struct target *const target)
 {
-	for (int i = 0; i < riscv_count_harts(target); ++i) {
-		if (!riscv_hart_enabled(target, i))
-			continue;
-
-		{
+	int const number_of_harts = riscv_count_harts(target);
+	int result = ERROR_OK;
+	for (int i = 0; i < number_of_harts; ++i)
+		if (riscv_hart_enabled(target, i)) {
 			int const err = riscv_resume_one_hart(target, i);
 
-			if (ERROR_OK != err)
-				return err;
+			if (ERROR_OK == result && ERROR_OK != err)
+				result = err;
 		}
-	}
 
 	riscv_invalidate_register_cache(target);
-	return ERROR_OK;
+	return result;
 }
 
 bool
@@ -2436,7 +2348,6 @@ riscv_supports_extension(struct target *const target,
 	int const hartid,
 	char const letter)
 {
-	struct riscv_info_t *const r = riscv_info(target);
 	unsigned num;
 
 	if (letter >= 'a' && letter <= 'z')
@@ -2446,6 +2357,8 @@ riscv_supports_extension(struct target *const target,
 	else
 		return false;
 
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r && r->misa && hartid < RISCV_MAX_HARTS && num <= ('Z' - 'A'));
 	return r->misa[hartid] & (1 << num);
 }
 
@@ -2455,19 +2368,23 @@ riscv_xlen(const struct target *const target)
 	return riscv_xlen_of_hart(target, riscv_current_hartid(target));
 }
 
-int riscv_xlen_of_hart(const struct target *const target, int const hartid)
+int
+riscv_xlen_of_hart(const struct target *const target, int const hartid)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 	assert(r->xlen[hartid] != -1);
 	return r->xlen[hartid];
 }
 
-bool riscv_rtos_enabled(const struct target *const target)
+bool
+riscv_rtos_enabled(const struct target *const target)
 {
 	return target->rtos != NULL;
 }
 
-int riscv_set_current_hartid(struct target *const target, int const hartid)
+/** @return error code */
+int
+riscv_set_current_hartid(struct target *const target, int const hartid)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 	assert(r);
@@ -2490,40 +2407,47 @@ int riscv_set_current_hartid(struct target *const target, int const hartid)
 	/* This might get called during init, in which case we shouldn't be
 	 * setting up the register cache. */
 	if (!target_was_examined(target))
+		/** @todo ERROR_TARGET_NOT_EXAMINED */
 		return ERROR_OK;
 
 	riscv_invalidate_register_cache(target);
 	return ERROR_OK;
 }
 
-void riscv_invalidate_register_cache(struct target *const target)
+void
+riscv_invalidate_register_cache(struct target *const target)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-
 	register_cache_invalidate(target->reg_cache);
+
 	for (size_t i = 0; i < target->reg_cache->num_regs; ++i) {
 		struct reg *reg = &target->reg_cache->reg_list[i];
+		assert(reg);
 		reg->valid = false;
 	}
 
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r);
 	r->registers_initialized = true;
 }
 
-int riscv_current_hartid(const struct target *const target)
+int
+riscv_current_hartid(const struct target *const target)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 	assert(r);
 	return r->current_hartid;
 }
 
-void riscv_set_all_rtos_harts(struct target *const target)
+void
+riscv_set_all_rtos_harts(struct target *const target)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 	assert(r);
 	r->rtos_hartid = -1;
 }
 
-void riscv_set_rtos_hartid(struct target *const target, int const hartid)
+void
+riscv_set_rtos_hartid(struct target *const target, int const hartid)
 {
 	LOG_DEBUG("%s: setting RTOS hartid %d", target->cmd_name, hartid);
 	struct riscv_info_t *const r = riscv_info(target);
@@ -2531,28 +2455,44 @@ void riscv_set_rtos_hartid(struct target *const target, int const hartid)
 	r->rtos_hartid = hartid;
 }
 
-int riscv_count_harts(struct target *const target)
+/**
+	@return number of HARTs
+	@bag return signed value
+*/
+int
+riscv_count_harts(struct target *const target)
 {
+	/** @bug riscv_count_harts 1 for NULL and bad target */
 	if (target == NULL)
 		return 1;
 
 	struct riscv_info_t *const r = riscv_info(target);
 
-	if (r == NULL)
+	if (!r)
 		return 1;
 
 	return r->hart_count;
 }
 
-bool riscv_has_register(struct target *const target, int hartid, int regid)
+/**
+	@deprecated Always return true
+	@return error code
+*/
+bool
+riscv_has_register(struct target *const target,
+	int const hartid,
+	int const regid)
 {
-	return 1;
+	return true;
 }
 
 /**
- * This function is called when the debug user wants to change the value of a
- * register. The new value may be cached, and may not be written until the hart
- * is resumed. */
+	This function is called when the debug user wants to change the value of a
+	register. The new value may be cached, and may not be written until the hart
+	is resumed.
+
+	@return error code
+ */
 int
 riscv_set_register(struct target *const target,
 	enum gdb_regno const r,
@@ -2561,18 +2501,22 @@ riscv_set_register(struct target *const target,
 	return riscv_set_register_on_hart(target, riscv_current_hartid(target), r, v);
 }
 
+/**	@return error code */
 int
 riscv_set_register_on_hart(struct target *const target,
-	int hartid,
+	int const hartid,
 	enum gdb_regno const regid,
 	uint64_t const value)
 {
-	struct riscv_info_t *const r = riscv_info(target);
 	LOG_DEBUG("%s: [%d] %s <- %" PRIx64, target->cmd_name, hartid, gdb_regno_name(regid), value);
+	struct riscv_info_t *const r = riscv_info(target);
 	assert(r && r->set_register);
 	return r->set_register(target, hartid, regid, value);
 }
 
+/**	@note Syntactical sugar
+	@return error code
+*/
 int
 riscv_get_register(struct target *const target,
 	riscv_reg_t *const value,
@@ -2582,6 +2526,10 @@ riscv_get_register(struct target *const target,
 		riscv_get_register_on_hart(target, value, riscv_current_hartid(target), r);
 }
 
+/**
+	@param[out] value
+	@return error code
+*/
 int
 riscv_get_register_on_hart(struct target *const target,
 	riscv_reg_t *const value,
@@ -2590,17 +2538,17 @@ riscv_get_register_on_hart(struct target *const target,
 {
 	struct riscv_info_t *const r = riscv_info(target);
 
-	if (hartid != riscv_current_hartid(target))
+	if (riscv_current_hartid(target) != hartid)
 		riscv_invalidate_register_cache(target);
 
-	int const result = r->get_register(target, value, hartid, regid);
+	int const err = r->get_register(target, value, hartid, regid);
 
-	if (hartid != riscv_current_hartid(target))
+	if (riscv_current_hartid(target) != hartid)
 		riscv_invalidate_register_cache(target);
 
 	assert(value);
 	LOG_DEBUG("%s: [%d] %s: %" PRIx64, target->cmd_name, hartid, gdb_regno_name(regid), *value);
-	return result;
+	return err;
 }
 
 bool
@@ -2869,6 +2817,7 @@ riscv_init_registers(struct target *const target)
 	}
 
 	target->reg_cache = calloc(1, sizeof(*target->reg_cache));
+	assert(target->reg_cache);
 	target->reg_cache->name = "RISC-V Registers";
 	target->reg_cache->num_regs = GDB_REGNO_COUNT;
 
@@ -2889,14 +2838,15 @@ riscv_init_registers(struct target *const target)
 
 	target->reg_cache->reg_list =
 		calloc(target->reg_cache->num_regs, sizeof(struct reg));
+	assert(target->reg_cache->reg_list);
 
-	const unsigned max_reg_name_len = 12;
+	static unsigned const max_reg_name_len = 12;
 	if (info->reg_names)
 		free(info->reg_names);
 
 	info->reg_names =
 		calloc(target->reg_cache->num_regs, max_reg_name_len);
-
+	assert(info->reg_names);
 	char *reg_name = info->reg_names;
 
 	static struct reg_feature const feature_cpu = {
@@ -2942,7 +2892,8 @@ riscv_init_registers(struct target *const target)
 	unsigned custom_range_index = 0;
 	int custom_within_range = 0;
 
-	riscv_reg_info_t *shared_reg_info = calloc(1, sizeof(riscv_reg_info_t));
+	riscv_reg_info_t *const shared_reg_info = calloc(1, sizeof(riscv_reg_info_t));
+	assert(shared_reg_info);
 	shared_reg_info->target = target;
 
 	/* When gdb requests register N, gdb_get_register_packet() assumes that this

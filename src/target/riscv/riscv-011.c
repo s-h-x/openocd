@@ -1697,8 +1697,8 @@ static int examine(struct target *const target)
 
 	LOG_DEBUG("%s: Discovered XLEN is %d", target->cmd_name, riscv_xlen(target));
 
-	if (read_csr(target, &r->misa[0], CSR_MISA) != ERROR_OK) {
-		const unsigned old_csr_misa = 0xf10;
+	if (ERROR_OK != read_csr(target, &r->misa[0], CSR_MISA)) {
+		static unsigned const old_csr_misa = 0xf10;
 		LOG_WARNING("%s: Failed to read misa at 0x%x; trying 0x%x.", target->cmd_name, CSR_MISA,
 				old_csr_misa);
 		{
@@ -1738,8 +1738,8 @@ static int examine(struct target *const target)
 	for (size_t i = 0; i < 32; ++i)
 		reg_cache_set(target, i, -1);
 
-	LOG_INFO("%s: Examined RISCV core; XLEN=%d, misa=0x%" PRIx64, target->cmd_name,
-			riscv_xlen(target), r->misa[0]);
+	LOG_INFO("%s: Examined RISCV core; XLEN=%d, misa=0x%" PRIx64,
+		target->cmd_name, riscv_xlen(target), r->misa[0]);
 
 	return ERROR_OK;
 }

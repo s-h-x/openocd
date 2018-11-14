@@ -18,9 +18,9 @@
 #define DEFAULT_COMMAND_TIMEOUT_SEC		2
 #define DEFAULT_RESET_TIMEOUT_SEC		30
 
+#if 0
 struct riscv_program;
-extern struct target_type const riscv011_target;
-extern struct target_type const riscv013_target;
+#endif
 
 /*
  * Definitions shared by code supporting all RISC-V versions.
@@ -44,6 +44,7 @@ struct riscv_reg_info_s {
 };
 typedef struct riscv_reg_info_s riscv_reg_info_t;
 
+/** @todo replace struct of arrays by array of struct */
 struct riscv_info_t {
 	unsigned dtm_version;
 
@@ -62,19 +63,23 @@ struct riscv_info_t {
 	 * every function than an actual */
 	int current_hartid;
 
-	/* Enough space to store all the registers we might need to save. */
-	/* FIXME: This should probably be a bunch of register caches. */
-	uint64_t saved_registers[RISCV_MAX_HARTS][RISCV_MAX_REGISTERS];
-	bool valid_saved_registers[RISCV_MAX_HARTS][RISCV_MAX_REGISTERS];
+	/** OpenOCD's register cache points into here.
 
-	/* OpenOCD's register cache points into here. This is not per-hart because
-	 * we just invalidate the entire cache when we change which hart is
-	 * selected. */
+	This is not per-hart because we just invalidate
+	the entire cache when we change which hart is selected.
+	*/
 	uint64_t reg_cache_values[RISCV_MAX_REGISTERS];
 
 	/* Single buffer that contains all register names, instead of calling
-	 * malloc for each register. Needs to be freed when reg_list is freed. */
+	* malloc for each register. Needs to be freed when reg_list is freed. */
 	char *reg_names;
+
+	/* Enough space to store all the registers we might need to save. */
+	/** @todo FIXME: This should probably be a bunch of register caches. */
+#if 0
+	uint64_t saved_registers[RISCV_MAX_HARTS][RISCV_MAX_REGISTERS];
+#endif
+	bool valid_saved_registers[RISCV_MAX_HARTS][RISCV_MAX_REGISTERS];
 
 	/* It's possible that each core has a different supported ISA set. */
 	int xlen[RISCV_MAX_HARTS];
@@ -83,14 +88,14 @@ struct riscv_info_t {
 	/* The number of triggers per hart. */
 	unsigned trigger_count[RISCV_MAX_HARTS];
 
-	/* For each physical trigger, contains -1 if the hwbp is available, or the
-	 * unique_id of the breakpoint/watchpoint that is using it.
-	 * Note that in RTOS mode the triggers are the same across all harts the
-	 * target controls, while otherwise only a single hart is controlled. */
-	int trigger_unique_id[RISCV_MAX_HWBPS];
-
 	/* The number of entries in the debug buffer. */
 	int debug_buffer_size[RISCV_MAX_HARTS];
+
+	/* For each physical trigger, contains -1 if the hwbp is available, or the
+	* unique_id of the breakpoint/watchpoint that is using it.
+	* Note that in RTOS mode the triggers are the same across all harts the
+	* target controls, while otherwise only a single hart is controlled. */
+	int trigger_unique_id[RISCV_MAX_HWBPS];
 
 	/* This avoids invalidating the register cache too often. */
 	bool registers_initialized;
@@ -107,6 +112,7 @@ struct riscv_info_t {
 	int (*set_register)(struct target *, int hartid, int regid,
 			uint64_t value);
 	int (*select_current_hart)(struct target *);
+	/** @todo check error code */
 	bool (*is_halted)(struct target *target);
 	int (*halt_current_hart)(struct target *);
 	int (*resume_current_hart)(struct target *target);
@@ -114,14 +120,18 @@ struct riscv_info_t {
 	int (*on_halt)(struct target *target);
 	int (*on_resume)(struct target *target);
 	int (*on_step)(struct target *target);
+	/** @todo check error code */
 	enum riscv_halt_reason (*halt_reason)(struct target *target);
 	int (*write_debug_buffer)(struct target *target, unsigned index,
 			riscv_insn_t d);
 	riscv_insn_t (*read_debug_buffer)(struct target *target, unsigned index);
 	int (*execute_debug_buffer)(struct target *target);
 	int (*dmi_write_u64_bits)(struct target *target);
+	/** @todo check error code */
 	void (*fill_dmi_write_u64)(struct target *target, uint8_t *buf, int a, uint64_t d);
+	/** @todo check error code */
 	void (*fill_dmi_read_u64)(struct target *target, uint8_t *buf, int a);
+	/** @todo check error code */
 	void (*fill_dmi_nop_u64)(struct target *target, uint8_t *buf);
 
 	int (*authdata_read)(struct target *target, uint32_t *value);
@@ -136,24 +146,31 @@ struct riscv_info_t {
 	int (*test_compliance)(struct target *target);
 };
 
-/* Wall-clock timeout for a command/access. Settable via RISC-V Target commands.*/
+extern struct target_type const riscv011_target;
+extern struct target_type const riscv013_target;
+
+/**	Wall-clock timeout for a command/access.
+
+	Settable via RISC-V Target commands.
+*/
 extern int riscv_command_timeout_sec;
 
-/* Wall-clock timeout after reset. Settable via RISC-V Target commands.*/
+/**	Wall-clock timeout after reset.
+
+	Settable via RISC-V Target commands.
+*/
 extern int riscv_reset_timeout_sec;
-
 extern bool riscv_prefer_sba;
-
-/* Everything needs the RISC-V specific info structure, so here's a nice macro
- * that provides that. */
-static inline struct riscv_info_t *riscv_info(struct target const *const target)
-{
-	return target->arch_info;
-}
-
 extern struct scan_field select_dtmcontrol;
 extern struct scan_field select_dbus;
 extern struct scan_field select_idcode;
+
+/** Everything needs the RISC-V specific info structure, so here's a nice macro that provides that. */
+static inline struct riscv_info_t *
+riscv_info(struct target const *const target)
+{
+	return target->arch_info;
+}
 
 /** OpenOCD Interface */
 /** @{*/
