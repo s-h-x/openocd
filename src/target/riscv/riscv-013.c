@@ -228,7 +228,7 @@ typedef struct scratch_mem_s scratch_mem_t;
 
 static LIST_HEAD(dm_list);
 
-/** @bug Dangerous! Buffer overrun is possible! Output length */
+/** @bug Dangerous! Buffer overrun is possible! Check size of output buffer! */
 static void
 decode_dmi(char *restrict text,
 	unsigned const address,
@@ -1121,10 +1121,10 @@ scratch_reserve(struct target *const target,
 
 	if (1 == info->dataaccess) {
 		/* Sign extend dataaddr. */
-		scratch->hart_address = info->dataaddr;
+		scratch->hart_address = (riscv_addr_t)(int64_t)(info->dataaddr);
 
-		if (info->dataaddr & (1<<11))
-			scratch->hart_address |= 0xfffffffffffff000ULL;
+		if (0 != (info->dataaddr & (1u << 11)))
+			scratch->hart_address |= UINT64_C(0xFFFFFFFFFFFFF000);
 
 		/* Align. */
 		scratch->hart_address = (scratch->hart_address + alignment - 1) & ~(alignment - 1);
@@ -1148,7 +1148,7 @@ scratch_reserve(struct target *const target,
 	unsigned const program_size = (program->instruction_count + 1) * 4;
 	scratch->hart_address = (info->progbuf_address + program_size + alignment - 1) & ~(alignment - 1);
 
-	if ((size_bytes + scratch->hart_address - info->progbuf_address + 3) / 4 >= info->progbufsize) {
+	if (info->progbufsize <= (size_bytes + scratch->hart_address - info->progbuf_address + 3) / sizeof(uint32_t)) {
 		scratch->memory_space = SPACE_DMI_PROGBUF;
 		scratch->debug_address = (scratch->hart_address - info->progbuf_address) / 4;
 		return ERROR_OK;
@@ -4364,8 +4364,8 @@ examine(struct target *const target)
 	if (info->progbufsize + r->impebreak < 2) {
 		LOG_WARNING("%s: We won't be able to execute fence instructions on this "
 				"target. Memory may not always appear consistent. "
-				"(progbufsize=%d, impebreak=%d)", target->cmd_name, info->progbufsize,
-				r->impebreak);
+				"(progbufsize=%d, impebreak=%d)",
+			target->cmd_name, info->progbufsize, r->impebreak);
 	}
 
 	/* Before doing anything else we must first enumerate the harts. */
@@ -4412,16 +4412,16 @@ examine(struct target *const target)
 
 		/* Without knowing anything else we can at least mess with the
 		 * program buffer. */
-		r->debug_buffer_size[i] = info->progbufsize;
+		r->harts[i].debug_buffer_size = info->progbufsize;
 
 		{
 			int const result = register_read_abstract(target, NULL, GDB_REGNO_S0, 64);
 			/** @todo Support 128 */
-			r->xlen[i] = result == ERROR_OK ? 64 : 32;
+			r->harts[i].xlen = result == ERROR_OK ? 64 : 32;
 		}
 
 		{
-			int const err = register_read(target, &r->misa[i], GDB_REGNO_MISA);
+			int const err = register_read(target, &r->harts[i].misa, GDB_REGNO_MISA);
 			if (ERROR_OK != err) {
 				LOG_ERROR("%s: Fatal: Failed to read MISA from hart %d.", target->cmd_name, i);
 				return err;
@@ -4438,13 +4438,14 @@ examine(struct target *const target)
 		/* Display this as early as possible to help people who are using
 		 * really slow simulators. */
 		LOG_DEBUG("%s: hart %d: XLEN=%d, misa=0x%" PRIx64,
-			target->cmd_name, i, r->xlen[i], r->misa[i]);
+			target->cmd_name, i, r->harts[i].xlen, r->harts[i].misa);
 
 		if (!halted)
 			riscv013_resume_current_hart(target);
 	}
 
-	LOG_DEBUG("%s: Enumerated %d harts", target->cmd_name, r->hart_count);
+	LOG_DEBUG("%s: Enumerated %d harts",
+		target->cmd_name, r->hart_count);
 
 	if (r->hart_count == 0) {
 		LOG_ERROR("%s: No harts found!", target->cmd_name);
@@ -4464,10 +4465,11 @@ examine(struct target *const target)
 
 	for (int i = 0; i < riscv_count_harts(target); ++i) {
 		if (riscv_hart_enabled(target, i)) {
-			LOG_INFO("%s: hart %d: XLEN=%d, misa=0x%" PRIx64, target->cmd_name, i, r->xlen[i],
-					r->misa[i]);
+			LOG_INFO("%s: hart %d: XLEN=%d, misa=0x%" PRIx64,
+				target->cmd_name, i, r->harts[i].xlen, r->harts[i].misa);
 		} else {
-			LOG_INFO("%s: hart %d: currently disabled", target->cmd_name, i);
+			LOG_INFO("%s: hart %d: currently disabled",
+				target->cmd_name, i);
 		}
 	}
 

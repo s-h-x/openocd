@@ -199,10 +199,10 @@ riscv_info_init(struct target *const target)
 	memset(r->trigger_unique_id, 0xff, sizeof(r->trigger_unique_id));
 
 	for (size_t hart = 0; hart < RISCV_MAX_HARTS; ++hart) {
-		r->xlen[hart] = -1;
+		r->harts[hart].xlen = -1;
 
 		for (size_t e = 0; e < RISCV_MAX_REGISTERS; ++e)
-			r->valid_saved_registers[hart][e] = false;
+			r->harts[hart].registers[e].valid = false;
 	}
 
 	return r;
@@ -309,12 +309,9 @@ maybe_add_trigger_t1(struct target *const target,
 	tdata1 = set_field(tdata1, bpcontrol_r, trigger->read);
 	tdata1 = set_field(tdata1, bpcontrol_w, trigger->write);
 	tdata1 = set_field(tdata1, bpcontrol_x, trigger->execute);
-	tdata1 = set_field(tdata1, bpcontrol_u,
-			!!(r->misa[hartid] & (1 << ('U' - 'A'))));
-	tdata1 = set_field(tdata1, bpcontrol_s,
-			!!(r->misa[hartid] & (1 << ('S' - 'A'))));
-	tdata1 = set_field(tdata1, bpcontrol_h,
-			!!(r->misa[hartid] & (1 << ('H' - 'A'))));
+	tdata1 = set_field(tdata1, bpcontrol_u, !!(r->harts[hartid].misa & (1 << ('U' - 'A'))));
+	tdata1 = set_field(tdata1, bpcontrol_s, !!(r->harts[hartid].misa & (1 << ('S' - 'A'))));
+	tdata1 = set_field(tdata1, bpcontrol_h, !!(r->harts[hartid].misa & (1 << ('H' - 'A'))));
 	tdata1 |= bpcontrol_m;
 	tdata1 = set_field(tdata1, bpcontrol_bpmatch, 0); /* exact match */
 	tdata1 = set_field(tdata1, bpcontrol_bpaction, 0); /* cause bp exception */
@@ -365,13 +362,13 @@ maybe_add_trigger_t2(struct target *const target,
 	tdata1 = set_field(tdata1, MCONTROL_MATCH, MCONTROL_MATCH_EQUAL);
 	tdata1 |= MCONTROL_M;
 
-	if (r->misa[hartid] & (1 << ('H' - 'A')))
+	if (r->harts[hartid].misa & (1 << ('H' - 'A')))
 		tdata1 |= MCONTROL_H;
 
-	if (r->misa[hartid] & (1 << ('S' - 'A')))
+	if (r->harts[hartid].misa & (1 << ('S' - 'A')))
 		tdata1 |= MCONTROL_S;
 
-	if (r->misa[hartid] & (1 << ('U' - 'A')))
+	if (r->harts[hartid].misa & (1 << ('U' - 'A')))
 		tdata1 |= MCONTROL_U;
 
 	assert(trigger);
@@ -454,7 +451,7 @@ add_trigger(struct target *const target,
 
 	unsigned i;
 
-	for (i = 0; i < r->trigger_count[first_hart]; ++i) {
+	for (i = 0; i < r->harts[first_hart].trigger_count; ++i) {
 		if (r->trigger_unique_id[i] != -1)
 			continue;
 
@@ -524,7 +521,7 @@ add_trigger(struct target *const target,
 			return err;
 	}
 
-	if (i >= r->trigger_count[first_hart]) {
+	if (i >= r->harts[first_hart].trigger_count) {
 		LOG_ERROR("%s: Couldn't find an available hardware trigger.", target->cmd_name);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
@@ -637,12 +634,12 @@ remove_trigger(struct target *const target,
 	assert(trigger);
 	unsigned i;
 
-	for (i = 0; i < r->trigger_count[first_hart]; ++i) {
+	for (i = 0; i < r->harts[first_hart].trigger_count; ++i) {
 		if (r->trigger_unique_id[i] == trigger->unique_id)
 			break;
 	}
 
-	if (i >= r->trigger_count[first_hart]) {
+	if (i >= r->harts[first_hart].trigger_count) {
 		LOG_ERROR("%s: Couldn't find the hardware resources used by hardware trigger.",
 			target->cmd_name);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
@@ -1275,7 +1272,8 @@ riscv_run_algorithm(struct target *const target, int const num_mem_params,
 	{
 		uint64_t const ie_mask = MSTATUS_MIE | MSTATUS_HIE | MSTATUS_SIE | MSTATUS_UIE;
 		uint8_t mstatus_bytes[8];
-		buf_set_u64(mstatus_bytes, 0, info->xlen[0], set_field(current_mstatus, ie_mask, 0));
+		/** @todo check hart number */
+		buf_set_u64(mstatus_bytes, 0, info->harts[0].xlen, set_field(current_mstatus, ie_mask, 0));
 		assert(reg_mstatus->type->set);
 		reg_mstatus->type->set(reg_mstatus, mstatus_bytes);
 	}
@@ -1344,13 +1342,14 @@ riscv_run_algorithm(struct target *const target, int const num_mem_params,
 		/** @todo restore interrupts on error too */
 		LOG_DEBUG("%s: Restoring Interrupts", target->cmd_name);
 		uint8_t mstatus_bytes[8];
-		buf_set_u64(mstatus_bytes, 0, info->xlen[0], current_mstatus);
+		buf_set_u64(mstatus_bytes, 0, info->harts[0].xlen, current_mstatus);
 		reg_mstatus->type->set(reg_mstatus, mstatus_bytes);
 	}
 
 	/* Restore registers */
 	uint8_t buf[8];
-	buf_set_u64(buf, 0, info->xlen[0], saved_pc);
+	/** @todo check hart number */
+	buf_set_u64(buf, 0, info->harts[0].xlen, saved_pc);
 
 	{
 		int const err = reg_pc->type->set(reg_pc, buf);
@@ -1363,7 +1362,7 @@ riscv_run_algorithm(struct target *const target, int const num_mem_params,
 		LOG_DEBUG("%s: restore %s", target->cmd_name, reg_params[i].reg_name);
 		struct reg *r = register_get_by_name(target->reg_cache, reg_params[i].reg_name, 0);
 		assert(r && r->number < DIM(saved_regs));
-		buf_set_u64(buf, 0, info->xlen[0], saved_regs[r->number]);
+		buf_set_u64(buf, 0, info->harts[0].xlen, saved_regs[r->number]);
 
 		{
 			assert(r->type && r->type->set);
@@ -2358,33 +2357,35 @@ riscv_supports_extension(struct target *const target,
 		return false;
 
 	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->misa && hartid < RISCV_MAX_HARTS && num <= ('Z' - 'A'));
-	return r->misa[hartid] & (1 << num);
+	assert(r && hartid < RISCV_MAX_HARTS && num <= ('Z' - 'A'));
+	return r->harts[hartid].misa & (1 << num);
 }
 
 int
-riscv_xlen(const struct target *const target)
+riscv_xlen(struct target const *const target)
 {
 	return riscv_xlen_of_hart(target, riscv_current_hartid(target));
 }
 
 int
-riscv_xlen_of_hart(const struct target *const target, int const hartid)
+riscv_xlen_of_hart(struct target const *const target,
+	int const hartid)
 {
 	struct riscv_info_t *const r = riscv_info(target);
-	assert(r->xlen[hartid] != -1);
-	return r->xlen[hartid];
+	assert(r->harts[hartid].xlen != -1);
+	return r->harts[hartid].xlen;
 }
 
 bool
 riscv_rtos_enabled(const struct target *const target)
 {
-	return target->rtos != NULL;
+	return !!target->rtos;
 }
 
 /** @return error code */
 int
-riscv_set_current_hartid(struct target *const target, int const hartid)
+riscv_set_current_hartid(struct target *const target,
+	int const hartid)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 	assert(r);
@@ -2584,14 +2585,16 @@ bool riscv_hart_enabled(struct target *const target, int hartid)
 	return hartid == target->coreid;
 }
 
-/**
- * Count triggers, and initialize trigger_count for each hart.
- * trigger_count is initialized even if this function fails to discover
- * something.
- * Disable any hardware triggers that have dmode set. We can't have set them
- * ourselves. Maybe they're left over from some killed debug session.
- * */
-int riscv_enumerate_triggers(struct target *const target)
+/**	@brief Count triggers, and initialize trigger_count for each hart.
+
+	trigger_count is initialized even if this function fails to discover something.
+
+	Disable any hardware triggers that have @c dmode set.
+	We can't have set them ourselves.
+	Maybe they're left over from some killed debug session.
+*/
+int
+riscv_enumerate_triggers(struct target *const target)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 	assert(r);
@@ -2615,7 +2618,7 @@ int riscv_enumerate_triggers(struct target *const target)
 		}
 
 		for (unsigned t = 0; t < RISCV_MAX_TRIGGERS; ++t) {
-			r->trigger_count[hartid] = t;
+			r->harts[hartid].trigger_count = t;
 
 			riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, t);
 			uint64_t tselect_rb;
@@ -2673,7 +2676,8 @@ int riscv_enumerate_triggers(struct target *const target)
 		if (ERROR_OK != err)
 			return err;
 
-		LOG_INFO("%s: [%d] Found %d triggers", target->cmd_name, hartid, r->trigger_count[hartid]);
+		LOG_INFO("%s: [%d] Found %d triggers",
+			target->cmd_name, hartid, r->harts[hartid].trigger_count);
 	}
 
 	return ERROR_OK;

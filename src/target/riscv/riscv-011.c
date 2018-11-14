@@ -1567,8 +1567,8 @@ static int init_target(struct command_context *cmd_ctx,
 	if (!generic_info->version_specific)
 		return ERROR_TARGET_INVALID;
 
-	/* Assume 32-bit until we discover the real value in examine(). */
-	generic_info->xlen[0] = 32;
+	/** @todo Now we assume 32-bit until we discover the real value in examine(). */
+	generic_info->harts[0].xlen = 32;
 	riscv_init_registers(target);
 
 	return ERROR_OK;
@@ -1648,8 +1648,8 @@ static int examine(struct target *const target)
 		return ERROR_TARGET_INVALID;
 	}
 
-	/* Pretend this is a 32-bit system until we have found out the true value. */
-	r->xlen[0] = 32;
+	/** @todo Pretend this is a 32-bit system until we have found out the true value. */
+	r->harts[0].xlen = 32;
 
 	/* Figure out XLEN, and test writing all of Debug RAM while we're at it. */
 	cache_set32(target, 0, xori(S1, ZERO, -1));
@@ -1682,27 +1682,27 @@ static int examine(struct target *const target)
 	assert(generic_info);
 
 	if (word0 == 1 && word1 == 0) {
-		generic_info->xlen[0] = 32;
+		generic_info->harts[0].xlen = 32;
 	} else if (word0 == 0xffffffff && word1 == 3) {
-		generic_info->xlen[0] = 64;
+		generic_info->harts[0].xlen = 64;
 	} else if (word0 == 0xffffffff && word1 == 0xffffffff) {
-		generic_info->xlen[0] = 128;
+		generic_info->harts[0].xlen = 128;
 	} else {
 		uint32_t const exception = cache_get32(target, info->dramsize-1);
-		LOG_ERROR("%s: Failed to discover xlen; word0=0x%x, word1=0x%x, exception=0x%x", target->cmd_name,
-				word0, word1, exception);
+		LOG_ERROR("%s: Failed to discover xlen; word0=0x%x, word1=0x%x, exception=0x%x",
+			target->cmd_name, word0, word1, exception);
 		dump_debug_ram(target);
 		return ERROR_TARGET_FAILURE;
 	}
 
 	LOG_DEBUG("%s: Discovered XLEN is %d", target->cmd_name, riscv_xlen(target));
 
-	if (ERROR_OK != read_csr(target, &r->misa[0], CSR_MISA)) {
+	if (ERROR_OK != read_csr(target, &r->harts[0].misa, CSR_MISA)) {
 		static unsigned const old_csr_misa = 0xf10;
 		LOG_WARNING("%s: Failed to read misa at 0x%x; trying 0x%x.", target->cmd_name, CSR_MISA,
 				old_csr_misa);
 		{
-			int const err = read_csr(target, &r->misa[0], old_csr_misa);
+			int const err = read_csr(target, &r->harts[0].misa, old_csr_misa);
 			if (ERROR_OK != err) {
 				/* Maybe this is an old core that still has $misa at the old
 				 * address. */
@@ -1739,7 +1739,7 @@ static int examine(struct target *const target)
 		reg_cache_set(target, i, -1);
 
 	LOG_INFO("%s: Examined RISCV core; XLEN=%d, misa=0x%" PRIx64,
-		target->cmd_name, riscv_xlen(target), r->misa[0]);
+		target->cmd_name, riscv_xlen(target), r->harts[0].misa);
 
 	return ERROR_OK;
 }

@@ -44,7 +44,28 @@ struct riscv_reg_info_s {
 };
 typedef struct riscv_reg_info_s riscv_reg_info_t;
 
-/** @todo replace struct of arrays by array of struct */
+struct HART_register_s {
+#if 0
+	uint64_t saved;
+#endif
+	bool valid;
+};
+
+struct HART_s {
+	/* Enough space to store all the registers we might need to save. */
+	/** @todo FIXME: This should probably be a bunch of register caches. */
+	struct HART_register_s registers[RISCV_MAX_REGISTERS];
+	/* It's possible that each core has a different supported ISA set. */
+	int xlen;
+	riscv_reg_t misa;
+
+	/* The number of triggers per hart. */
+	unsigned trigger_count;
+
+	/* The number of entries in the debug buffer. */
+	int debug_buffer_size;
+};
+
 struct riscv_info_t {
 	unsigned dtm_version;
 
@@ -74,22 +95,7 @@ struct riscv_info_t {
 	* malloc for each register. Needs to be freed when reg_list is freed. */
 	char *reg_names;
 
-	/* Enough space to store all the registers we might need to save. */
-	/** @todo FIXME: This should probably be a bunch of register caches. */
-#if 0
-	uint64_t saved_registers[RISCV_MAX_HARTS][RISCV_MAX_REGISTERS];
-#endif
-	bool valid_saved_registers[RISCV_MAX_HARTS][RISCV_MAX_REGISTERS];
-
-	/* It's possible that each core has a different supported ISA set. */
-	int xlen[RISCV_MAX_HARTS];
-	riscv_reg_t misa[RISCV_MAX_HARTS];
-
-	/* The number of triggers per hart. */
-	unsigned trigger_count[RISCV_MAX_HARTS];
-
-	/* The number of entries in the debug buffer. */
-	int debug_buffer_size[RISCV_MAX_HARTS];
+	struct HART_s harts[RISCV_MAX_HARTS];
 
 	/* For each physical trigger, contains -1 if the hwbp is available, or the
 	* unique_id of the breakpoint/watchpoint that is using it.

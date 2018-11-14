@@ -80,7 +80,7 @@ riscv_debug_buffer_size(struct target *const target)
 {
 	struct riscv_info_t *const r = riscv_info(target);
 	assert(r);
-	return r->debug_buffer_size[riscv_current_hartid(target)];
+	return r->harts[riscv_current_hartid(target)].debug_buffer_size;
 }
 
 /** Add ebreak and execute the program. */
