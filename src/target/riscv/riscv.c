@@ -2686,8 +2686,6 @@ riscv_enumerate_triggers(struct target *const target)
 char const *
 gdb_regno_name(enum gdb_regno const regno)
 {
-	static char buf[32];
-
 	switch (regno) {
 		case GDB_REGNO_ZERO:
 			return "zero";
@@ -2738,16 +2736,20 @@ gdb_regno_name(enum gdb_regno const regno)
 			return "priv";
 
 		default:
-			if (regno <= GDB_REGNO_XPR31)
-				sprintf(buf, "x%d", regno - GDB_REGNO_ZERO);
-			else if (regno >= GDB_REGNO_CSR0 && regno <= GDB_REGNO_CSR4095)
-				sprintf(buf, "csr%d", regno - GDB_REGNO_CSR0);
-			else if (regno >= GDB_REGNO_FPR0 && regno <= GDB_REGNO_FPR31)
-				sprintf(buf, "f%d", regno - GDB_REGNO_FPR0);
-			else
-				sprintf(buf, "gdb_regno_%d", regno);
+			{
+				static char buf[32] = {[31]='\0'};
 
-			return buf;
+				if (regno <= GDB_REGNO_XPR31)
+					snprintf(buf, sizeof buf - 1, "x%d", regno - GDB_REGNO_ZERO);
+				else if (regno >= GDB_REGNO_CSR0 && regno <= GDB_REGNO_CSR4095)
+					snprintf(buf, sizeof buf - 1, "csr%d", regno - GDB_REGNO_CSR0);
+				else if (regno >= GDB_REGNO_FPR0 && regno <= GDB_REGNO_FPR31)
+					snprintf(buf, sizeof buf - 1, "f%d", regno - GDB_REGNO_FPR0);
+				else
+					snprintf(buf, sizeof buf - 1, "gdb_regno_%d", regno);
+
+				return buf;
+			}
 	}
 }
 
@@ -2883,7 +2885,7 @@ riscv_init_registers(struct target *const target)
 		.id = "ieee_double"
 	};
 
-	struct csr_info csr_info[] = {
+	static struct csr_info csr_info[] = {
 #define DECLARE_CSR(name, number) { number, #name },
 #include "encoding.h"
 #undef DECLARE_CSR
@@ -3057,7 +3059,8 @@ riscv_init_registers(struct target *const target)
 			r->feature = (struct reg_feature *)&feature_cpu;
 		} else if (number == GDB_REGNO_PC) {
 			r->caller_save = true;
-			sprintf(reg_name, "pc");
+			reg_name[max_reg_name_len - 1] = '\0';
+			snprintf(reg_name, max_reg_name_len - 1, "pc");
 			r->group = "general";
 			/** @todo This should probably be const. */
 			r->feature = (struct reg_feature *)&feature_cpu;
@@ -3222,7 +3225,8 @@ riscv_init_registers(struct target *const target)
 			if (csr_info[csr_info_index].number == csr_number) {
 				r->name = csr_info[csr_info_index].name;
 			} else {
-				sprintf(reg_name, "csr%d", csr_number);
+				reg_name[max_reg_name_len - 1] = '\0';
+				snprintf(reg_name, max_reg_name_len - 1, "csr%d", csr_number);
 				/* Assume unnamed registers don't exist, unless we have some
 				 * configuration that tells us otherwise. That's important
 				 * because eg. Eclipse crashes if a target has too many
@@ -3343,7 +3347,8 @@ riscv_init_registers(struct target *const target)
 			}
 
 		} else if (number == GDB_REGNO_PRIV) {
-			sprintf(reg_name, "priv");
+			reg_name[max_reg_name_len - 1] = '\0';
+			snprintf(reg_name, max_reg_name_len - 1, "priv");
 			r->group = "general";
 			/** @todo This should probably be const. */
 			r->feature = (struct reg_feature *)&feature_virtual;
@@ -3364,7 +3369,8 @@ riscv_init_registers(struct target *const target)
 			assert(r->arch_info);
 			((riscv_reg_info_t *)r->arch_info)->target = target;
 			((riscv_reg_info_t *)r->arch_info)->custom_number = custom_number;
-			sprintf(reg_name, "custom%d", custom_number);
+			reg_name[max_reg_name_len - 1] = '\0';
+			snprintf(reg_name, max_reg_name_len - 1, "custom%d", custom_number);
 
 			++custom_within_range;
 			if (custom_within_range > range->high - range->low) {

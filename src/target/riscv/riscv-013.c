@@ -228,7 +228,7 @@ typedef struct scratch_mem_s scratch_mem_t;
 
 static LIST_HEAD(dm_list);
 
-/** @bug Dangerous! Buffer overrun is possible! Check size of output buffer! */
+#define DUMP_FIELD_BUFFER_SIZE (500)
 static void
 decode_dmi(char *restrict text,
 	unsigned const address,
@@ -301,13 +301,12 @@ decode_dmi(char *restrict text,
 				if (i > 0)
 					*text++ = ' ';
 
+				text[DUMP_FIELD_BUFFER_SIZE - 1] = '\0';
 				if (mask & (mask >> 1)) {
 					/* If the field is more than 1 bit wide. */
-					/** @bug Use @c snprintf instead of @c sprintf to prevent buffer overrun */
-					sprintf(text, "%s=%d", p_descr->name, value);
+					snprintf(text, DUMP_FIELD_BUFFER_SIZE - 1, "%s=%d", p_descr->name, value);
 				} else {
-					/** @bug Use @c strncpy instead of @c strcpy to prevent buffer overrun */
-					strcpy(text, p_descr->name);
+					strncpy(text, p_descr->name, DUMP_FIELD_BUFFER_SIZE - 1);
 				}
 
 				text += strlen(text);
@@ -343,12 +342,10 @@ dump_field(struct scan_field const *const restrict field)
 			op_string[out_op], out_data, out_address,
 			status_string[in_op], in_data, in_address);
 
-	/** @bug Buffers overrun is possible */
-	char out_text[500];
+	char out_text[DUMP_FIELD_BUFFER_SIZE];
 	decode_dmi(out_text, out_address, out_data);
 
-	/** @bug Buffers overrun is possible */
-	char in_text[500];
+	char in_text[DUMP_FIELD_BUFFER_SIZE];
 	decode_dmi(in_text, in_address, in_data);
 
 	if (in_text[0] || out_text[0]) {
