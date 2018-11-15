@@ -576,12 +576,18 @@ dmi_op_timeout(struct target *const restrict target,
 
 static int
 register_read(struct target *const target, uint64_t *value, uint32_t number);
+
 static int
-register_read_direct(struct target *const target, uint64_t *value, uint32_t number)__attribute__((warn_unused_result));
+__attribute__((warn_unused_result))
+register_read_direct(struct target *const target, uint64_t *value, uint32_t number);
+
 static int
-register_write_direct(struct target *const target, unsigned number, uint64_t value)__attribute__((warn_unused_result));
+__attribute__((warn_unused_result))
+register_write_direct(struct target *const target, unsigned number, uint64_t value);
+
 static int
 read_memory(struct target *const target, target_addr_t address, uint32_t size, uint32_t count, uint8_t *buffer);
+
 static int
 write_memory(struct target *const target, target_addr_t address, uint32_t size, uint32_t count, const uint8_t *buffer);
 
@@ -2321,7 +2327,7 @@ riscv013_clear_abstract_error(struct target *const target)
  */
 static int
 read_memory_progbuf(struct target *const target,
-	target_addr_t address,
+	target_addr_t const address,
 	uint32_t const size,
 	uint32_t const count,
 	uint8_t *const buffer)
@@ -2432,8 +2438,9 @@ read_memory_progbuf(struct target *const target,
 	unsigned skip = 1;
 
 	while (read_addr < fin_addr) {
-		LOG_DEBUG("%s: read_addr=0x%" PRIx64 ", receive_addr=0x%" PRIx64
-				", fin_addr=0x%" PRIx64, target->cmd_name, read_addr, receive_addr, fin_addr);
+		LOG_DEBUG("%s: read_addr=0x%" PRIx64 ", receive_addr=0x%" PRIx64 ", fin_addr=0x%" PRIx64,
+			target->cmd_name, read_addr, receive_addr, fin_addr);
+
 		/* The pipeline looks like this:
 		 * memory -> s1 -> dm_data0 -> debugger
 		 * It advances every time the debugger reads dmdata0.
@@ -2444,8 +2451,8 @@ read_memory_progbuf(struct target *const target,
 		LOG_DEBUG("%s: creating burst to read from 0x%" PRIx64
 				" up to 0x%" PRIx64, target->cmd_name, read_addr, fin_addr);
 		assert(read_addr >= address && read_addr < fin_addr);
-		struct riscv_batch *batch = riscv_batch_alloc(target, 32,
-				info->dmi_busy_delay + info->ac_busy_delay);
+		struct riscv_batch *const batch =
+			riscv_batch_alloc(target, 32, info->dmi_busy_delay + info->ac_busy_delay);
 
 		size_t reads = 0;
 		for (riscv_addr_t addr = read_addr; addr < fin_addr; addr += size) {
@@ -2456,7 +2463,11 @@ read_memory_progbuf(struct target *const target,
 				break;
 		}
 
-		riscv_batch_run(batch);
+		{
+			int const err = riscv_batch_run(batch);
+			if (ERROR_OK != err)
+				return err;
+		}
 
 		/* Wait for the target to finish performing the last abstract command,
 		 * and update our copy of cmderr. */
@@ -2476,49 +2487,55 @@ read_memory_progbuf(struct target *const target,
 
 		switch (info->cmderr) {
 			case CMDERR_NONE:
-				LOG_DEBUG("%s: successful (partial?) memory read", target->cmd_name);
-				next_read_addr = read_addr + reads * size;
+				{
+					LOG_DEBUG("%s: successful (partial?) memory read", target->cmd_name);
+					next_read_addr = read_addr + reads * size;
+				}
 				break;
 
 			case CMDERR_BUSY:
-				LOG_DEBUG("%s: memory read resulted in busy response", target->cmd_name);
+				{
+					LOG_DEBUG("%s: memory read resulted in busy response", target->cmd_name);
 
-				increase_ac_busy_delay(target);
-				riscv013_clear_abstract_error(target);
+					increase_ac_busy_delay(target);
+					riscv013_clear_abstract_error(target);
 
-				dmi_write(target, DMI_ABSTRACTAUTO, 0);
+					dmi_write(target, DMI_ABSTRACTAUTO, 0);
 
-				/* This is definitely a good version of the value that we
-				 * attempted to read when we discovered that the target was
-				 * busy. */
-				if (dmi_read(target, &dmi_data0, DMI_DATA0) != ERROR_OK) {
-					riscv_batch_free(batch);
-					goto error;
+					/* This is definitely a good version of the value that we
+					 * attempted to read when we discovered that the target was
+					 * busy. */
+					if (dmi_read(target, &dmi_data0, DMI_DATA0) != ERROR_OK) {
+						riscv_batch_free(batch);
+						goto error;
+					}
+
+					/* Clobbers DMI_DATA0. */
+					result =
+						register_read_direct(target, &next_read_addr, GDB_REGNO_S0);
+
+					if (result != ERROR_OK) {
+						riscv_batch_free(batch);
+						goto error;
+					}
+
+					/* Restore the command, and execute it.
+					 * Now DMI_DATA0 contains the next value just as it would if no
+					 * error had occurred. */
+					dmi_write(target, DMI_COMMAND, command);
+
+					dmi_write(target, DMI_ABSTRACTAUTO,
+							1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET);
 				}
-
-				/* Clobbers DMI_DATA0. */
-				result = register_read_direct(target, &next_read_addr,
-					GDB_REGNO_S0);
-
-				if (result != ERROR_OK) {
-					riscv_batch_free(batch);
-					goto error;
-				}
-
-				/* Restore the command, and execute it.
-				 * Now DMI_DATA0 contains the next value just as it would if no
-				 * error had occurred. */
-				dmi_write(target, DMI_COMMAND, command);
-
-				dmi_write(target, DMI_ABSTRACTAUTO,
-						1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET);
 				break;
 
 			default:
-				LOG_ERROR("%s: error when reading memory, abstractcs=0x%08lx", target->cmd_name, (long)abstractcs);
-				riscv013_clear_abstract_error(target);
-				riscv_batch_free(batch);
-				result = ERROR_TARGET_FAILURE;
+				{
+					LOG_ERROR("%s: error when reading memory, abstractcs=0x%08lx", target->cmd_name, (long)abstractcs);
+					riscv013_clear_abstract_error(target);
+					riscv_batch_free(batch);
+					result = ERROR_TARGET_FAILURE;
+				}
 				goto error;
 		}
 
@@ -2529,14 +2546,14 @@ read_memory_progbuf(struct target *const target,
 
 			read_addr += size;
 
-			if (skip > 0) {
-				skip--;
+			if (0 < skip) {
+				--skip;
 				continue;
 			}
 
-			riscv_addr_t offset = receive_addr - address;
-			uint64_t dmi_out = riscv_batch_get_dmi_read(batch, i);
-			uint32_t value = get_field(dmi_out, DTM_DMI_DATA);
+			riscv_addr_t const offset = receive_addr - address;
+			uint64_t const dmi_out = riscv_batch_get_dmi_read(batch, i);
+			uint32_t const value = get_field(dmi_out, DTM_DMI_DATA);
 			write_to_buf(buffer + offset, value, size);
 			log_memory_access(receive_addr, value, size, true);
 
@@ -2545,8 +2562,8 @@ read_memory_progbuf(struct target *const target,
 
 		riscv_batch_free(batch);
 
-		if (cmderr == CMDERR_BUSY) {
-			riscv_addr_t offset = receive_addr - address;
+		if (CMDERR_BUSY == cmderr) {
+			riscv_addr_t const offset = receive_addr - address;
 			write_to_buf(buffer + offset, dmi_data0, size);
 			log_memory_access(receive_addr, dmi_data0, size, true);
 			read_addr += size;
@@ -2568,23 +2585,24 @@ read_memory_progbuf(struct target *const target,
 		receive_addr += size;
 	}
 
-	/* Read the last word. */
-	uint64_t value;
-	result = register_read_direct(target, &value, GDB_REGNO_S1);
+	{
+		/* Read the last word. */
+		uint64_t value;
+		result = register_read_direct(target, &value, GDB_REGNO_S1);
 
-	if (result != ERROR_OK)
-		goto error;
+		if (ERROR_OK != result)
+			goto error;
 
-	write_to_buf(buffer + receive_addr - address, value, size);
-	log_memory_access(receive_addr, value, size, true);
+		write_to_buf(buffer + receive_addr - address, value, size);
+		log_memory_access(receive_addr, value, size, true);
+	}
 
-	riscv_set_register(target, GDB_REGNO_S0, s0);
-	riscv_set_register(target, GDB_REGNO_S1, s1);
-	return ERROR_OK;
+	goto finish;
 
 error:
 	dmi_write(target, DMI_ABSTRACTAUTO, 0);
 
+finish:
 	riscv_set_register(target, GDB_REGNO_S0, s0);
 	riscv_set_register(target, GDB_REGNO_S1, s1);
 	return result;
@@ -3015,26 +3033,31 @@ static int write_memory(struct target *const target, target_addr_t address,
 	return ERROR_TARGET_INVALID;
 }
 
-/* 0.13-specific implementations of various RISC-V helper functions. */
-static int riscv013_get_register(struct target *const target,
-		riscv_reg_t *value, int hid, int rid)
+static int
+__attribute__((warn_unused_result))
+riscv013_get_register(struct target *const target,
+	riscv_reg_t *const value,
+	int const hid,
+	int const rid)
 {
-	LOG_DEBUG("%s: reading register %s on hart %d", target->cmd_name, gdb_regno_name(rid), hid);
+	LOG_DEBUG("%s: reading register %s on hart %d",
+		target->cmd_name, gdb_regno_name(rid), hid);
 
 	riscv_set_current_hartid(target, hid);
 
 	int result = ERROR_OK;
 
-	if (rid == GDB_REGNO_PC) {
+	if (GDB_REGNO_PC == rid) {
 		result = register_read(target, value, GDB_REGNO_DPC);
-		LOG_DEBUG("%s: read PC from DPC: 0x%016" PRIx64, target->cmd_name, *value);
-	} else if (rid == GDB_REGNO_PRIV) {
+		LOG_DEBUG("%s: read PC from DPC: 0x%016" PRIx64,
+			target->cmd_name, *value);
+	} else if (GDB_REGNO_PRIV == rid) {
 		uint64_t dcsr;
 		result = register_read(target, &dcsr, GDB_REGNO_DCSR);
 		*value = get_field(dcsr, CSR_DCSR_PRV);
 	} else {
 		result = register_read(target, value, rid);
-		if (result != ERROR_OK)
+		if (ERROR_OK != result)
 			*value = -1;
 	}
 

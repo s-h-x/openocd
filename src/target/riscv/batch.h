@@ -40,14 +40,20 @@ struct riscv_batch {
 /* Allocates (or frees) a new scan set.  "scans" is the maximum number of JTAG
  * scans that can be issued to this object, and idle is the number of JTAG idle
  * cycles between every real scan. */
-struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_t idle);
-void riscv_batch_free(struct riscv_batch *batch);
+struct riscv_batch *
+	__attribute__((warn_unused_result))
+	riscv_batch_alloc(struct target *target, size_t scans, size_t idle);
+
+void
+riscv_batch_free(struct riscv_batch *batch);
 
 /* Checks to see if this batch is full. */
 bool riscv_batch_full(struct riscv_batch *batch);
 
 /* Executes this scan batch. */
-int riscv_batch_run(struct riscv_batch *batch);
+int
+__attribute__((warn_unused_result))
+riscv_batch_run(struct riscv_batch *batch);
 
 /* Adds a DMI write to this batch. */
 void riscv_batch_add_dmi_write(struct riscv_batch *batch, unsigned address, uint64_t data);
