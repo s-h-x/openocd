@@ -44,26 +44,29 @@ dump_field(struct scan_field const *const field)
 
 struct riscv_batch *
 	riscv_batch_alloc(struct target *const target,
-		size_t scans,
+		size_t const a_scans,
 		size_t const idle)
 {
-	scans += 4;
-	struct riscv_batch *out = malloc(sizeof(*out));
+	size_t const scans = a_scans + 4;
+	struct riscv_batch *out = malloc(sizeof *out);
 	assert(out);
-	memset(out, 0, sizeof(*out));
+	memset(out, 0, sizeof *out);
 	out->target = target;
 	out->allocated_scans = scans;
 	out->used_scans = 0;
 	out->idle_count = idle;
-	out->data_out = malloc(sizeof(*out->data_out) * (scans) * sizeof(uint64_t));
-	out->data_in  = malloc(sizeof(*out->data_in)  * (scans) * sizeof(uint64_t));
-	out->fields = malloc(sizeof(*out->fields) * (scans));
+	out->data_out = malloc(scans * sizeof(uint64_t));
+	assert(out->data_out);
+	out->data_in  = malloc(scans * sizeof(uint64_t));
+	assert(out->data_in);
+	out->fields = malloc(scans * sizeof *out->fields);
+	assert(out->fields);
 	out->last_scan = RISCV_SCAN_TYPE_INVALID;
-	out->read_keys = malloc(sizeof(*out->read_keys) * (scans));
+	out->read_keys = malloc(scans * sizeof *out->read_keys);
+	assert(out->read_keys);
 	out->read_keys_used = 0;
 	return out;
 }
-
 void
 riscv_batch_free(struct riscv_batch *batch)
 {
@@ -76,15 +79,14 @@ riscv_batch_free(struct riscv_batch *batch)
 bool
 riscv_batch_full(struct riscv_batch *batch)
 {
-	return batch->used_scans > (batch->allocated_scans - 4);
+	return batch->allocated_scans < batch->used_scans + 4;
 }
-
 int
 riscv_batch_run(struct riscv_batch *batch)
 {
 	assert(batch && batch->target);
 
-	if (batch->used_scans == 0) {
+	if (0 == batch->used_scans) {
 		LOG_DEBUG("%s: Ignoring empty batch.", batch->target->cmd_name);
 		return ERROR_OK;
 	}
@@ -95,7 +97,7 @@ riscv_batch_run(struct riscv_batch *batch)
 
 	for (size_t i = 0; i < batch->used_scans; ++i) {
 		jtag_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
-		if (batch->idle_count > 0)
+		if (0 < batch->idle_count)
 			jtag_add_runtest(batch->idle_count, TAP_IDLE);
 	}
 
@@ -150,7 +152,7 @@ riscv_batch_add_dmi_write(struct riscv_batch *const batch,
 	assert(batch->used_scans < batch->allocated_scans);
 	struct scan_field *field = batch->fields + batch->used_scans;
 	field->num_bits = riscv_dmi_write_u64_bits(batch->target);
-	uint8_t *p_tmp = batch->data_out + batch->used_scans * sizeof(uint64_t);
+	uint8_t *const p_tmp = batch->data_out + batch->used_scans * sizeof(uint64_t);
 	field->out_value = p_tmp;
 	field->in_value  = batch->data_in  + batch->used_scans * sizeof(uint64_t);
 	riscv_fill_dmi_write_u64(batch->target, p_tmp, address, data);
@@ -174,7 +176,7 @@ riscv_batch_add_dmi_read(struct riscv_batch *const batch,
 	assert(batch && batch->used_scans < batch->allocated_scans);
 	struct scan_field *const field = batch->fields + batch->used_scans;
 	field->num_bits = riscv_dmi_write_u64_bits(batch->target);
-	uint8_t *p_tmp = batch->data_out + batch->used_scans * sizeof(uint64_t);
+	uint8_t *const p_tmp = batch->data_out + batch->used_scans * sizeof(uint64_t);
 	field->out_value = p_tmp;
 	field->in_value  = batch->data_in  + batch->used_scans * sizeof(uint64_t);
 	riscv_fill_dmi_read_u64(batch->target, p_tmp, address);
@@ -183,7 +185,7 @@ riscv_batch_add_dmi_read(struct riscv_batch *const batch,
 	++batch->used_scans;
 
 	/* FIXME We get the read response back on the next scan.  For now I'm
-	 * just sticking a NOP in there, but this should be coelesced away. */
+	 * just sticking a NOP in there, but this should be coalesced away. */
 	riscv_batch_add_nop(batch);
 
 	batch->read_keys[batch->read_keys_used] = batch->used_scans - 1;
@@ -195,7 +197,7 @@ riscv_batch_get_dmi_read(struct riscv_batch const *const batch,
 	size_t const key)
 {
 	assert(key < batch->read_keys_used);
-	size_t index = batch->read_keys[key];
+	size_t const index = batch->read_keys[key];
 	assert(index <= batch->used_scans);
 	uint8_t const *const base = batch->data_in + 8 * index;
 	return
@@ -209,7 +211,8 @@ riscv_batch_get_dmi_read(struct riscv_batch const *const batch,
 		(uint64_t)base[7] << 7 * CHAR_BIT;
 }
 
-void riscv_batch_add_nop(struct riscv_batch *batch)
+void
+riscv_batch_add_nop(struct riscv_batch *batch)
 {
 	assert(batch->used_scans < batch->allocated_scans);
 	struct scan_field *field = batch->fields + batch->used_scans;
