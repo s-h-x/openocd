@@ -1143,8 +1143,7 @@ riscv_get_gdb_reg_list(struct target *const target,
 
 		default:
 			LOG_ERROR("%s: Unsupported reg_class: %d",
-				target->cmd_name,
-				reg_class);
+				target->cmd_name, reg_class);
 			return ERROR_COMMAND_ARGUMENT_INVALID;
 	}
 
@@ -2815,6 +2814,7 @@ cmp_csr_info(void const *p1, void const *p2)
 int
 riscv_init_registers(struct target *const target)
 {
+	assert(target);
 	if (target->reg_cache) {
 		if (target->reg_cache->reg_list)
 			free(target->reg_cache->reg_list);
@@ -2855,7 +2855,6 @@ riscv_init_registers(struct target *const target)
 
 	info->reg_names = calloc(target->reg_cache->num_regs, max_reg_name_len);
 	assert(info->reg_names);
-	char *reg_name = info->reg_names;
 
 	static struct reg_feature const feature_cpu = {
 		.name = "org.gnu.gdb.riscv.cpu"
@@ -2895,7 +2894,6 @@ riscv_init_registers(struct target *const target)
 
 	/* encoding.h does not contain the registers in sorted order. */
 	qsort(csr_info, DIM(csr_info), sizeof *csr_info, cmp_csr_info);
-	unsigned csr_info_index = 0;
 
 	unsigned custom_range_index = 0;
 	int custom_within_range = 0;
@@ -2903,6 +2901,8 @@ riscv_init_registers(struct target *const target)
 	riscv_reg_info_t *const shared_reg_info = calloc(1, sizeof(riscv_reg_info_t));
 	assert(shared_reg_info);
 	shared_reg_info->target = target;
+
+	char *reg_name = info->reg_names;
 
 	/* When gdb requests register N, gdb_get_register_packet() assumes that this
 	 * is register at index N in reg_list. So if there are certain registers
@@ -3058,24 +3058,24 @@ riscv_init_registers(struct target *const target)
 
 			r->group = "general";
 			/** @todo This should probably be const. */
-			r->feature = (struct reg_feature *)&feature_cpu;
+			r->feature = (struct reg_feature *)(&feature_cpu);
 		} else if (number == GDB_REGNO_PC) {
 			r->caller_save = true;
 			reg_name[max_reg_name_len - 1] = '\0';
 			snprintf(reg_name, max_reg_name_len - 1, "pc");
 			r->group = "general";
 			/** @todo This should probably be const. */
-			r->feature = (struct reg_feature *)&feature_cpu;
-		} else if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
+			r->feature = (struct reg_feature *)(&feature_cpu);
+		} else if (GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31) {
 			r->caller_save = true;
 
 			if (riscv_supports_extension(target, riscv_current_hartid(target), 'D')) {
 				/** @todo This should probably be const. */
-				r->reg_data_type = (struct reg_data_type *)&type_ieee_double;
+				r->reg_data_type = (struct reg_data_type *)(&type_ieee_double);
 				r->size = 64;
 			} else if (riscv_supports_extension(target, riscv_current_hartid(target), 'F')) {
 				/** @todo This should probably be const. */
-				r->reg_data_type = (struct reg_data_type *)&type_ieee_single;
+				r->reg_data_type = (struct reg_data_type *)(&type_ieee_single);
 				r->size = 32;
 			} else {
 				r->exist = false;
@@ -3209,18 +3209,19 @@ riscv_init_registers(struct target *const target)
 				case GDB_REGNO_FT11:
 					r->name = "ft11";
 					break;
-
+				/** @bug no default case */
 			}
 
 			r->group = "float";
 			/** @todo This should probably be const. */
-			r->feature = (struct reg_feature *)&feature_fpu;
-		} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
+			r->feature = (struct reg_feature *)(&feature_fpu);
+		} else if (GDB_REGNO_CSR0 <= number && number <= GDB_REGNO_CSR4095) {
 			r->group = "csr";
 			/** @todo This should probably be const. */
-			r->feature = (struct reg_feature *)&feature_csr;
-			unsigned csr_number = number - GDB_REGNO_CSR0;
+			r->feature = (struct reg_feature *)(&feature_csr);
+			unsigned const csr_number = number - GDB_REGNO_CSR0;
 
+			unsigned csr_info_index = 0;
 			while (csr_info[csr_info_index].number < csr_number && csr_info_index < DIM(csr_info) - 1)
 				++csr_info_index;
 
@@ -3353,35 +3354,36 @@ riscv_init_registers(struct target *const target)
 			snprintf(reg_name, max_reg_name_len - 1, "priv");
 			r->group = "general";
 			/** @todo This should probably be const. */
-			r->feature = (struct reg_feature *)&feature_virtual;
+			r->feature = (struct reg_feature *)(&feature_virtual);
 			r->size = 8;
 
 		} else {
 			/* Custom registers. */
 			assert(expose_custom);
 
-			range_t *range = &expose_custom[custom_range_index];
+			range_t *const range = &expose_custom[custom_range_index];
 			assert(range->low <= range->high);
-			unsigned custom_number = range->low + custom_within_range;
+			unsigned const custom_number = range->low + custom_within_range;
 
 			r->group = "custom";
 			/** @todo This should probably be const. */
-			r->feature = (struct reg_feature *)&feature_custom;
+			r->feature = (struct reg_feature *)(&feature_custom);
 			r->arch_info = calloc(1, sizeof(riscv_reg_info_t));
 			assert(r->arch_info);
-			((riscv_reg_info_t *)r->arch_info)->target = target;
-			((riscv_reg_info_t *)r->arch_info)->custom_number = custom_number;
+			((riscv_reg_info_t *)(r->arch_info))->target = target;
+			((riscv_reg_info_t *)(r->arch_info))->custom_number = custom_number;
 			reg_name[max_reg_name_len - 1] = '\0';
 			snprintf(reg_name, max_reg_name_len - 1, "custom%d", custom_number);
 
 			++custom_within_range;
+
 			if (custom_within_range > range->high - range->low) {
 				custom_within_range = 0;
 				++custom_range_index;
 			}
 		}
 
-		if (reg_name[0])
+		if (*reg_name)
 			r->name = reg_name;
 
 		reg_name += strlen(reg_name) + 1;
