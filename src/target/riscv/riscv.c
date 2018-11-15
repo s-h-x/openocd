@@ -191,12 +191,12 @@ riscv_info_init(struct target *const target)
 		return NULL;
 	}
 
-	memset(r, 0, sizeof(*r));
+	memset(r, 0, sizeof *r);
 	r->dtm_version = 1;
 	r->registers_initialized = false;
 	r->current_hartid = target->coreid;
 
-	memset(r->trigger_unique_id, 0xff, sizeof(r->trigger_unique_id));
+	memset(r->trigger_unique_id, 0xff, sizeof r->trigger_unique_id);
 
 	for (size_t hart = 0; hart < RISCV_MAX_HARTS; ++hart) {
 		r->harts[hart].xlen = -1;
@@ -2805,16 +2805,16 @@ struct csr_info {
 static int
 cmp_csr_info(void const *p1, void const *p2)
 {
+	struct csr_info const *const pp1 = p1;
+	struct csr_info const *const pp2 = p2;
 	return
-		(int)((struct csr_info *)p1)->number -
-		(int)((struct csr_info *)p2)->number;
+		(int)(pp1->number) -
+		(int)(pp2->number);
 }
 
 int
 riscv_init_registers(struct target *const target)
 {
-	struct riscv_info_t *const info = riscv_info(target);
-
 	if (target->reg_cache) {
 		if (target->reg_cache->reg_list)
 			free(target->reg_cache->reg_list);
@@ -2822,7 +2822,7 @@ riscv_init_registers(struct target *const target)
 		free(target->reg_cache);
 	}
 
-	target->reg_cache = calloc(1, sizeof(*target->reg_cache));
+	target->reg_cache = calloc(1, sizeof *target->reg_cache);
 	assert(target->reg_cache);
 	target->reg_cache->name = "RISC-V Registers";
 	target->reg_cache->num_regs = GDB_REGNO_COUNT;
@@ -2847,11 +2847,13 @@ riscv_init_registers(struct target *const target)
 	assert(target->reg_cache->reg_list);
 
 	static unsigned const max_reg_name_len = 12;
+	struct riscv_info_t *const info = riscv_info(target);
+	assert(info);
+
 	if (info->reg_names)
 		free(info->reg_names);
 
-	info->reg_names =
-		calloc(target->reg_cache->num_regs, max_reg_name_len);
+	info->reg_names = calloc(target->reg_cache->num_regs, max_reg_name_len);
 	assert(info->reg_names);
 	char *reg_name = info->reg_names;
 
@@ -2892,7 +2894,7 @@ riscv_init_registers(struct target *const target)
 	};
 
 	/* encoding.h does not contain the registers in sorted order. */
-	qsort(csr_info, DIM(csr_info), sizeof(*csr_info), cmp_csr_info);
+	qsort(csr_info, DIM(csr_info), sizeof *csr_info, cmp_csr_info);
 	unsigned csr_info_index = 0;
 
 	unsigned custom_range_index = 0;
