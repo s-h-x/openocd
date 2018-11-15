@@ -11,7 +11,7 @@ int
 riscv_program_init(struct riscv_program *const p,
 	struct target *const target)
 {
-	memset(p, 0, sizeof(*p));
+	memset(p, 0, sizeof *p);
 	p->target = target;
 	p->instruction_count = 0;
 	p->target_xlen = riscv_xlen(target);
