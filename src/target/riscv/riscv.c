@@ -96,11 +96,7 @@ struct scan_field select_idcode = {
 	.out_value = ir_idcode
 };
 
-
-/** Wall-clock timeout for a command/access. Settable via RISC-V Target commands.*/
 int riscv_command_timeout_sec = DEFAULT_COMMAND_TIMEOUT_SEC;
-
-/** Wall-clock timeout after reset. Settable via RISC-V Target commands.*/
 int riscv_reset_timeout_sec = DEFAULT_RESET_TIMEOUT_SEC;
 
 /** @bug uninitialized */

@@ -171,7 +171,8 @@ struct riscv013_info_s {
 
 	/** Number of run-test/idle cycles to add between consecutive bus master
 	 * reads/writes respectively. */
-	unsigned bus_master_write_delay, bus_master_read_delay;
+	unsigned bus_master_write_delay;
+	unsigned bus_master_read_delay;
 
 	/** This value is increased every time we tried to execute two commands
 	 * consecutively, and the second one failed because the previous hadn't
@@ -1874,31 +1875,30 @@ deassert_reset(struct target *const target)
 	return ERROR_OK;
 }
 
-/** @param size in bytes */
 static void
 write_to_buf(uint8_t *const buffer,
 	uint64_t const value,
-	unsigned const size)
+	unsigned const size /**< [in] size in bytes */)
 {
 	switch (size) {
 		case 8:
-			buffer[7] = value >> 56;
-			buffer[6] = value >> 48;
-			buffer[5] = value >> 40;
-			buffer[4] = value >> 32;
+			buffer[7] = (uint8_t)(value >> 7 * CHAR_BIT);
+			buffer[6] = (uint8_t)(value >> 6 * CHAR_BIT);
+			buffer[5] = (uint8_t)(value >> 5 * CHAR_BIT);
+			buffer[4] = (uint8_t)(value >> 4 * CHAR_BIT);
 			/* falls through */
 
 		case 4:
-			buffer[3] = value >> 24;
-			buffer[2] = value >> 16;
+			buffer[3] = (uint8_t)(value >> 3 * CHAR_BIT);
+			buffer[2] = (uint8_t)(value >> 2 * CHAR_BIT);
 			/* falls through */
 
 		case 2:
-			buffer[1] = value >> 8;
+			buffer[1] = (uint8_t)(value >> 1 * CHAR_BIT);
 			/* falls through */
 
 		case 1:
-			buffer[0] = value;
+			buffer[0] = (uint8_t)(value >> 0 * CHAR_BIT);
 			break;
 
 		default:
@@ -2089,7 +2089,7 @@ sb_write_address(struct target *const target,
 
 static int
 read_sbcs_nonbusy(struct target *const target,
-	uint32_t *const sbcs)
+	uint32_t *const sbcs /**< [out]*/)
 {
 	assert(sbcs);
 	time_t const start = time(NULL);
@@ -2124,7 +2124,7 @@ read_memory_bus_v0(struct target *const target,
 			TARGET_PRIxADDR, target->cmd_name, size, count, address);
 	uint8_t *t_buffer = buffer;
 	riscv_addr_t cur_addr = address;
-	riscv_addr_t fin_addr = address + (count * size);
+	riscv_addr_t const fin_addr = address + (count * size);
 	uint32_t access = 0;
 
 	enum {
@@ -2145,9 +2145,13 @@ read_memory_bus_v0(struct target *const target,
 			}
 			dmi_write(target, DMI_SBADDRESS0, cur_addr);
 			/* size/2 matching the bit access of the spec 0.13 */
-			access = set_field(access, DMI_SBCS_SBACCESS, size/2);
-			access = set_field(access, DMI_SBCS_SBSINGLEREAD, 1);
-			LOG_DEBUG("%s: read_memory: sab: access:  0x%08x", target->cmd_name, access);
+			access =
+				set_field(
+					set_field(access, DMI_SBCS_SBACCESS, size / 2),
+					DMI_SBCS_SBSINGLEREAD,
+					1);
+			LOG_DEBUG("%s: read_memory: sab: access:  0x%08" PRIx32,
+				target->cmd_name, access);
 			dmi_write(target, DMI_SBCS, access);
 			/* 3) read */
 			uint32_t value;
@@ -2175,11 +2179,17 @@ read_memory_bus_v0(struct target *const target,
 	dmi_write(target, DMI_SBADDRESS0, cur_addr);
 	/* 2) write sbaccess=2, sbsingleread,sbautoread,sbautoincrement
 	 * size/2 matching the bit access of the spec 0.13 */
-	access = set_field(access, DMI_SBCS_SBACCESS, size/2);
-	access = set_field(access, DMI_SBCS_SBAUTOREAD, 1);
-	access = set_field(access, DMI_SBCS_SBSINGLEREAD, 1);
-	access = set_field(access, DMI_SBCS_SBAUTOINCREMENT, 1);
-	LOG_DEBUG("%s: access:  0x%08x", target->cmd_name, access);
+	access =
+		set_field(
+			set_field(
+				set_field(
+					set_field(access,
+						DMI_SBCS_SBACCESS, size / 2),
+					DMI_SBCS_SBAUTOREAD, 1),
+				DMI_SBCS_SBSINGLEREAD, 1),
+			DMI_SBCS_SBAUTOINCREMENT, 1);
+	LOG_DEBUG("%s: access:  0x%08x",
+		target->cmd_name, access);
 	dmi_write(target, DMI_SBCS, access);
 
 	while (cur_addr < fin_addr) {
@@ -2191,6 +2201,7 @@ read_memory_bus_v0(struct target *const target,
 			size,
 			count,
 			cur_addr);
+
 		/* read */
 		uint32_t value;
 
@@ -2226,68 +2237,75 @@ read_memory_bus_v0(struct target *const target,
  */
 static int
 read_memory_bus_v1(struct target *const target,
-	target_addr_t address,
+	target_addr_t const address,
 	uint32_t const size,
 	uint32_t const count,
 	uint8_t *const buffer)
 {
 	riscv013_info_t *const info = get_info(target);
 	assert(info);
-	target_addr_t next_address = address;
-	target_addr_t end_address = address + count * size;
+	
+	target_addr_t const end_address = address + count * size;
 
-	while (next_address < end_address) {
-		uint32_t sbcs = set_field(0, DMI_SBCS_SBREADONADDR, 1);
-		sbcs |= sb_sbaccess(size);
-		sbcs = set_field(sbcs, DMI_SBCS_SBAUTOINCREMENT, 1);
-		sbcs = set_field(sbcs, DMI_SBCS_SBREADONDATA, count > 1);
-		dmi_write(target, DMI_SBCS, sbcs);
+	for (target_addr_t next_address = address; next_address < end_address;) {
+		{
+			uint32_t const sbcs =
+				set_field(
+					set_field(
+						set_field(0, DMI_SBCS_SBREADONADDR, 1) | sb_sbaccess(size),
+						DMI_SBCS_SBAUTOINCREMENT,
+						1),
+					DMI_SBCS_SBREADONDATA,
+					1 < count);
+			dmi_write(target, DMI_SBCS, sbcs);
 
-		/* This address write will trigger the first read. */
-		sb_write_address(target, next_address);
+			/* This address write will trigger the first read. */
+			/** @todo check return */
+			sb_write_address(target, next_address);
 
-		if (info->bus_master_read_delay) {
-			jtag_add_runtest(info->bus_master_read_delay, TAP_IDLE);
+			if (0 < info->bus_master_read_delay) {
+				jtag_add_runtest(info->bus_master_read_delay, TAP_IDLE);
 
-			int const err = jtag_execute_queue();
-			if (ERROR_OK != err) {
-				LOG_ERROR("%s: Failed to scan idle sequence", target->cmd_name);
-				return err;
+				int const err = jtag_execute_queue();
+				if (ERROR_OK != err) {
+					LOG_ERROR("%s: Failed to scan idle sequence", target->cmd_name);
+					return err;
+				}
 			}
+
+			for (uint32_t i = (next_address - address) / size; i < count - 1; ++i)
+				read_memory_bus_word(target, address + i * size, size, buffer + i * size);
+
+			dmi_write(target, DMI_SBCS, set_field(sbcs, DMI_SBCS_SBREADONDATA, 0));
 		}
-
-		for (uint32_t i = (next_address - address) / size; i < count - 1; ++i)
-			read_memory_bus_word(target, address + i * size, size, buffer + i * size);
-
-		sbcs = set_field(sbcs, DMI_SBCS_SBREADONDATA, 0);
-		dmi_write(target, DMI_SBCS, sbcs);
 
 		read_memory_bus_word(target, address + (count - 1) * size, size, buffer + (count - 1) * size);
 
 		{
-			int const err = read_sbcs_nonbusy(target, &sbcs);
-			if (ERROR_OK != err)
-				return err;
+			uint32_t sbcs_1;
+			{
+				int const err = read_sbcs_nonbusy(target, &sbcs_1);
+				if (ERROR_OK != err)
+					return err;
+			}
+
+			if (0 != get_field(sbcs_1, DMI_SBCS_SBBUSYERROR)) {
+				/* We read while the target was busy. Slow down and try again. */
+				dmi_write(target, DMI_SBCS, DMI_SBCS_SBBUSYERROR);
+				next_address = sb_read_address(target);
+				info->bus_master_read_delay += info->bus_master_read_delay / 10 + 1;
+				continue;
+			}
+
+			if (0 != get_field(sbcs_1, DMI_SBCS_SBERROR)) {
+				/* Some error indicating the bus access failed, but not because of
+				 * something we did wrong. */
+				dmi_write(target, DMI_SBCS, DMI_SBCS_SBERROR);
+				return ERROR_TARGET_FAILURE;
+			}
 		}
 
-		if (get_field(sbcs, DMI_SBCS_SBBUSYERROR)) {
-			/* We read while the target was busy. Slow down and try again. */
-			dmi_write(target, DMI_SBCS, DMI_SBCS_SBBUSYERROR);
-			next_address = sb_read_address(target);
-			info->bus_master_read_delay += info->bus_master_read_delay / 10 + 1;
-			continue;
-		}
-
-		unsigned error = get_field(sbcs, DMI_SBCS_SBERROR);
-
-		if (error == 0) {
-			next_address = end_address;
-		} else {
-			/* Some error indicating the bus access failed, but not because of
-			 * something we did wrong. */
-			dmi_write(target, DMI_SBCS, DMI_SBCS_SBERROR);
-			return ERROR_TARGET_FAILURE;
-		}
+		next_address = end_address;
 	}
 
 	return ERROR_OK;
@@ -2611,8 +2629,12 @@ finish:
 	return result;
 }
 
-static int read_memory(struct target *const target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
+static int
+read_memory(struct target *const target,
+	target_addr_t const address,
+	uint32_t const size,
+	uint32_t const count,
+	uint8_t *const buffer)
 {
 	riscv013_info_t *const info = get_info(target);
 	assert(info);
@@ -2621,14 +2643,16 @@ static int read_memory(struct target *const target, target_addr_t address,
 		return read_memory_progbuf(target, address, size, count, buffer);
 
 	if ((get_field(info->sbcs, DMI_SBCS_SBACCESS8) && size == 1) ||
-			(get_field(info->sbcs, DMI_SBCS_SBACCESS16) && size == 2) ||
-			(get_field(info->sbcs, DMI_SBCS_SBACCESS32) && size == 4) ||
-			(get_field(info->sbcs, DMI_SBCS_SBACCESS64) && size == 8) ||
-			(get_field(info->sbcs, DMI_SBCS_SBACCESS128) && size == 16)) {
-		if (get_field(info->sbcs, DMI_SBCS_SBVERSION) == 0)
-			return read_memory_bus_v0(target, address, size, count, buffer);
-		else if (get_field(info->sbcs, DMI_SBCS_SBVERSION) == 1)
-			return read_memory_bus_v1(target, address, size, count, buffer);
+		(get_field(info->sbcs, DMI_SBCS_SBACCESS16) && size == 2) ||
+		(get_field(info->sbcs, DMI_SBCS_SBACCESS32) && size == 4) ||
+		(get_field(info->sbcs, DMI_SBCS_SBACCESS64) && size == 8) ||
+		(get_field(info->sbcs, DMI_SBCS_SBACCESS128) && size == 16)
+		) {
+			return
+				(0 == get_field(info->sbcs, DMI_SBCS_SBVERSION) ?
+					read_memory_bus_v0 :
+					read_memory_bus_v1
+					)(target, address, size, count, buffer);
 	}
 
 	if (info->progbufsize >= 2)
