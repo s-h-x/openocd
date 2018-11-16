@@ -63,6 +63,17 @@
 #define DBUS						0x11
 /** @} */
 
+/** External handlers
+
+	@todo place in header
+*/
+/**@{*/
+__COMMAND_HANDLER(handle_common_semihosting_command);
+__COMMAND_HANDLER(handle_common_semihosting_fileio_command);
+__COMMAND_HANDLER(handle_common_semihosting_resumable_exit_command);
+__COMMAND_HANDLER(handle_common_semihosting_cmdline);
+/**@}*/
+
 struct trigger {
 	uint64_t address;
 	uint32_t length;
@@ -121,7 +132,8 @@ dtmcontrol_scan(struct target *const target,
 	uint8_t out_value[4];
 	buf_set_u32(out_value, 0, 32, out);
 	uint8_t in_value[4];
-	struct scan_field const field = {
+	typedef struct scan_field scan_field_t;
+	scan_field_t const field = {
 		.num_bits = 32,
 		.out_value = out_value,
 		.in_value = in_value,
@@ -2179,11 +2191,6 @@ static struct command_registration const riscv_exec_command_handlers[] = {
 	COMMAND_REGISTRATION_DONE
 };
 
-extern __COMMAND_HANDLER(handle_common_semihosting_command);
-extern __COMMAND_HANDLER(handle_common_semihosting_fileio_command);
-extern __COMMAND_HANDLER(handle_common_semihosting_resumable_exit_command);
-extern __COMMAND_HANDLER(handle_common_semihosting_cmdline);
-
 /**
  * To be noted that RISC-V targets use the same semihosting commands as
  * ARM targets.
@@ -2245,44 +2252,6 @@ struct command_registration const riscv_command_handlers[] = {
 		.chain = arm_exec_command_handlers
 	},
 	COMMAND_REGISTRATION_DONE
-};
-
-struct target_type riscv_target = {
-	.name = "riscv",
-
-	.init_target = riscv_init_target,
-	.deinit_target = riscv_deinit_target,
-	.examine = riscv_examine,
-
-	/* poll current target status */
-	.poll = old_or_new_riscv_poll,
-
-	.halt = old_or_new_riscv_halt,
-	.resume = old_or_new_riscv_resume,
-	.step = old_or_new_riscv_step,
-
-	.assert_reset = riscv_assert_reset,
-	.deassert_reset = riscv_deassert_reset,
-
-	.read_memory = riscv_read_memory,
-	.write_memory = riscv_write_memory,
-
-	.checksum_memory = riscv_checksum_memory,
-
-	.get_gdb_reg_list = riscv_get_gdb_reg_list,
-
-	.add_breakpoint = riscv_add_breakpoint,
-	.remove_breakpoint = riscv_remove_breakpoint,
-
-	.add_watchpoint = riscv_add_watchpoint,
-	.remove_watchpoint = riscv_remove_watchpoint,
-	.hit_watchpoint = riscv_hit_watchpoint,
-
-	.arch_state = riscv_arch_state,
-
-	.run_algorithm = riscv_run_algorithm,
-
-	.commands = riscv_command_handlers
 };
 
 int
@@ -2741,6 +2710,12 @@ cmp_csr_info(void const *p1, void const *p2)
 		(int)(pp2->number);
 }
 
+static struct csr_info csr_info[] = {
+#define DECLARE_CSR(name, number) { number, #name },
+#include "encoding.h"
+#undef DECLARE_CSR
+};
+
 int
 riscv_init_registers(struct target *const target)
 {
@@ -2786,40 +2761,36 @@ riscv_init_registers(struct target *const target)
 	rvi->reg_names = calloc(target->reg_cache->num_regs, max_reg_name_len);
 	assert(rvi->reg_names);
 
-	static struct reg_feature const feature_cpu = {
+	typedef struct reg_feature reg_feature_t;
+	static reg_feature_t const feature_cpu = {
 		.name = "org.gnu.gdb.riscv.cpu"
 	};
 
-	static struct reg_feature const feature_fpu = {
+	static reg_feature_t const feature_fpu = {
 		.name = "org.gnu.gdb.riscv.fpu"
 	};
 
-	static struct reg_feature const feature_csr = {
+	static reg_feature_t const feature_csr = {
 		.name = "org.gnu.gdb.riscv.csr"
 	};
 
-	static struct reg_feature const feature_virtual = {
+	static reg_feature_t const feature_virtual = {
 		.name = "org.gnu.gdb.riscv.virtual"
 	};
 
-	static struct reg_feature const feature_custom = {
+	static reg_feature_t const feature_custom = {
 		.name = "org.gnu.gdb.riscv.custom"
 	};
 
-	static struct reg_data_type const type_ieee_single = {
+	typedef struct reg_data_type reg_data_type_t;
+	static reg_data_type_t const type_ieee_single = {
 		.type = REG_TYPE_IEEE_SINGLE,
 		.id = "ieee_single"
 	};
 
-	static struct reg_data_type const type_ieee_double = {
+	static reg_data_type_t const type_ieee_double = {
 		.type = REG_TYPE_IEEE_DOUBLE,
 		.id = "ieee_double"
-	};
-
-	static struct csr_info csr_info[] = {
-#define DECLARE_CSR(name, number) { number, #name },
-#include "encoding.h"
-#undef DECLARE_CSR
 	};
 
 	/* encoding.h does not contain the registers in sorted order. */
@@ -2988,24 +2959,24 @@ riscv_init_registers(struct target *const target)
 
 			p_reg->group = "general";
 			/** @todo This should probably be const. */
-			p_reg->feature = (struct reg_feature *)(&feature_cpu);
+			p_reg->feature = (reg_feature_t *)(&feature_cpu);
 		} else if (number == GDB_REGNO_PC) {
 			p_reg->caller_save = true;
 			reg_name[max_reg_name_len - 1] = '\0';
 			snprintf(reg_name, max_reg_name_len - 1, "pc");
 			p_reg->group = "general";
 			/** @todo This should probably be const. */
-			p_reg->feature = (struct reg_feature *)(&feature_cpu);
+			p_reg->feature = (reg_feature_t *)(&feature_cpu);
 		} else if (GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31) {
 			p_reg->caller_save = true;
 
 			if (riscv_supports_extension(target, riscv_current_hartid(target), 'D')) {
 				/** @todo This should probably be const. */
-				p_reg->reg_data_type = (struct reg_data_type *)(&type_ieee_double);
+				p_reg->reg_data_type = (reg_data_type_t *)(&type_ieee_double);
 				p_reg->size = 64;
 			} else if (riscv_supports_extension(target, riscv_current_hartid(target), 'F')) {
 				/** @todo This should probably be const. */
-				p_reg->reg_data_type = (struct reg_data_type *)(&type_ieee_single);
+				p_reg->reg_data_type = (reg_data_type_t *)(&type_ieee_single);
 				p_reg->size = 32;
 			} else {
 				p_reg->exist = false;
@@ -3144,11 +3115,11 @@ riscv_init_registers(struct target *const target)
 
 			p_reg->group = "float";
 			/** @todo This should probably be const. */
-			p_reg->feature = (struct reg_feature *)(&feature_fpu);
+			p_reg->feature = (reg_feature_t *)(&feature_fpu);
 		} else if (GDB_REGNO_CSR0 <= number && number <= GDB_REGNO_CSR4095) {
 			p_reg->group = "csr";
 			/** @todo This should probably be const. */
-			p_reg->feature = (struct reg_feature *)(&feature_csr);
+			p_reg->feature = (reg_feature_t *)(&feature_csr);
 			unsigned const csr_number = number - GDB_REGNO_CSR0;
 
 			unsigned csr_info_index = 0;
@@ -3176,7 +3147,7 @@ riscv_init_registers(struct target *const target)
 						riscv_supports_extension(target, riscv_current_hartid(target), 'F');
 					p_reg->group = "float";
 					/** @todo This should probably be const. */
-					p_reg->feature = (struct reg_feature *)&feature_fpu;
+					p_reg->feature = (reg_feature_t *)&feature_fpu;
 					break;
 
 				case CSR_SSTATUS:
@@ -3284,7 +3255,7 @@ riscv_init_registers(struct target *const target)
 			snprintf(reg_name, max_reg_name_len - 1, "priv");
 			p_reg->group = "general";
 			/** @todo This should probably be const. */
-			p_reg->feature = (struct reg_feature *)(&feature_virtual);
+			p_reg->feature = (reg_feature_t *)(&feature_virtual);
 			p_reg->size = 8;
 
 		} else {
@@ -3297,7 +3268,7 @@ riscv_init_registers(struct target *const target)
 
 			p_reg->group = "custom";
 			/** @todo This should probably be const. */
-			p_reg->feature = (struct reg_feature *)(&feature_custom);
+			p_reg->feature = (reg_feature_t *)(&feature_custom);
 			p_reg->arch_info = calloc(1, sizeof(riscv_reg_info_t));
 			assert(p_reg->arch_info);
 			((riscv_reg_info_t *)(p_reg->arch_info))->target = target;
@@ -3323,3 +3294,64 @@ riscv_init_registers(struct target *const target)
 
 	return ERROR_OK;
 }
+
+struct target_type riscv_target = {
+	.name = "riscv",
+	.poll = old_or_new_riscv_poll,
+	.arch_state = riscv_arch_state,
+#if 0
+	.target_request_data = NULL,
+#endif
+	.halt = old_or_new_riscv_halt,
+	.resume = old_or_new_riscv_resume,
+	.step = old_or_new_riscv_step,
+	.assert_reset = riscv_assert_reset,
+	.deassert_reset = riscv_deassert_reset,
+#if 0
+	.soft_reset_halt = NULL,
+#endif
+	.get_gdb_reg_list = riscv_get_gdb_reg_list,
+	.read_memory = riscv_read_memory,
+	.write_memory = riscv_write_memory,
+#if 0
+    .read_buffer = NULL,
+	.write_buffer = NULL,
+#endif
+	.checksum_memory = riscv_checksum_memory,
+#if 0
+	.blank_check_memory = NULL,
+#endif
+	.add_breakpoint = riscv_add_breakpoint,
+#if 0
+	.add_context_breakpoint = NULL,
+	.add_hybrid_breakpoint = NULL,
+#endif
+	.remove_breakpoint = riscv_remove_breakpoint,
+	.add_watchpoint = riscv_add_watchpoint,
+	.remove_watchpoint = riscv_remove_watchpoint,
+	.hit_watchpoint = riscv_hit_watchpoint,
+	.run_algorithm = riscv_run_algorithm,
+#if 0
+	.start_algorithm = NULL,
+	.wait_algorithm = NULL,
+#endif
+	.commands = riscv_command_handlers,
+#if 0
+	.target_create = NULL,
+	.target_jim_configure = NULL,
+	.target_jim_commands = NULL,
+#endif
+	.examine = riscv_examine,
+	.init_target = riscv_init_target,
+	.deinit_target = riscv_deinit_target,
+#if 0
+	.virt2phys = NULL,
+	.read_phys_memory = NULL,
+	.write_phys_memory = NULL,
+	.mmu = NULL,
+	.check_reset = NULL,
+	.get_gdb_fileio_info = NULL,
+	.gdb_fileio_end = NULL,
+	.profiling = NULL,
+#endif
+};
