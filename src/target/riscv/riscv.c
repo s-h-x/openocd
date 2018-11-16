@@ -413,8 +413,6 @@ static int
 add_trigger(struct target *const target,
 	struct trigger *const trigger)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-
 	{
 		int const err = riscv_enumerate_triggers(target);
 		if (ERROR_OK != err)
@@ -430,8 +428,9 @@ add_trigger(struct target *const target,
 	riscv_reg_t tselect[RISCV_MAX_HARTS];
 
 	int first_hart = -1;
+	int const number_of_harts = riscv_count_harts(target);
 
-	for (int hartid = 0; hartid < riscv_count_harts(target); ++hartid) {
+	for (int hartid = 0; hartid < number_of_harts; ++hartid) {
 		if (!riscv_hart_enabled(target, hartid))
 			continue;
 
@@ -448,6 +447,9 @@ add_trigger(struct target *const target,
 	}
 
 	assert(first_hart >= 0);
+
+	struct riscv_info_t *const r = riscv_info(target);
+	assert(r);
 
 	unsigned i;
 
@@ -2376,8 +2378,9 @@ riscv_xlen_of_hart(struct target const *const target,
 }
 
 bool
-riscv_rtos_enabled(const struct target *const target)
+riscv_rtos_enabled(struct target const *const target)
 {
+	assert(target);
 	return !!target->rtos;
 }
 
@@ -2460,7 +2463,7 @@ riscv_set_rtos_hartid(struct target *const target, int const hartid)
 	@bag return signed value
 */
 int
-riscv_count_harts(struct target *const target)
+riscv_count_harts(struct target const *const target)
 {
 	/** @bug riscv_count_harts 1 for NULL and bad target */
 	if (target == NULL)

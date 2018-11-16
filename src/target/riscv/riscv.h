@@ -242,7 +242,9 @@ int riscv_xlen(const struct target *target);
 int riscv_xlen_of_hart(const struct target *target, int hartid);
 /** @} */
 
-bool riscv_rtos_enabled(const struct target *target);
+bool
+__attribute__((pure))
+riscv_rtos_enabled(struct target const *target);
 
 /** Sets the current hart, which is the hart that will actually be used when
  * issuing debug commands. */
@@ -262,8 +264,10 @@ void riscv_set_rtos_hartid(struct target *target, int hartid);
 /** @} */
 
 /** Lists the number of harts in the system, which are assumed to be
- * concecutive and start with mhartid=0. */
-int riscv_count_harts(struct target *target);
+ * consecutive and start with `mhartid=0`. */
+int
+__attribute__((pure))
+riscv_count_harts(struct target const *target);
 
 /** @returns TRUE if the target has the given register on the given hart.  */
 bool riscv_has_register(struct target *target, int hartid, int regid);
