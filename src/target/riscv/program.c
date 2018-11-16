@@ -25,19 +25,18 @@ riscv_program_init(struct riscv_program *const p,
 	return ERROR_OK;
 }
 
-static int
+static inline int
 riscv_write_debug_buffer(struct target *const target,
 	int const index,
 	riscv_insn_t const insn)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->write_debug_buffer);
-	r->write_debug_buffer(target, index, insn);
-	return ERROR_OK;
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi && rvi->write_debug_buffer);
+	return rvi->write_debug_buffer(target, index, insn);
 }
 
 int
-riscv_program_write(struct riscv_program *program)
+riscv_program_write(struct riscv_program *const program)
 {
 	assert(program && program->target);
 
@@ -58,29 +57,31 @@ riscv_program_write(struct riscv_program *program)
 	return ERROR_OK;
 }
 
-static int
+static inline int
 riscv_execute_debug_buffer(struct target *const target)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->execute_debug_buffer);
-	return r->execute_debug_buffer(target);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi && rvi->execute_debug_buffer);
+	return rvi->execute_debug_buffer(target);
 }
 
-static riscv_insn_t
+static inline riscv_insn_t
 riscv_read_debug_buffer(struct target *const target,
 	int const index)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->read_debug_buffer);
-	return r->read_debug_buffer(target, index);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi && rvi->read_debug_buffer);
+	return rvi->read_debug_buffer(target, index);
 }
 
 static size_t
 riscv_debug_buffer_size(struct target *const target)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	return r->harts[riscv_current_hartid(target)].debug_buffer_size;
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
+	int const hart = riscv_current_hartid(target);
+	assert(hart < RISCV_MAX_HARTS);
+	return rvi->harts[hart].debug_buffer_size;
 }
 
 /** Add ebreak and execute the program. */

@@ -191,9 +191,9 @@ riscv_info_init(struct target *const target)
 		return NULL;
 	}
 
-	memset(r, 0, sizeof *r);
 	r->dtm_version = 1;
 	r->registers_initialized = false;
+	/** @bug r->current_hartid != target->coreid in common case */
 	r->current_hartid = target->coreid;
 
 	memset(r->trigger_unique_id, 0xff, sizeof r->trigger_unique_id);
@@ -304,14 +304,14 @@ maybe_add_trigger_t1(struct target *const target,
 	}
 
 	assert(trigger);
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
 	tdata1 = set_field(tdata1, bpcontrol_r, trigger->read);
 	tdata1 = set_field(tdata1, bpcontrol_w, trigger->write);
 	tdata1 = set_field(tdata1, bpcontrol_x, trigger->execute);
-	tdata1 = set_field(tdata1, bpcontrol_u, !!(r->harts[hartid].misa & (1 << ('U' - 'A'))));
-	tdata1 = set_field(tdata1, bpcontrol_s, !!(r->harts[hartid].misa & (1 << ('S' - 'A'))));
-	tdata1 = set_field(tdata1, bpcontrol_h, !!(r->harts[hartid].misa & (1 << ('H' - 'A'))));
+	tdata1 = set_field(tdata1, bpcontrol_u, !!(rvi->harts[hartid].misa & (1 << ('U' - 'A'))));
+	tdata1 = set_field(tdata1, bpcontrol_s, !!(rvi->harts[hartid].misa & (1 << ('S' - 'A'))));
+	tdata1 = set_field(tdata1, bpcontrol_h, !!(rvi->harts[hartid].misa & (1 << ('H' - 'A'))));
 	tdata1 |= bpcontrol_m;
 	tdata1 = set_field(tdata1, bpcontrol_bpmatch, 0); /* exact match */
 	tdata1 = set_field(tdata1, bpcontrol_bpaction, 0); /* cause bp exception */
@@ -348,7 +348,7 @@ maybe_add_trigger_t2(struct target *const target,
 	struct trigger *const trigger,
 	uint64_t tdata1)
 {
-	struct riscv_info_t *const r = riscv_info(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
 
 	/* tselect is already set */
 	if (0 != (tdata1 & (MCONTROL_EXECUTE | MCONTROL_STORE | MCONTROL_LOAD))) {
@@ -362,13 +362,13 @@ maybe_add_trigger_t2(struct target *const target,
 	tdata1 = set_field(tdata1, MCONTROL_MATCH, MCONTROL_MATCH_EQUAL);
 	tdata1 |= MCONTROL_M;
 
-	if (r->harts[hartid].misa & (1 << ('H' - 'A')))
+	if (rvi->harts[hartid].misa & (1 << ('H' - 'A')))
 		tdata1 |= MCONTROL_H;
 
-	if (r->harts[hartid].misa & (1 << ('S' - 'A')))
+	if (rvi->harts[hartid].misa & (1 << ('S' - 'A')))
 		tdata1 |= MCONTROL_S;
 
-	if (r->harts[hartid].misa & (1 << ('U' - 'A')))
+	if (rvi->harts[hartid].misa & (1 << ('U' - 'A')))
 		tdata1 |= MCONTROL_U;
 
 	assert(trigger);
@@ -448,13 +448,13 @@ add_trigger(struct target *const target,
 
 	assert(first_hart >= 0);
 
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
 
 	unsigned i;
 
-	for (i = 0; i < r->harts[first_hart].trigger_count; ++i) {
-		if (r->trigger_unique_id[i] != -1)
+	for (i = 0; i < rvi->harts[first_hart].trigger_count; ++i) {
+		if (rvi->trigger_unique_id[i] != -1)
 			continue;
 
 		riscv_set_register_on_hart(target, first_hart, GDB_REGNO_TSELECT, i);
@@ -509,7 +509,7 @@ add_trigger(struct target *const target,
 				i,
 				type,
 				trigger->unique_id);
-		r->trigger_unique_id[i] = trigger->unique_id;
+		rvi->trigger_unique_id[i] = trigger->unique_id;
 		break;
 	}
 
@@ -523,7 +523,7 @@ add_trigger(struct target *const target,
 			return err;
 	}
 
-	if (i >= r->harts[first_hart].trigger_count) {
+	if (i >= rvi->harts[first_hart].trigger_count) {
 		LOG_ERROR("%s: Couldn't find an available hardware trigger.", target->cmd_name);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
@@ -611,8 +611,6 @@ static int
 remove_trigger(struct target *const target,
 	struct trigger *const trigger)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-
 	{
 		int const err = riscv_enumerate_triggers(target);
 
@@ -634,14 +632,17 @@ remove_trigger(struct target *const target,
 
 	assert(first_hart >= 0);
 	assert(trigger);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
+
 	unsigned i;
 
-	for (i = 0; i < r->harts[first_hart].trigger_count; ++i) {
-		if (r->trigger_unique_id[i] == trigger->unique_id)
+	for (i = 0; i < rvi->harts[first_hart].trigger_count; ++i) {
+		if (rvi->trigger_unique_id[i] == trigger->unique_id)
 			break;
 	}
 
-	if (i >= r->harts[first_hart].trigger_count) {
+	if (rvi->harts[first_hart].trigger_count <= i) {
 		LOG_ERROR("%s: Couldn't find the hardware resources used by hardware trigger.",
 			target->cmd_name);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
@@ -666,7 +667,7 @@ remove_trigger(struct target *const target,
 		riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, tselect);
 	}
 
-	r->trigger_unique_id[i] = -1;
+	rvi->trigger_unique_id[i] = -1;
 
 	return ERROR_OK;
 }
@@ -898,16 +899,20 @@ static int old_or_new_riscv_step(struct target *const target,
 	target_addr_t const address,
 	int const handle_breakpoints)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	LOG_DEBUG("%s: handle_breakpoints=%d", target->cmd_name, handle_breakpoints);
+	LOG_DEBUG("%s: handle_breakpoints=%d",
+		target->cmd_name, handle_breakpoints);
 
-	if (r->is_halted == NULL)
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
+
+	if (!rvi->is_halted)
 		return oldriscv_step(target, current, address, handle_breakpoints);
 	else
 		return riscv_openocd_step(target, current, address, handle_breakpoints);
 }
 
-static int riscv_examine(struct target *const target)
+static int
+riscv_examine(struct target *const target)
 {
 	assert(target);
 	LOG_DEBUG("%s: riscv_examine()", target->cmd_name);
@@ -949,17 +954,17 @@ oldriscv_poll(struct target *const target)
 static int
 old_or_new_riscv_poll(struct target *const target)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	return r->is_halted ? riscv_openocd_poll(target) : oldriscv_poll(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
+	return rvi->is_halted ? riscv_openocd_poll(target) : oldriscv_poll(target);
 }
 
 static int
 old_or_new_riscv_halt(struct target *const target)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	return r->is_halted ? riscv_openocd_halt(target) : oldriscv_halt(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
+	return rvi->is_halted ? riscv_openocd_halt(target) : oldriscv_halt(target);
 }
 
 static int
@@ -1003,11 +1008,11 @@ old_or_new_riscv_resume(struct target *const target,
 			target->cmd_name,
 			handle_breakpoints);
 
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
 
 	return
-		r->is_halted ?
+		rvi->is_halted ?
 		riscv_openocd_resume(target, current, address, handle_breakpoints, debug_execution) :
 		oldriscv_resume(target, current, address, handle_breakpoints, debug_execution);
 }
@@ -1016,12 +1021,13 @@ static int
 riscv_select_current_hart(struct target *const target)
 {
 	if (riscv_rtos_enabled(target)) {
-		struct riscv_info_t *const r = riscv_info(target);
-		assert(r);
+		struct riscv_info_t *const rvi = riscv_info(target);
+		assert(rvi);
 
-		if (r->rtos_hartid == -1)
-			r->rtos_hartid = target->rtos->current_threadid - 1;
-		return riscv_set_current_hartid(target, r->rtos_hartid);
+		if (rvi->rtos_hartid == -1)
+			rvi->rtos_hartid = target->rtos->current_threadid - 1;
+
+		return riscv_set_current_hartid(target, rvi->rtos_hartid);
 	} else
 		return riscv_set_current_hartid(target, target->coreid);
 }
@@ -1109,15 +1115,13 @@ riscv_get_gdb_reg_list(struct target *const target,
 {
 	assert(target);
 	LOG_DEBUG("%s: reg_class=%d",
-			target->cmd_name,
-			reg_class);
+		target->cmd_name, reg_class);
 
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
+
 	LOG_DEBUG("%s: rtos_hartid=%d current_hartid=%d",
-			target->cmd_name,
-			r->rtos_hartid,
-			r->current_hartid);
+			target->cmd_name, rvi->rtos_hartid, rvi->current_hartid);
 
 	if (!target->reg_cache) {
 		LOG_ERROR("%s: Target not initialized.",
@@ -1402,8 +1406,6 @@ enum riscv_poll_hart_e {
 static enum riscv_poll_hart_e
 riscv_poll_hart(struct target *const target, int const hartid)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-
 	if (ERROR_OK != riscv_set_current_hartid(target, hartid))
 		return RPH_ERROR;
 
@@ -1414,8 +1416,11 @@ riscv_poll_hart(struct target *const target, int const hartid)
 	bool const halted = riscv_is_halted(target);
 
 	if (target->state != TARGET_HALTED && halted) {
-		LOG_DEBUG("%s:  triggered a halt", target->cmd_name);
-		r->on_halt(target);
+		LOG_DEBUG("%s:  triggered a halt",
+			target->cmd_name);
+		struct riscv_info_t const *const rvi = riscv_info(target);
+		assert(rvi && rvi->on_halt);
+		rvi->on_halt(target);
 		return RPH_DISCOVERED_HALTED;
 	} else if (target->state != TARGET_RUNNING && !halted) {
 		LOG_DEBUG("%s:  triggered running", target->cmd_name);
@@ -1429,7 +1434,6 @@ riscv_poll_hart(struct target *const target, int const hartid)
 static int
 riscv_halt_one_hart(struct target *const target, int const hartid)
 {
-	struct riscv_info_t *const r = riscv_info(target);
 	LOG_DEBUG("%s: halting hart %d", target->cmd_name, hartid);
 
 	{
@@ -1446,7 +1450,9 @@ riscv_halt_one_hart(struct target *const target, int const hartid)
 		return ERROR_OK;
 	}
 
-	return r->halt_current_hart(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi && rvi->halt_current_hart);
+	return rvi->halt_current_hart(target);
 }
 
 int
@@ -1570,16 +1576,15 @@ riscv_openocd_halt(struct target *const target)
 	register_cache_invalidate(target->reg_cache);
 
 	if (riscv_rtos_enabled(target)) {
-		struct riscv_info_t *const r =
-			riscv_info(target);
-		assert(r);
+		struct riscv_info_t const *const rvi = riscv_info(target);
+		assert(rvi);
 
-		if (r->rtos_hartid != -1) {
+		if (rvi->rtos_hartid != -1) {
 			LOG_DEBUG("%s: halt requested on RTOS hartid %d",
-				target->cmd_name,
-				r->rtos_hartid);
-			target->rtos->current_threadid = r->rtos_hartid + 1;
-			target->rtos->current_thread = r->rtos_hartid + 1;
+				target->cmd_name, rvi->rtos_hartid);
+			assert(target->rtos);
+			target->rtos->current_threadid = rvi->rtos_hartid + 1;
+			target->rtos->current_thread = rvi->rtos_hartid + 1;
 		} else
 			LOG_DEBUG("%s: halt requested, but no known RTOS hartid",
 				target->cmd_name);
@@ -1594,11 +1599,12 @@ riscv_openocd_halt(struct target *const target)
 int
 riscv_step_rtos_hart(struct target *const target)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	int hartid = r->current_hartid;
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
+	int hartid = rvi->current_hartid;
 
 	if (riscv_rtos_enabled(target)) {
-		hartid = r->rtos_hartid;
+		hartid = rvi->rtos_hartid;
 		if (hartid == -1) {
 			LOG_DEBUG("%s: GDB has asked me to step \"any\" thread, so I'm stepping hart 0.", target->cmd_name);
 			hartid = 0;
@@ -1619,20 +1625,20 @@ riscv_step_rtos_hart(struct target *const target)
 	}
 
 	riscv_invalidate_register_cache(target);
-	assert(r->on_step);
-	r->on_step(target);
+	assert(rvi->on_step);
+	rvi->on_step(target);
 
 	{
-		assert(r->step_current_hart);
-		int const err = r->step_current_hart(target);
+		assert(rvi->step_current_hart);
+		int const err = rvi->step_current_hart(target);
 		if (ERROR_OK != err)
 			return err;
 	}
 
 	riscv_invalidate_register_cache(target);
 	{
-		assert(r->on_halt);
-		int const err = r->on_halt(target);
+		assert(rvi->on_halt);
+		int const err = rvi->on_halt(target);
 
 		if (!riscv_is_halted(target)) {
 			LOG_ERROR("%s: Hart was not halted after single step!", target->cmd_name);
@@ -1792,11 +1798,11 @@ COMMAND_HANDLER(riscv_test_compliance)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
 
-	if (r->test_compliance) {
-		return r->test_compliance(target);
+	if (rvi->test_compliance) {
+		return rvi->test_compliance(target);
 	} else {
 		LOG_ERROR("%s: This target does not support this command"
 				" (may implement an older version of the spec).",
@@ -1937,18 +1943,19 @@ COMMAND_HANDLER(riscv_authdata_read)
 		return ERROR_TARGET_INVALID;
 	}
 
-	struct riscv_info_t *const r = riscv_info(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
 
-	if (!r) {
-		LOG_ERROR("%s: riscv_info is NULL!", target->cmd_name);
+	if (!rvi) {
+		LOG_ERROR("%s: riscv_info is NULL!",
+			target->cmd_name);
 		return ERROR_TARGET_INVALID;
 	}
 
-	if (r->authdata_read) {
+	if (rvi->authdata_read) {
 		uint32_t value;
 
 		{
-			int const err = r->authdata_read(target, &value);
+			int const err = rvi->authdata_read(target, &value);
 
 			if (ERROR_OK != err)
 				return err;
@@ -1974,11 +1981,11 @@ COMMAND_HANDLER(riscv_authdata_write)
 	uint32_t value;
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], value);
 
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
 
-	if (r->authdata_write) {
-		return r->authdata_write(target, value);
+	if (rvi->authdata_write) {
+		return rvi->authdata_write(target, value);
 	} else {
 		LOG_ERROR("%s: authdata_write is not implemented for this target.", target->cmd_name);
 		return ERROR_TARGET_INVALID;
@@ -1999,20 +2006,20 @@ COMMAND_HANDLER(riscv_dmi_read)
 		return ERROR_TARGET_INVALID;
 	}
 
-	struct riscv_info_t *const r = riscv_info(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
 
-	if (!r) {
+	if (!rvi) {
 		LOG_ERROR("%s: riscv_info is NULL!", target->cmd_name);
 		return ERROR_TARGET_INVALID;
 	}
 
-	if (r->dmi_read) {
+	if (rvi->dmi_read) {
 		uint32_t address;
 		uint32_t value;
 		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], address);
 
 		{
-			int const err = r->dmi_read(target, &value, address);
+			int const err = rvi->dmi_read(target, &value, address);
 
 			if (ERROR_OK != err)
 				return err;
@@ -2041,11 +2048,11 @@ COMMAND_HANDLER(riscv_dmi_write)
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], value);
 
 	struct target *const target = get_current_target(CMD_CTX);
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
 
-	if (r->dmi_write) {
-		return r->dmi_write(target, address, value);
+	if (rvi->dmi_write) {
+		return rvi->dmi_write(target, address, value);
 	} else {
 		LOG_ERROR("%s: dmi_write is not implemented for this target.", target->cmd_name);
 		return ERROR_TARGET_INVALID;
@@ -2072,12 +2079,12 @@ COMMAND_HANDLER(riscv_test_sba_config_reg)
 	COMMAND_PARSE_ON_OFF(CMD_ARGV[3], run_sbbusyerror_test);
 
 	struct target *const target = get_current_target(CMD_CTX);
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
 
-	if (r->test_sba_config_reg) {
+	if (rvi->test_sba_config_reg) {
 		return
-			r->test_sba_config_reg(target, legal_address, num_words, illegal_address, run_sbbusyerror_test);
+			rvi->test_sba_config_reg(target, legal_address, num_words, illegal_address, run_sbbusyerror_test);
 	} else {
 		LOG_ERROR("%s: test_sba_config_reg is not implemented for this target.", target->cmd_name);
 		return ERROR_TARGET_INVALID;
@@ -2314,16 +2321,16 @@ riscv_resume_one_hart(struct target *const target, int const hartid)
 		return ERROR_OK;
 	}
 
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->on_resume);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi && rvi->on_resume);
 	{
-		int const err = r->on_resume(target);
+		int const err = rvi->on_resume(target);
 
 		if (ERROR_OK != err)
 			return err;
 	}
-	assert(r->resume_current_hart);
-	return r->resume_current_hart(target);
+	assert(rvi->resume_current_hart);
+	return rvi->resume_current_hart(target);
 }
 
 int
@@ -2343,65 +2350,24 @@ riscv_resume_all_harts(struct target *const target)
 	return result;
 }
 
-bool
-riscv_supports_extension(struct target *const target,
-	int const hartid,
-	char const letter)
-{
-	unsigned num;
-
-	if (letter >= 'a' && letter <= 'z')
-		num = letter - 'a';
-	else if (letter >= 'A' && letter <= 'Z')
-		num = letter - 'A';
-	else
-		return false;
-
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && hartid < RISCV_MAX_HARTS && num <= ('Z' - 'A'));
-	return r->harts[hartid].misa & (1 << num);
-}
-
-int
-riscv_xlen(struct target const *const target)
-{
-	return riscv_xlen_of_hart(target, riscv_current_hartid(target));
-}
-
-int
-riscv_xlen_of_hart(struct target const *const target,
-	int const hartid)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r->harts[hartid].xlen != -1);
-	return r->harts[hartid].xlen;
-}
-
-bool
-riscv_rtos_enabled(struct target const *const target)
-{
-	assert(target);
-	return !!target->rtos;
-}
-
 /** @return error code */
 int
 riscv_set_current_hartid(struct target *const target,
 	int const hartid)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
 
-	if (!r->select_current_hart)
+	if (!rvi->select_current_hart)
 		return ERROR_OK;
 
 	int const previous_hartid = riscv_current_hartid(target);
-	r->current_hartid = hartid;
+	rvi->current_hartid = hartid;
 	assert(riscv_hart_enabled(target, hartid));
 	LOG_DEBUG("%s: setting hartid to %d, was %d", target->cmd_name, hartid, previous_hartid);
 
 	{
-		int const err = r->select_current_hart(target);
+		int const err = rvi->select_current_hart(target);
 
 		if (ERROR_OK != err)
 			return err;
@@ -2428,34 +2394,9 @@ riscv_invalidate_register_cache(struct target *const target)
 		reg->valid = false;
 	}
 
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	r->registers_initialized = true;
-}
-
-int
-riscv_current_hartid(const struct target *const target)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	return r->current_hartid;
-}
-
-void
-riscv_set_all_rtos_harts(struct target *const target)
-{
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	r->rtos_hartid = -1;
-}
-
-void
-riscv_set_rtos_hartid(struct target *const target, int const hartid)
-{
-	LOG_DEBUG("%s: setting RTOS hartid %d", target->cmd_name, hartid);
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	r->rtos_hartid = hartid;
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
+	rvi->registers_initialized = true;
 }
 
 /**
@@ -2469,24 +2410,12 @@ riscv_count_harts(struct target const *const target)
 	if (target == NULL)
 		return 1;
 
-	struct riscv_info_t *const r = riscv_info(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
 
-	if (!r)
+	if (!rvi)
 		return 1;
 
-	return r->hart_count;
-}
-
-/**
-	@deprecated Always return true
-	@return error code
-*/
-bool
-riscv_has_register(struct target *const target,
-	int const hartid,
-	int const regid)
-{
-	return true;
+	return rvi->hart_count;
 }
 
 /**
@@ -2498,10 +2427,10 @@ riscv_has_register(struct target *const target,
  */
 int
 riscv_set_register(struct target *const target,
-	enum gdb_regno const r,
-	riscv_reg_t const v)
+	enum gdb_regno const gdb_reg_no,
+	riscv_reg_t const value)
 {
-	return riscv_set_register_on_hart(target, riscv_current_hartid(target), r, v);
+	return riscv_set_register_on_hart(target, riscv_current_hartid(target), gdb_reg_no, value);
 }
 
 /**	@return error code */
@@ -2512,9 +2441,9 @@ riscv_set_register_on_hart(struct target *const target,
 	uint64_t const value)
 {
 	LOG_DEBUG("%s: [%d] %s <- %" PRIx64, target->cmd_name, hartid, gdb_regno_name(regid), value);
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->set_register);
-	return r->set_register(target, hartid, regid, value);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi && rvi->set_register);
+	return rvi->set_register(target, hartid, regid, value);
 }
 
 /**	@note Syntactical sugar
@@ -2539,12 +2468,12 @@ riscv_get_register_on_hart(struct target *const target,
 	int const hartid,
 	enum gdb_regno const regid)
 {
-	struct riscv_info_t *const r = riscv_info(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
 
 	if (riscv_current_hartid(target) != hartid)
 		riscv_invalidate_register_cache(target);
 
-	int const err = r->get_register(target, value, hartid, regid);
+	int const err = rvi->get_register(target, value, hartid, regid);
 
 	if (riscv_current_hartid(target) != hartid)
 		riscv_invalidate_register_cache(target);
@@ -2557,15 +2486,16 @@ riscv_get_register_on_hart(struct target *const target,
 bool
 riscv_is_halted(struct target *const target)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && r->is_halted);
-	return r->is_halted(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi && rvi->is_halted);
+	return rvi->is_halted(target);
 }
 
 enum riscv_halt_reason
-	riscv_halt_reason(struct target *const target, int hartid)
+	riscv_halt_reason(struct target *const target,
+		int const hartid)
 {
-	struct riscv_info_t *const r = riscv_info(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
 
 	if (riscv_set_current_hartid(target, hartid) != ERROR_OK)
 		return RISCV_HALT_ERROR;
@@ -2575,7 +2505,7 @@ enum riscv_halt_reason
 		return RISCV_HALT_UNKNOWN;
 	}
 
-	return r->halt_reason(target);
+	return rvi->halt_reason(target);
 }
 
 bool riscv_hart_enabled(struct target *const target, int hartid)
@@ -2598,13 +2528,11 @@ bool riscv_hart_enabled(struct target *const target, int hartid)
 int
 riscv_enumerate_triggers(struct target *const target)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
 
-	if (r->triggers_enumerated)
+	if (rvi->triggers_enumerated)
 		return ERROR_OK;
-
-	r->triggers_enumerated = true;	/* At the very least we tried. */
 
 	for (int hartid = 0; hartid < riscv_count_harts(target); ++hartid) {
 		if (!riscv_hart_enabled(target, hartid))
@@ -2620,7 +2548,7 @@ riscv_enumerate_triggers(struct target *const target)
 		}
 
 		for (unsigned t = 0; t < RISCV_MAX_TRIGGERS; ++t) {
-			r->harts[hartid].trigger_count = t;
+			rvi->harts[hartid].trigger_count = t;
 
 			riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, t);
 			uint64_t tselect_rb;
@@ -2672,16 +2600,19 @@ riscv_enumerate_triggers(struct target *const target)
 			}
 		}
 
-		int const err =
-			riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, tselect);
+		{
+			int const err =
+				riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, tselect);
 
-		if (ERROR_OK != err)
-			return err;
+			if (ERROR_OK != err)
+				return err;
+		}
 
 		LOG_INFO("%s: [%d] Found %d triggers",
-			target->cmd_name, hartid, r->harts[hartid].trigger_count);
+			target->cmd_name, hartid, rvi->harts[hartid].trigger_count);
 	}
 
+	rvi->triggers_enumerated = true;
 	return ERROR_OK;
 }
 
@@ -2850,14 +2781,14 @@ riscv_init_registers(struct target *const target)
 	assert(target->reg_cache->reg_list);
 
 	static unsigned const max_reg_name_len = 12;
-	struct riscv_info_t *const info = riscv_info(target);
-	assert(info);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
 
-	if (info->reg_names)
-		free(info->reg_names);
+	if (rvi->reg_names)
+		free(rvi->reg_names);
 
-	info->reg_names = calloc(target->reg_cache->num_regs, max_reg_name_len);
-	assert(info->reg_names);
+	rvi->reg_names = calloc(target->reg_cache->num_regs, max_reg_name_len);
+	assert(rvi->reg_names);
 
 	static struct reg_feature const feature_cpu = {
 		.name = "org.gnu.gdb.riscv.cpu"
@@ -2905,7 +2836,7 @@ riscv_init_registers(struct target *const target)
 	assert(shared_reg_info);
 	shared_reg_info->target = target;
 
-	char *reg_name = info->reg_names;
+	char *reg_name = rvi->reg_names;
 
 	/* When gdb requests register N, gdb_get_register_packet() assumes that this
 	 * is register at index N in reg_list. So if there are certain registers
@@ -2914,314 +2845,314 @@ riscv_init_registers(struct target *const target)
 	 * between). */
 	for (uint32_t number = 0; number < target->reg_cache->num_regs; ++number) {
 		assert(target && target->reg_cache && target->reg_cache->reg_list && number < target->reg_cache->num_regs);
-		struct reg *const r = &target->reg_cache->reg_list[number];
-		r->dirty = false;
-		r->valid = false;
-		r->exist = true;
-		r->type = &riscv_reg_arch_type;
-		r->arch_info = shared_reg_info;
-		r->number = number;
-		r->size = riscv_xlen(target);
+		struct reg *const p_reg = &target->reg_cache->reg_list[number];
+		p_reg->dirty = false;
+		p_reg->valid = false;
+		p_reg->exist = true;
+		p_reg->type = &riscv_reg_arch_type;
+		p_reg->arch_info = shared_reg_info;
+		p_reg->number = number;
+		p_reg->size = riscv_xlen(target);
 
-		/* r->size is set in riscv_invalidate_register_cache, maybe because the
+		/* p_reg->size is set in riscv_invalidate_register_cache, maybe because the
 		 * target is in theory allowed to change XLEN on us. But I expect a lot
 		 * of other things to break in that case as well. */
 		if (number <= GDB_REGNO_XPR31) {
-			r->caller_save = true;
+			p_reg->caller_save = true;
 
 			switch (number) {
 				case GDB_REGNO_ZERO:
-					r->name = "zero";
+					p_reg->name = "zero";
 					break;
 
 				case GDB_REGNO_RA:
-					r->name = "ra";
+					p_reg->name = "ra";
 					break;
 
 				case GDB_REGNO_SP:
-					r->name = "sp";
+					p_reg->name = "sp";
 					break;
 
 				case GDB_REGNO_GP:
-					r->name = "gp";
+					p_reg->name = "gp";
 					break;
 
 				case GDB_REGNO_TP:
-					r->name = "tp";
+					p_reg->name = "tp";
 					break;
 
 				case GDB_REGNO_T0:
-					r->name = "t0";
+					p_reg->name = "t0";
 					break;
 
 				case GDB_REGNO_T1:
-					r->name = "t1";
+					p_reg->name = "t1";
 					break;
 
 				case GDB_REGNO_T2:
-					r->name = "t2";
+					p_reg->name = "t2";
 					break;
 
 				case GDB_REGNO_FP:
-					r->name = "fp";
+					p_reg->name = "fp";
 					break;
 
 				case GDB_REGNO_S1:
-					r->name = "s1";
+					p_reg->name = "s1";
 					break;
 
 				case GDB_REGNO_A0:
-					r->name = "a0";
+					p_reg->name = "a0";
 					break;
 
 				case GDB_REGNO_A1:
-					r->name = "a1";
+					p_reg->name = "a1";
 					break;
 
 				case GDB_REGNO_A2:
-					r->name = "a2";
+					p_reg->name = "a2";
 					break;
 
 				case GDB_REGNO_A3:
-					r->name = "a3";
+					p_reg->name = "a3";
 					break;
 
 				case GDB_REGNO_A4:
-					r->name = "a4";
+					p_reg->name = "a4";
 					break;
 
 				case GDB_REGNO_A5:
-					r->name = "a5";
+					p_reg->name = "a5";
 					break;
 
 				case GDB_REGNO_A6:
-					r->name = "a6";
+					p_reg->name = "a6";
 					break;
 
 				case GDB_REGNO_A7:
-					r->name = "a7";
+					p_reg->name = "a7";
 					break;
 
 				case GDB_REGNO_S2:
-					r->name = "s2";
+					p_reg->name = "s2";
 					break;
 
 				case GDB_REGNO_S3:
-					r->name = "s3";
+					p_reg->name = "s3";
 					break;
 
 				case GDB_REGNO_S4:
-					r->name = "s4";
+					p_reg->name = "s4";
 					break;
 
 				case GDB_REGNO_S5:
-					r->name = "s5";
+					p_reg->name = "s5";
 					break;
 
 				case GDB_REGNO_S6:
-					r->name = "s6";
+					p_reg->name = "s6";
 					break;
 
 				case GDB_REGNO_S7:
-					r->name = "s7";
+					p_reg->name = "s7";
 					break;
 
 				case GDB_REGNO_S8:
-					r->name = "s8";
+					p_reg->name = "s8";
 					break;
 
 				case GDB_REGNO_S9:
-					r->name = "s9";
+					p_reg->name = "s9";
 					break;
 
 				case GDB_REGNO_S10:
-					r->name = "s10";
+					p_reg->name = "s10";
 					break;
 
 				case GDB_REGNO_S11:
-					r->name = "s11";
+					p_reg->name = "s11";
 					break;
 
 				case GDB_REGNO_T3:
-					r->name = "t3";
+					p_reg->name = "t3";
 					break;
 
 				case GDB_REGNO_T4:
-					r->name = "t4";
+					p_reg->name = "t4";
 					break;
 
 				case GDB_REGNO_T5:
-					r->name = "t5";
+					p_reg->name = "t5";
 					break;
 
 				case GDB_REGNO_T6:
-					r->name = "t6";
+					p_reg->name = "t6";
 					break;
 			}
 
-			r->group = "general";
+			p_reg->group = "general";
 			/** @todo This should probably be const. */
-			r->feature = (struct reg_feature *)(&feature_cpu);
+			p_reg->feature = (struct reg_feature *)(&feature_cpu);
 		} else if (number == GDB_REGNO_PC) {
-			r->caller_save = true;
+			p_reg->caller_save = true;
 			reg_name[max_reg_name_len - 1] = '\0';
 			snprintf(reg_name, max_reg_name_len - 1, "pc");
-			r->group = "general";
+			p_reg->group = "general";
 			/** @todo This should probably be const. */
-			r->feature = (struct reg_feature *)(&feature_cpu);
+			p_reg->feature = (struct reg_feature *)(&feature_cpu);
 		} else if (GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31) {
-			r->caller_save = true;
+			p_reg->caller_save = true;
 
 			if (riscv_supports_extension(target, riscv_current_hartid(target), 'D')) {
 				/** @todo This should probably be const. */
-				r->reg_data_type = (struct reg_data_type *)(&type_ieee_double);
-				r->size = 64;
+				p_reg->reg_data_type = (struct reg_data_type *)(&type_ieee_double);
+				p_reg->size = 64;
 			} else if (riscv_supports_extension(target, riscv_current_hartid(target), 'F')) {
 				/** @todo This should probably be const. */
-				r->reg_data_type = (struct reg_data_type *)(&type_ieee_single);
-				r->size = 32;
+				p_reg->reg_data_type = (struct reg_data_type *)(&type_ieee_single);
+				p_reg->size = 32;
 			} else {
-				r->exist = false;
+				p_reg->exist = false;
 			}
 
 			switch (number) {
 				case GDB_REGNO_FT0:
-					r->name = "ft0";
+					p_reg->name = "ft0";
 					break;
 
 				case GDB_REGNO_FT1:
-					r->name = "ft1";
+					p_reg->name = "ft1";
 					break;
 
 				case GDB_REGNO_FT2:
-					r->name = "ft2";
+					p_reg->name = "ft2";
 					break;
 
 				case GDB_REGNO_FT3:
-					r->name = "ft3";
+					p_reg->name = "ft3";
 					break;
 
 				case GDB_REGNO_FT4:
-					r->name = "ft4";
+					p_reg->name = "ft4";
 					break;
 
 				case GDB_REGNO_FT5:
-					r->name = "ft5";
+					p_reg->name = "ft5";
 					break;
 
 				case GDB_REGNO_FT6:
-					r->name = "ft6";
+					p_reg->name = "ft6";
 					break;
 
 				case GDB_REGNO_FT7:
-					r->name = "ft7";
+					p_reg->name = "ft7";
 					break;
 
 				case GDB_REGNO_FS0:
-					r->name = "fs0";
+					p_reg->name = "fs0";
 					break;
 
 				case GDB_REGNO_FS1:
-					r->name = "fs1";
+					p_reg->name = "fs1";
 					break;
 
 				case GDB_REGNO_FA0:
-					r->name = "fa0";
+					p_reg->name = "fa0";
 					break;
 
 				case GDB_REGNO_FA1:
-					r->name = "fa1";
+					p_reg->name = "fa1";
 					break;
 
 				case GDB_REGNO_FA2:
-					r->name = "fa2";
+					p_reg->name = "fa2";
 					break;
 
 				case GDB_REGNO_FA3:
-					r->name = "fa3";
+					p_reg->name = "fa3";
 					break;
 
 				case GDB_REGNO_FA4:
-					r->name = "fa4";
+					p_reg->name = "fa4";
 					break;
 
 				case GDB_REGNO_FA5:
-					r->name = "fa5";
+					p_reg->name = "fa5";
 					break;
 
 				case GDB_REGNO_FA6:
-					r->name = "fa6";
+					p_reg->name = "fa6";
 					break;
 
 				case GDB_REGNO_FA7:
-					r->name = "fa7";
+					p_reg->name = "fa7";
 					break;
 
 				case GDB_REGNO_FS2:
-					r->name = "fs2";
+					p_reg->name = "fs2";
 					break;
 
 				case GDB_REGNO_FS3:
-					r->name = "fs3";
+					p_reg->name = "fs3";
 					break;
 
 				case GDB_REGNO_FS4:
-					r->name = "fs4";
+					p_reg->name = "fs4";
 					break;
 
 				case GDB_REGNO_FS5:
-					r->name = "fs5";
+					p_reg->name = "fs5";
 					break;
 
 				case GDB_REGNO_FS6:
-					r->name = "fs6";
+					p_reg->name = "fs6";
 					break;
 
 				case GDB_REGNO_FS7:
-					r->name = "fs7";
+					p_reg->name = "fs7";
 					break;
 
 				case GDB_REGNO_FS8:
-					r->name = "fs8";
+					p_reg->name = "fs8";
 					break;
 
 				case GDB_REGNO_FS9:
-					r->name = "fs9";
+					p_reg->name = "fs9";
 					break;
 
 				case GDB_REGNO_FS10:
-					r->name = "fs10";
+					p_reg->name = "fs10";
 					break;
 
 				case GDB_REGNO_FS11:
-					r->name = "fs11";
+					p_reg->name = "fs11";
 					break;
 
 				case GDB_REGNO_FT8:
-					r->name = "ft8";
+					p_reg->name = "ft8";
 					break;
 
 				case GDB_REGNO_FT9:
-					r->name = "ft9";
+					p_reg->name = "ft9";
 					break;
 
 				case GDB_REGNO_FT10:
-					r->name = "ft10";
+					p_reg->name = "ft10";
 					break;
 
 				case GDB_REGNO_FT11:
-					r->name = "ft11";
+					p_reg->name = "ft11";
 					break;
 				/** @bug no default case */
 			}
 
-			r->group = "float";
+			p_reg->group = "float";
 			/** @todo This should probably be const. */
-			r->feature = (struct reg_feature *)(&feature_fpu);
+			p_reg->feature = (struct reg_feature *)(&feature_fpu);
 		} else if (GDB_REGNO_CSR0 <= number && number <= GDB_REGNO_CSR4095) {
-			r->group = "csr";
+			p_reg->group = "csr";
 			/** @todo This should probably be const. */
-			r->feature = (struct reg_feature *)(&feature_csr);
+			p_reg->feature = (struct reg_feature *)(&feature_csr);
 			unsigned const csr_number = number - GDB_REGNO_CSR0;
 
 			unsigned csr_info_index = 0;
@@ -3229,7 +3160,7 @@ riscv_init_registers(struct target *const target)
 				++csr_info_index;
 
 			if (csr_info[csr_info_index].number == csr_number) {
-				r->name = csr_info[csr_info_index].name;
+				p_reg->name = csr_info[csr_info_index].name;
 			} else {
 				reg_name[max_reg_name_len - 1] = '\0';
 				snprintf(reg_name, max_reg_name_len - 1, "csr%d", csr_number);
@@ -3238,18 +3169,18 @@ riscv_init_registers(struct target *const target)
 				 * because eg. Eclipse crashes if a target has too many
 				 * registers, and apparently has no way of only showing a
 				 * subset of registers in any case. */
-				r->exist = false;
+				p_reg->exist = false;
 			}
 
 			switch (csr_number) {
 				case CSR_FFLAGS:
 				case CSR_FRM:
 				case CSR_FCSR:
-					r->exist =
+					p_reg->exist =
 						riscv_supports_extension(target, riscv_current_hartid(target), 'F');
-					r->group = "float";
+					p_reg->group = "float";
 					/** @todo This should probably be const. */
-					r->feature = (struct reg_feature *)&feature_fpu;
+					p_reg->feature = (struct reg_feature *)&feature_fpu;
 					break;
 
 				case CSR_SSTATUS:
@@ -3262,7 +3193,7 @@ riscv_init_registers(struct target *const target)
 				case CSR_SCAUSE:
 				case CSR_STVAL:
 				case CSR_SATP:
-					r->exist = riscv_supports_extension(target,
+					p_reg->exist = riscv_supports_extension(target,
 							riscv_current_hartid(target), 'S');
 					break;
 
@@ -3271,7 +3202,7 @@ riscv_init_registers(struct target *const target)
 					/* "In systems with only M-mode, or with both M-mode and
 					 * U-mode but without U-mode trap support, the medeleg and
 					 * mideleg registers should not exist." */
-					r->exist = riscv_supports_extension(target, riscv_current_hartid(target), 'S') ||
+					p_reg->exist = riscv_supports_extension(target, riscv_current_hartid(target), 'S') ||
 						riscv_supports_extension(target, riscv_current_hartid(target), 'N');
 					break;
 
@@ -3338,15 +3269,15 @@ riscv_init_registers(struct target *const target)
 				case CSR_MHPMCOUNTER29H:
 				case CSR_MHPMCOUNTER30H:
 				case CSR_MHPMCOUNTER31H:
-					r->exist = riscv_xlen(target) == 32;
+					p_reg->exist = riscv_xlen(target) == 32;
 					break;
 			}
 
-			if (!r->exist && expose_csr) {
+			if (!p_reg->exist && expose_csr) {
 				for (unsigned i = 0; expose_csr[i].low <= expose_csr[i].high; ++i) {
 					if (csr_number >= expose_csr[i].low && csr_number <= expose_csr[i].high) {
 						LOG_INFO("%s: Exposing additional CSR %d", target->cmd_name, csr_number);
-						r->exist = true;
+						p_reg->exist = true;
 						break;
 					}
 				}
@@ -3355,10 +3286,10 @@ riscv_init_registers(struct target *const target)
 		} else if (number == GDB_REGNO_PRIV) {
 			reg_name[max_reg_name_len - 1] = '\0';
 			snprintf(reg_name, max_reg_name_len - 1, "priv");
-			r->group = "general";
+			p_reg->group = "general";
 			/** @todo This should probably be const. */
-			r->feature = (struct reg_feature *)(&feature_virtual);
-			r->size = 8;
+			p_reg->feature = (struct reg_feature *)(&feature_virtual);
+			p_reg->size = 8;
 
 		} else {
 			/* Custom registers. */
@@ -3368,13 +3299,13 @@ riscv_init_registers(struct target *const target)
 			assert(range->low <= range->high);
 			unsigned const custom_number = range->low + custom_within_range;
 
-			r->group = "custom";
+			p_reg->group = "custom";
 			/** @todo This should probably be const. */
-			r->feature = (struct reg_feature *)(&feature_custom);
-			r->arch_info = calloc(1, sizeof(riscv_reg_info_t));
-			assert(r->arch_info);
-			((riscv_reg_info_t *)(r->arch_info))->target = target;
-			((riscv_reg_info_t *)(r->arch_info))->custom_number = custom_number;
+			p_reg->feature = (struct reg_feature *)(&feature_custom);
+			p_reg->arch_info = calloc(1, sizeof(riscv_reg_info_t));
+			assert(p_reg->arch_info);
+			((riscv_reg_info_t *)(p_reg->arch_info))->target = target;
+			((riscv_reg_info_t *)(p_reg->arch_info))->custom_number = custom_number;
 			reg_name[max_reg_name_len - 1] = '\0';
 			snprintf(reg_name, max_reg_name_len - 1, "custom%d", custom_number);
 
@@ -3387,11 +3318,11 @@ riscv_init_registers(struct target *const target)
 		}
 
 		if (*reg_name)
-			r->name = reg_name;
+			p_reg->name = reg_name;
 
 		reg_name += strlen(reg_name) + 1;
-		assert(reg_name < info->reg_names + target->reg_cache->num_regs * max_reg_name_len);
-		r->value = &info->reg_cache_values[number];
+		assert(reg_name < rvi->reg_names + target->reg_cache->num_regs * max_reg_name_len);
+		p_reg->value = &rvi->reg_cache_values[number];
 	}
 
 	return ERROR_OK;

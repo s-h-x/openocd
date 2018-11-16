@@ -1352,8 +1352,10 @@ register_write_direct(struct target *const target,
 	riscv013_info_t const *const info = get_info(target);
 	assert(info);
 
-	struct riscv_info_t *const r = riscv_info(target);
-	if (ERROR_OK == result || info->progbufsize + r->impebreak < 2 || !riscv_is_halted(target))
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
+
+	if (ERROR_OK == result || info->progbufsize + rvi->impebreak < 2 || !riscv_is_halted(target))
 		return result;
 
 	struct riscv_program program;
@@ -1511,9 +1513,10 @@ register_read_direct(struct target *const target,
 	riscv013_info_t *const info = get_info(target);
 	assert(info);
 
-	struct riscv_info_t *const r = riscv_info(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
 
-	if (ERROR_OK != result && info->progbufsize + r->impebreak >= 2 && GDB_REGNO_XPR31 < number) {
+	if (ERROR_OK != result && info->progbufsize + rvi->impebreak >= 2 && GDB_REGNO_XPR31 < number) {
 		struct riscv_program program;
 		riscv_program_init(&program, target);
 
@@ -1649,10 +1652,10 @@ static int
 riscv013_select_current_hart(struct target *const target)
 {
 	dm013_info_t *const dm = get_dm(target);
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r && dm);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi && dm);
 
-	if (r->current_hartid == dm->current_hartid)
+	if (rvi->current_hartid == dm->current_hartid)
 		return ERROR_OK;
 
 	uint32_t dmcontrol;
@@ -1664,22 +1667,22 @@ riscv013_select_current_hart(struct target *const target)
 			return err;
 	}
 
-	dmcontrol = set_hartsel(dmcontrol, r->current_hartid);
+	dmcontrol = set_hartsel(dmcontrol, rvi->current_hartid);
 	int const result = dmi_write(target, DMI_DMCONTROL, dmcontrol);
 
-	dm->current_hartid = r->current_hartid;
+	dm->current_hartid = rvi->current_hartid;
 	return result;
 }
 
 static int
 riscv013_halt_current_hart(struct target *const target)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	LOG_DEBUG("%s: halting hart %d", target->cmd_name, r->current_hartid);
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
+	LOG_DEBUG("%s: halting hart %d", target->cmd_name, rvi->current_hartid);
 
 	if (riscv_is_halted(target))
-		LOG_ERROR("%s: Hart %d is already halted!", target->cmd_name, r->current_hartid);
+		LOG_ERROR("%s: Hart %d is already halted!", target->cmd_name, rvi->current_hartid);
 
 	/* Issue the halt command, and then wait for the current hart to halt. */
 	uint32_t dmcontrol;
@@ -1714,7 +1717,7 @@ riscv013_halt_current_hart(struct target *const target)
 		}
 
 		/** @todo Make single message */
-		LOG_ERROR("%s: unable to halt hart %d", target->cmd_name, r->current_hartid);
+		LOG_ERROR("%s: unable to halt hart %d", target->cmd_name, rvi->current_hartid);
 		LOG_ERROR("%s:   dmcontrol=0x%08x", target->cmd_name, dmcontrol);
 		LOG_ERROR("%s:   dmstatus =0x%08x", target->cmd_name, dmstatus);
 		return ERROR_TARGET_FAILURE;
@@ -1769,8 +1772,9 @@ assert_reset(struct target *const target)
 
 	} else {
 		/* Reset just this hart. */
-		struct riscv_info_t *const r = riscv_info(target);
-		uint32_t control = set_hartsel(control_base, r->current_hartid);
+		struct riscv_info_t const *const rvi = riscv_info(target);
+		assert(rvi);
+		uint32_t control = set_hartsel(control_base, rvi->current_hartid);
 		control =
 			set_field(control, DMI_DMCONTROL_HALTREQ, target->reset_halt ? 1 : 0);
 		control = set_field(control, DMI_DMCONTROL_NDMRESET, 1);
@@ -1786,7 +1790,6 @@ assert_reset(struct target *const target)
 static int
 deassert_reset(struct target *const target)
 {
-	struct riscv_info_t *const r = riscv_info(target);
 	riscv013_info_t *const info = get_info(target);
 	select_dmi(target);
 
@@ -1794,8 +1797,8 @@ deassert_reset(struct target *const target)
 	uint32_t control = 0;
 	control = set_field(control, DMI_DMCONTROL_HALTREQ, target->reset_halt ? 1 : 0);
 	control = set_field(control, DMI_DMCONTROL_DMACTIVE, 1);
-	dmi_write(target, DMI_DMCONTROL,
-			set_hartsel(control, r->current_hartid));
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	dmi_write(target, DMI_DMCONTROL, set_hartsel(control, rvi->current_hartid));
 
 	uint32_t dmstatus;
 	assert(info);
@@ -1812,7 +1815,7 @@ deassert_reset(struct target *const target)
 			dmi_write(target, DMI_DMCONTROL,
 					set_hartsel(control, index));
 		} else {
-			index = r->current_hartid;
+			index = rvi->current_hartid;
 		}
 
 		char const *operation = NULL;
@@ -3678,10 +3681,10 @@ static int
 maybe_execute_fence_i(struct target *const target)
 {
 	riscv013_info_t *const info = get_info(target);
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
 
-	if (info->progbufsize + r->impebreak >= 3)
+	if (info->progbufsize + rvi->impebreak >= 3)
 		return execute_fence(target);
 
 	return ERROR_OK;
@@ -3727,12 +3730,13 @@ riscv013_on_resume(struct target *const target)
 static int
 riscv013_step_or_resume_current_hart(struct target *const target, bool step)
 {
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	LOG_DEBUG("%s: resuming hart %d (for step?=%d)", target->cmd_name, r->current_hartid, step);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
+	LOG_DEBUG("%s: resuming hart %d (for step?=%d)",
+		target->cmd_name, rvi->current_hartid, step);
 
 	if (!riscv_is_halted(target)) {
-		LOG_ERROR("%s: Hart %d is not halted!", target->cmd_name, r->current_hartid);
+		LOG_ERROR("%s: Hart %d is not halted!", target->cmd_name, rvi->current_hartid);
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
@@ -3744,7 +3748,7 @@ riscv013_step_or_resume_current_hart(struct target *const target, bool step)
 
 	/* Issue the resume command, and then wait for the current hart to resume. */
 	uint32_t dmcontrol = DMI_DMCONTROL_DMACTIVE;
-	dmcontrol = set_hartsel(dmcontrol, r->current_hartid);
+	dmcontrol = set_hartsel(dmcontrol, rvi->current_hartid);
 	dmi_write(target, DMI_DMCONTROL, dmcontrol | DMI_DMCONTROL_RESUMEREQ);
 
 	uint32_t dmstatus;
@@ -3763,7 +3767,7 @@ riscv013_step_or_resume_current_hart(struct target *const target, bool step)
 		return dmi_write(target, DMI_DMCONTROL, dmcontrol);
 	}
 
-	LOG_ERROR("%s: unable to resume hart %d", target->cmd_name, r->current_hartid);
+	LOG_ERROR("%s: unable to resume hart %d", target->cmd_name, rvi->current_hartid);
 
 	{
 		int const err = dmi_read(target, &dmcontrol, DMI_DMCONTROL);
@@ -4377,15 +4381,15 @@ examine(struct target *const target)
 
 	LOG_INFO("%s: datacount=%d progbufsize=%d", target->cmd_name, info->datacount, info->progbufsize);
 
-	struct riscv_info_t *const r = riscv_info(target);
-	assert(r);
-	r->impebreak = get_field(dmstatus, DMI_DMSTATUS_IMPEBREAK);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
+	rvi->impebreak = get_field(dmstatus, DMI_DMSTATUS_IMPEBREAK);
 
-	if (info->progbufsize + r->impebreak < 2) {
+	if (info->progbufsize + rvi->impebreak < 2) {
 		LOG_WARNING("%s: We won't be able to execute fence instructions on this "
 				"target. Memory may not always appear consistent. "
 				"(progbufsize=%d, impebreak=%d)",
-			target->cmd_name, info->progbufsize, r->impebreak);
+			target->cmd_name, info->progbufsize, rvi->impebreak);
 	}
 
 	/* Before doing anything else we must first enumerate the harts. */
@@ -4396,7 +4400,7 @@ examine(struct target *const target)
 		if (!riscv_rtos_enabled(target) && i != target->coreid)
 			continue;
 
-		r->current_hartid = i;
+		rvi->current_hartid = i;
 
 		{
 			int const err = riscv013_select_current_hart(target);
@@ -4415,7 +4419,7 @@ examine(struct target *const target)
 		if (get_field(s, DMI_DMSTATUS_ANYNONEXISTENT))
 			break;
 
-		r->hart_count = i + 1;
+		rvi->hart_count = i + 1;
 
 		if (get_field(s, DMI_DMSTATUS_ANYHAVERESET))
 			dmi_write(target, DMI_DMCONTROL,
@@ -4432,16 +4436,16 @@ examine(struct target *const target)
 
 		/* Without knowing anything else we can at least mess with the
 		 * program buffer. */
-		r->harts[i].debug_buffer_size = info->progbufsize;
+		rvi->harts[i].debug_buffer_size = info->progbufsize;
 
 		{
 			int const result = register_read_abstract(target, NULL, GDB_REGNO_S0, 64);
 			/** @todo Support 128 */
-			r->harts[i].xlen = result == ERROR_OK ? 64 : 32;
+			rvi->harts[i].xlen = result == ERROR_OK ? 64 : 32;
 		}
 
 		{
-			int const err = register_read(target, &r->harts[i].misa, GDB_REGNO_MISA);
+			int const err = register_read(target, &rvi->harts[i].misa, GDB_REGNO_MISA);
 			if (ERROR_OK != err) {
 				LOG_ERROR("%s: Fatal: Failed to read MISA from hart %d.", target->cmd_name, i);
 				return err;
@@ -4458,16 +4462,16 @@ examine(struct target *const target)
 		/* Display this as early as possible to help people who are using
 		 * really slow simulators. */
 		LOG_DEBUG("%s: hart %d: XLEN=%d, misa=0x%" PRIx64,
-			target->cmd_name, i, r->harts[i].xlen, r->harts[i].misa);
+			target->cmd_name, i, rvi->harts[i].xlen, rvi->harts[i].misa);
 
 		if (!halted)
 			riscv013_resume_current_hart(target);
 	}
 
 	LOG_DEBUG("%s: Enumerated %d harts",
-		target->cmd_name, r->hart_count);
+		target->cmd_name, rvi->hart_count);
 
-	if (r->hart_count == 0) {
+	if (rvi->hart_count == 0) {
 		LOG_ERROR("%s: No harts found!", target->cmd_name);
 		return ERROR_TARGET_INVALID;
 	}
@@ -4486,7 +4490,7 @@ examine(struct target *const target)
 	for (int i = 0; i < riscv_count_harts(target); ++i) {
 		if (riscv_hart_enabled(target, i)) {
 			LOG_INFO("%s: hart %d: XLEN=%d, misa=0x%" PRIx64,
-				target->cmd_name, i, r->harts[i].xlen, r->harts[i].misa);
+				target->cmd_name, i, rvi->harts[i].xlen, rvi->harts[i].misa);
 		} else {
 			LOG_INFO("%s: hart %d: currently disabled",
 				target->cmd_name, i);

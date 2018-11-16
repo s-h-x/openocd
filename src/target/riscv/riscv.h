@@ -4,6 +4,7 @@
 #include "gdb_regs.h"
 
 #include "target/target.h"
+#include "helper/log.h"
 
 #include <stdbool.h>
 
@@ -188,7 +189,7 @@ extern struct scan_field select_idcode;
 
 /** Everything needs the RISC-V specific info structure, so here's a nice macro that provides that. */
 static inline struct riscv_info_t *
-__attribute__((warn_unused_result))
+__attribute__((warn_unused_result,pure))
 riscv_info(struct target const *const target)
 {
 	return target->arch_info;
@@ -234,24 +235,68 @@ riscv_resume_all_harts(struct target *target);
 * then the only hart. */
 int riscv_step_rtos_hart(struct target *target);
 
-bool riscv_supports_extension(struct target *target, int hartid, char letter);
-
-/** @returns XLEN for the given (or current) hart. */
-/** @{ */
-int riscv_xlen(const struct target *target);
-int riscv_xlen_of_hart(const struct target *target, int hartid);
-/** @} */
-
-bool
+static inline bool
 __attribute__((pure))
-riscv_rtos_enabled(struct target const *target);
+riscv_supports_extension(struct target *const target,
+	int const hartid,
+	char const letter)
+{
+	unsigned num;
+
+	if (letter >= 'a' && letter <= 'z')
+		num = letter - 'a';
+	else if (letter >= 'A' && letter <= 'Z')
+		num = letter - 'A';
+	else
+		return false;
+
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi && 0 <= hartid && hartid < RISCV_MAX_HARTS && num <= ('Z' - 'A'));
+	return rvi->harts[hartid].misa & (1 << num);
+}
+
+static inline bool
+__attribute__((pure))
+riscv_rtos_enabled(struct target const *const target)
+{
+	assert(target);
+	return !!target->rtos;
+}
 
 /** Sets the current hart, which is the hart that will actually be used when
  * issuing debug commands. */
  /** @{ */
 int riscv_set_current_hartid(struct target *target, int hartid);
-int riscv_current_hartid(const struct target *target);
+
+static inline int
+__attribute__((warn_unused_result,pure))
+riscv_current_hartid(struct target const *const target)
+{
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi);
+	return rvi->current_hartid;
+}
 /** @} */
+
+/** @returns XLEN for the given (or current) hart. */
+static inline int
+__attribute__((pure))
+riscv_xlen_of_hart(struct target const *const target,
+	int const hartid)
+{
+	struct riscv_info_t const *const rvi = riscv_info(target);
+	assert(rvi && 0 <= hartid && hartid < RISCV_MAX_HARTS);
+	assert(rvi->harts[hartid].xlen != -1);
+	return rvi->harts[hartid].xlen;
+}
+
+/** @returns XLEN for the given (or current) hart. */
+static inline int
+__attribute__((pure))
+riscv_xlen(struct target const *const target)
+{
+	return riscv_xlen_of_hart(target, riscv_current_hartid(target));
+}
 
 /** Support functions for the RISC-V 'RTOS', which provides multihart support
  * without requiring multiple targets.  */
@@ -259,8 +304,24 @@ int riscv_current_hartid(const struct target *target);
 /** When using the RTOS to debug, this selects the hart that is currently being
  * debugged.  This doesn't propogate to the hardware. */
  /** @{ */
-void riscv_set_all_rtos_harts(struct target *target);
-void riscv_set_rtos_hartid(struct target *target, int hartid);
+static inline void
+riscv_set_all_rtos_harts(struct target *const target)
+{
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
+	rvi->rtos_hartid = -1;
+}
+
+static inline void
+riscv_set_rtos_hartid(struct target *const target,
+	int const hartid)
+{
+	LOG_DEBUG("%s: setting RTOS hartid %d", target->cmd_name, hartid);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
+	rvi->rtos_hartid = hartid;
+}
+
 /** @} */
 
 /** Lists the number of harts in the system, which are assumed to be
@@ -269,8 +330,21 @@ int
 __attribute__((pure))
 riscv_count_harts(struct target const *target);
 
-/** @returns TRUE if the target has the given register on the given hart.  */
-bool riscv_has_register(struct target *target, int hartid, int regid);
+/** @returns TRUE if the target has the given register on the given hart.
+    @bug Always return true
+*/
+static inline bool
+__attribute__((const))
+riscv_has_register(struct target *const target,
+	int const hartid,
+	int const regid)
+{
+	(void)target;
+	(void)hartid;
+	(void)regid;
+	return true;
+}
+
 
 /* @returns the value of the given register on the given hart.  32-bit registers
  * are zero extended to 64 bits.  */

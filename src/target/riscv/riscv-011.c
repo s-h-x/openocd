@@ -517,16 +517,17 @@ dbus_scan(struct target *const target,
 	uint16_t const address_out,
 	uint64_t const data_out)
 {
-	riscv011_info_t *info = get_info(target);
-	uint8_t in[8] = {0};
+	riscv011_info_t *const info = get_info(target);
+	assert(info);
+	assert(info->addrbits != 0);
+
 	uint8_t out[8];
+	uint8_t in[8] = {0};
 	struct scan_field field = {
 		.num_bits = info->addrbits + DBUS_OP_SIZE + DBUS_DATA_SIZE,
 		.out_value = out,
 		.in_value = in
 	};
-
-	assert(info->addrbits != 0);
 
 	buf_set_u64(out, DBUS_OP_START, DBUS_OP_SIZE, op);
 	buf_set_u64(out, DBUS_DATA_START, DBUS_DATA_SIZE, data_out);

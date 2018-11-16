@@ -48,7 +48,11 @@ void
 riscv_batch_free(struct riscv_batch *batch);
 
 /* Checks to see if this batch is full. */
-bool riscv_batch_full(struct riscv_batch *batch);
+static inline bool
+riscv_batch_full(struct riscv_batch const *const batch)
+{
+	return batch->allocated_scans < batch->used_scans + 4;
+}
 
 /* Executes this scan batch. */
 int
@@ -62,8 +66,5 @@ void riscv_batch_add_dmi_write(struct riscv_batch *batch, unsigned address, uint
  * provides a key, the second one actually obtains the value of that read .*/
 size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address);
 uint64_t riscv_batch_get_dmi_read(struct riscv_batch const *batch, size_t key);
-
-/* Scans in a NOP. */
-void riscv_batch_add_nop(struct riscv_batch *batch);
 
 #endif  /* TARGET_RISCV_SCANS_H_ */
