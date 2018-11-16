@@ -2,25 +2,32 @@
 #define TARGET_RISCV_DEBUG_DEFINES_H_
 
 #define DTM_IDCODE                          0x01
-/*
-* Identifies the release version of this part.
+
+/** @name Identifies the release version of this part.
  */
+ /**@{*/
 #define DTM_IDCODE_VERSION_OFFSET           28
 #define DTM_IDCODE_VERSION_LENGTH           4
 #define DTM_IDCODE_VERSION                  (0xfU << DTM_IDCODE_VERSION_OFFSET)
-/*
-* Identifies the designer's part number of this part.
- */
+/**@}*/
+
+/** @name Identifies the designer's part number of this part. */
+/**@{*/
 #define DTM_IDCODE_PARTNUMBER_OFFSET        12
 #define DTM_IDCODE_PARTNUMBER_LENGTH        16
 #define DTM_IDCODE_PARTNUMBER               (0xffffU << DTM_IDCODE_PARTNUMBER_OFFSET)
-/*
-* Identifies the designer/manufacturer of this part. Bits 6:0 must be
-* bits 6:0 of the designer/manufacturer's Identification Code as
-* assigned by JEDEC Standard JEP106. Bits 10:7 contain the modulo-16
-* count of the number of continuation characters (0x7f) in that same
-* Identification Code.
- */
+/**@}*/
+
+/** @name DTM_IDCODE
+
+Identifies the designer/manufacturer of this part.
+
+Bits 6:0 must be bits 6:0 of the designer/manufacturer's Identification Code as
+assigned by JEDEC Standard JEP106.
+Bits 10:7 contain the modulo-16 count of the number of continuation characters (0x7f)
+in that same Identification Code.
+*/
+/**@{*/
 #define DTM_IDCODE_MANUFID_OFFSET           1
 #define DTM_IDCODE_MANUFID_LENGTH           11
 #define DTM_IDCODE_MANUFID                  (0x7ffU << DTM_IDCODE_MANUFID_OFFSET)
@@ -28,25 +35,35 @@
 #define DTM_IDCODE_1_LENGTH                 1
 #define DTM_IDCODE_1                        (0x1U << DTM_IDCODE_1_OFFSET)
 #define DTM_DTMCS                           0x10
-/*
-* Writing 1 to this bit does a hard reset of the DTM,
-* causing the DTM to forget about any outstanding DMI transactions.
-* In general this should only be used when the Debugger has
-* reason to expect that the outstanding DMI transaction will never
-* complete (e.g. a reset condition caused an inflight DMI transaction to
-* be cancelled).
- */
+/**@}*/
+
+/** @name DTM_DTMCS_DMIHARDRESET
+
+Writing 1 to this bit does a hard reset of the DTM,
+causing the DTM to forget about any outstanding DMI transactions.
+In general this should only be used when the Debugger has
+reason to expect that the outstanding DMI transaction will never
+complete (e.g. a reset condition caused an inflight DMI transaction to
+be cancelled).
+*/
+/**@{*/
 #define DTM_DTMCS_DMIHARDRESET_OFFSET       17
 #define DTM_DTMCS_DMIHARDRESET_LENGTH       1
 #define DTM_DTMCS_DMIHARDRESET              (0x1U << DTM_DTMCS_DMIHARDRESET_OFFSET)
-/*
-* Writing 1 to this bit clears the sticky error state
-* and allows the DTM to retry or complete the previous
-* transaction.
- */
+/**@}*/
+
+/** @name DTM_DTMCS_DMIRESET
+
+Writing 1 to this bit clears the sticky error state
+and allows the DTM to retry or complete the previous
+transaction.
+*/
+/**@{*/
 #define DTM_DTMCS_DMIRESET_OFFSET           16
 #define DTM_DTMCS_DMIRESET_LENGTH           1
 #define DTM_DTMCS_DMIRESET                  (0x1U << DTM_DTMCS_DMIRESET_OFFSET)
+/**@}*/
+
 /*
 * This is a hint to the debugger of the minimum number of
 * cycles a debugger should spend in
@@ -110,183 +127,219 @@
 #define DTM_DMI_DATA_OFFSET                 2
 #define DTM_DMI_DATA_LENGTH                 32
 #define DTM_DMI_DATA                        (0xffffffffULL << DTM_DMI_DATA_OFFSET)
+
 /*
-* When the debugger writes this field, it has the following meaning:
-*
-* 0: Ignore \Fdata and \Faddress. (nop)
-*
-* Don't send anything over the DMI during Update-DR.
-* This operation should never result in a busy or error response.
-* The address and data reported in the following Capture-DR
-* are undefined.
-*
-* 1: Read from \Faddress. (read)
-*
-* 2: Write \Fdata to \Faddress. (write)
-*
-* 3: Reserved.
-*
-* When the debugger reads this field, it means the following:
-*
-* 0: The previous operation completed successfully.
-*
-* 1: Reserved.
-*
-* 2: A previous operation failed.  The data scanned into \Rdmi in
-* this access will be ignored.  This status is sticky and can be
-* cleared by writing \Fdmireset in \Rdtmcs.
-*
-* This indicates that the DM itself responded with an error.
-* Note: there are no specified cases in which the DM would
-* respond with an error, and DMI is not required to support
-* returning errors.
-*
-* 3: An operation was attempted while a DMI request is still in
-* progress. The data scanned into @c dmi in this access will be
-* ignored. This status is sticky and can be cleared by writing
-* @c dmireset in @c dtmcs. If a debugger sees this status, it
-* needs to give the target more TCK edges between Update-DR and
-* Capture-DR. The simplest way to do that is to add extra transitions
-* in Run-Test/Idle.
-*
-* (The DTM, DM, and/or component may be in different clock domains,
-* so synchronization may be required. Some relatively fixed number of
-* TCK ticks may be needed for the request to reach the DM, complete,
-* and for the response to be synchronized back into the TCK domain.)
+When the debugger writes this field, it has the following meaning:
+
+0: Ignore \Fdata and \Faddress. (nop)
+
+Don't send anything over the DMI during Update-DR.
+This operation should never result in a busy or error response.
+The address and data reported in the following Capture-DR
+are undefined.
+
+1: Read from \Faddress. (read)
+
+2: Write \Fdata to \Faddress. (write)
+
+3: Reserved.
+
+When the debugger reads this field, it means the following:
+
+0: The previous operation completed successfully.
+
+1: Reserved.
+
+2: A previous operation failed.  The data scanned into \Rdmi in
+this access will be ignored.  This status is sticky and can be
+cleared by writing \Fdmireset in \Rdtmcs.
+
+This indicates that the DM itself responded with an error.
+Note: there are no specified cases in which the DM would
+respond with an error, and DMI is not required to support
+returning errors.
+
+3: An operation was attempted while a DMI request is still in
+progress. The data scanned into @c dmi in this access will be
+ignored. This status is sticky and can be cleared by writing
+@c dmireset in @c dtmcs. If a debugger sees this status, it
+needs to give the target more TCK edges between Update-DR and
+Capture-DR. The simplest way to do that is to add extra transitions
+in Run-Test/Idle.
+
+(The DTM, DM, and/or component may be in different clock domains,
+so synchronization may be required. Some relatively fixed number of
+TCK ticks may be needed for the request to reach the DM, complete,
+and for the response to be synchronized back into the TCK domain.)
  */
 #define DTM_DMI_OP_OFFSET                   0
 #define DTM_DMI_OP_LENGTH                   2
 #define DTM_DMI_OP                          (0x3ULL << DTM_DMI_OP_OFFSET)
 #define CSR_DCSR                            0x7b0
+
 /*
-* 0: There is no external debug support.
-*
-* 4: External debug support exists as it is described in this document.
-*
-* 15: There is external debug support, but it does not conform to any
-* available version of this spec.
+0: There is no external debug support.
+
+4: External debug support exists as it is described in this document.
+
+15: There is external debug support, but it does not conform to any
+available version of this spec.
+@{
  */
 #define CSR_DCSR_XDEBUGVER_OFFSET           28
 #define CSR_DCSR_XDEBUGVER_LENGTH           4
 #define CSR_DCSR_XDEBUGVER                  (0xfU << CSR_DCSR_XDEBUGVER_OFFSET)
-/*
-* When 1, @c ebreak instructions in Machine Mode enter Debug Mode.
- */
+/**@}*/
+
+/** When 1, @c ebreak instructions in Machine Mode enter Debug Mode.
+@{
+*/
 #define CSR_DCSR_EBREAKM_OFFSET             15
 #define CSR_DCSR_EBREAKM_LENGTH             1
 #define CSR_DCSR_EBREAKM                    (0x1U << CSR_DCSR_EBREAKM_OFFSET)
-/*
-* When 1, @c ebreak instructions in Supervisor Mode enter Debug Mode.
- */
+/**@}*/
+
+/** When 1, @c ebreak instructions in Supervisor Mode enter Debug Mode.
+@{
+*/
 #define CSR_DCSR_EBREAKS_OFFSET             13
 #define CSR_DCSR_EBREAKS_LENGTH             1
 #define CSR_DCSR_EBREAKS                    (0x1U << CSR_DCSR_EBREAKS_OFFSET)
-/*
-* When 1, {\tt ebreak} instructions in User/Application Mode enter
-* Debug Mode.
- */
+/**@}*/
+
+/** When 1, @ ebreak instructions in User/Application Mode enter Debug Mode.
+@{
+*/
 #define CSR_DCSR_EBREAKU_OFFSET             12
 #define CSR_DCSR_EBREAKU_LENGTH             1
 #define CSR_DCSR_EBREAKU                    (0x1U << CSR_DCSR_EBREAKU_OFFSET)
+/**@}*/
+
 /*
-* 0: Interrupts are disabled during single stepping.
-*
-* 1: Interrupts are enabled during single stepping.
-*
-* Implementations may hard wire this bit to 0.
-* The debugger must read back the value it
-* writes to check whether the feature is supported. If not
-* supported, interrupt behavior can be emulated by the debugger.
+0: Interrupts are disabled during single stepping.
+
+1: Interrupts are enabled during single stepping.
+
+Implementations may hard wire this bit to 0.
+The debugger must read back the value it
+writes to check whether the feature is supported. If not
+supported, interrupt behavior can be emulated by the debugger.
  */
 #define CSR_DCSR_STEPIE_OFFSET              11
 #define CSR_DCSR_STEPIE_LENGTH              1
 #define CSR_DCSR_STEPIE                     (0x1U << CSR_DCSR_STEPIE_OFFSET)
-/*
-* 0: Increment counters as usual.
-*
-* 1: Don't increment any counters while in Debug Mode or on {\tt
-* ebreak} instructions that cause entry into Debug Mode.  These
-* counters include the {\tt cycle} and {\tt instret} CSRs. This is
-* preferred for most debugging scenarios.
-*
-* An implementation may choose not to support writing to this bit.
-* The debugger must read back the value it writes to check whether
-* the feature is supported.
+
+/**
+0: Increment counters as usual.
+
+1: Don't increment any counters while in Debug Mode or on {\tt
+ebreak} instructions that cause entry into Debug Mode.  These
+counters include the {\tt cycle} and {\tt instret} CSRs. This is
+preferred for most debugging scenarios.
+
+An implementation may choose not to support writing to this bit.
+The debugger must read back the value it writes to check whether
+the feature is supported.
+
+@{
  */
 #define CSR_DCSR_STOPCOUNT_OFFSET           10
 #define CSR_DCSR_STOPCOUNT_LENGTH           1
 #define CSR_DCSR_STOPCOUNT                  (0x1U << CSR_DCSR_STOPCOUNT_OFFSET)
-/*
-* 0: Increment timers as usual.
-*
-* 1: Don't increment any hart-local timers while in Debug Mode.
-*
-* An implementation may choose not to support writing to this bit.
-* The debugger must read back the value it writes to check whether
-* the feature is supported.
- */
+/**@}*/
+
+/**
+0: Increment timers as usual.
+
+1: Don't increment any hart-local timers while in Debug Mode.
+
+An implementation may choose not to support writing to this bit.
+The debugger must read back the value it writes to check whether
+the feature is supported.
+@{
+*/
 #define CSR_DCSR_STOPTIME_OFFSET            9
 #define CSR_DCSR_STOPTIME_LENGTH            1
 #define CSR_DCSR_STOPTIME                   (0x1U << CSR_DCSR_STOPTIME_OFFSET)
-/*
-* Explains why Debug Mode was entered.
-*
-* When there are multiple reasons to enter Debug Mode in a single
-* cycle, hardware should set \Fcause to the cause with the highest
-* priority.
-*
-* 1: An {\tt ebreak} instruction was executed. (priority 3)
-*
-* 2: The Trigger Module caused a breakpoint exception. (priority 4)
-*
-* 3: The debugger requested entry to Debug Mode. (priority 2)
-*
-* 4: The hart single stepped because \Fstep was set. (priority 1)
-*
-* Other values are reserved for future use.
- */
+/**@}*/
+
+/**
+Explains why Debug Mode was entered.
+
+When there are multiple reasons to enter Debug Mode in a single
+cycle, hardware should set \Fcause to the cause with the highest
+priority.
+
+1: An {\tt ebreak} instruction was executed. (priority 3)
+
+2: The Trigger Module caused a breakpoint exception. (priority 4)
+
+3: The debugger requested entry to Debug Mode. (priority 2)
+
+4: The hart single stepped because \Fstep was set. (priority 1)
+
+Other values are reserved for future use.
+
+@{
+*/
 #define CSR_DCSR_CAUSE_OFFSET               6
 #define CSR_DCSR_CAUSE_LENGTH               3
 #define CSR_DCSR_CAUSE                      (0x7U << CSR_DCSR_CAUSE_OFFSET)
-/*
-* When 1, \Fmprv in \Rmstatus takes effect during debug mode.
-* When 0, it is ignored during debug mode.
-* Implementing this bit is optional.
-* If not implemented it should be tied to 0.
- */
+/**@}*/
+
+/**
+When 1, \Fmprv in \Rmstatus takes effect during debug mode.
+When 0, it is ignored during debug mode.
+Implementing this bit is optional.
+If not implemented it should be tied to 0.
+
+@{
+*/
 #define CSR_DCSR_MPRVEN_OFFSET              4
 #define CSR_DCSR_MPRVEN_LENGTH              1
 #define CSR_DCSR_MPRVEN                     (0x1U << CSR_DCSR_MPRVEN_OFFSET)
-/*
-* When set, there is a Non-Maskable-Interrupt (NMI) pending for the hart.
-*
-* Since an NMI can indicate a hardware error condition,
-* reliable debugging may no longer be possible once this bit becomes set.
-* This is implementation-dependent.
- */
+/**@}*/
+
+/**
+When set, there is a Non-Maskable-Interrupt (NMI) pending for the hart.
+
+Since an NMI can indicate a hardware error condition,
+reliable debugging may no longer be possible once this bit becomes set.
+This is implementation-dependent.
+
+@{
+*/
 #define CSR_DCSR_NMIP_OFFSET                3
 #define CSR_DCSR_NMIP_LENGTH                1
 #define CSR_DCSR_NMIP                       (0x1U << CSR_DCSR_NMIP_OFFSET)
-/*
-* When set and not in Debug Mode, the hart will only execute a single
-* instruction and then enter Debug Mode.
-* If the instruction does not complete due to an exception,
-* the hart will immediately enter Debug Mode before executing
-* the trap handler, with appropriate exception registers set.
- */
+/**@}*/
+
+/**
+When set and not in Debug Mode, the hart will only execute a single
+instruction and then enter Debug Mode.
+If the instruction does not complete due to an exception,
+the hart will immediately enter Debug Mode before executing
+the trap handler, with appropriate exception registers set.
+
+@{
+*/
 #define CSR_DCSR_STEP_OFFSET                2
 #define CSR_DCSR_STEP_LENGTH                1
 #define CSR_DCSR_STEP                       (0x1U << CSR_DCSR_STEP_OFFSET)
-/*
-* Contains the privilege level the hart was operating in when Debug
-* Mode was entered. The encoding is described in Table
-* \ref{tab:privlevel}.  A debugger can change this value to change
-* the hart's privilege level when exiting Debug Mode.
-*
-* Not all privilege levels are supported on all harts. If the
-* encoding written is not supported or the debugger is not allowed to
-* change to it, the hart may change to any supported privilege level.
- */
+/**@}*/
+
+/**
+Contains the privilege level the hart was operating in when Debug
+Mode was entered. The encoding is described in Table \ref{tab:privlevel}.
+A debugger can change this value to change
+the hart's privilege level when exiting Debug Mode.
+
+Not all privilege levels are supported on all harts. If the
+encoding written is not supported or the debugger is not allowed to
+change to it, the hart may change to any supported privilege level.
+
+@{
+*/
 #define CSR_DCSR_PRV_OFFSET                 0
 #define CSR_DCSR_PRV_LENGTH                 2
 #define CSR_DCSR_PRV                        (0x3U << CSR_DCSR_PRV_OFFSET)
@@ -301,50 +354,61 @@
 #define CSR_TSELECT_INDEX_LENGTH            MXLEN
 #define CSR_TSELECT_INDEX                   (((1L<<MXLEN)-1) << CSR_TSELECT_INDEX_OFFSET)
 #define CSR_TDATA1                          0x7a1
-/*
-* 0: There is no trigger at this \Rtselect.
-*
-* 1: The trigger is a legacy SiFive address match trigger. These
-* should not be implemented and aren't further documented here.
-*
-* 2: The trigger is an address/data match trigger. The remaining bits
-* in this register act as described in \Rmcontrol.
-*
-* 3: The trigger is an instruction count trigger. The remaining bits
-* in this register act as described in \Ricount.
-*
-* 4: The trigger is an interrupt trigger. The remaining bits
-* in this register act as described in \Ritrigger.
-*
-* 5: The trigger is an exception trigger. The remaining bits
-* in this register act as described in \Retrigger.
-*
-* 15: This trigger exists (so enumeration shouldn't terminate), but
-* is not currently available.
-*
-* Other values are reserved for future use.
-*
-* When this field is written to an unsupported value, it takes on its
-* reset value instead. The reset value is any one of the types
-* supported by the trigger selected by \Rtselect.
- */
+/**@}*/
+
+/**
+0: There is no trigger at this \Rtselect.
+
+1: The trigger is a legacy SiFive address match trigger. These
+should not be implemented and aren't further documented here.
+
+2: The trigger is an address/data match trigger. The remaining bits
+in this register act as described in \Rmcontrol.
+
+3: The trigger is an instruction count trigger. The remaining bits
+in this register act as described in \Ricount.
+
+4: The trigger is an interrupt trigger. The remaining bits
+in this register act as described in \Ritrigger.
+
+5: The trigger is an exception trigger. The remaining bits
+in this register act as described in \Retrigger.
+
+15: This trigger exists (so enumeration shouldn't terminate), but
+is not currently available.
+
+Other values are reserved for future use.
+
+When this field is written to an unsupported value, it takes on its
+reset value instead. The reset value is any one of the types
+supported by the trigger selected by \Rtselect.
+
+@{
+*/
 #define CSR_TDATA1_TYPE_OFFSET              (MXLEN-4)
 #define CSR_TDATA1_TYPE_LENGTH              4
 #define CSR_TDATA1_TYPE                     (0xfULL << CSR_TDATA1_TYPE_OFFSET)
-/*
-* 0: Both Debug and M Mode can write the {\tt tdata} registers at the
-* selected \Rtselect.
-*
-* 1: Only Debug Mode can write the {\tt tdata} registers at the
-* selected \Rtselect.  Writes from other modes are ignored.
-*
-* This bit is only writable from Debug Mode.
- */
+/**@}*/
+
+/**
+0: Both Debug and M Mode can write the {\tt tdata} registers at the
+selected \Rtselect.
+
+1: Only Debug Mode can write the {\tt tdata} registers at the
+selected \Rtselect.  Writes from other modes are ignored.
+
+This bit is only writable from Debug Mode.
+
+@{
+*/
 #define CSR_TDATA1_DMODE_OFFSET             (MXLEN-5)
 #define CSR_TDATA1_DMODE_LENGTH             1
 #define CSR_TDATA1_DMODE                    (0x1ULL << CSR_TDATA1_DMODE_OFFSET)
-/*
-* Trigger-specific data.
+/**@}*/
+
+/** Trigger-specific data.
+
+@{
  */
 #define CSR_TDATA1_DATA_OFFSET              0
 #define CSR_TDATA1_DATA_LENGTH              (MXLEN - 5)
@@ -358,19 +422,22 @@
 #define CSR_TDATA3_DATA_LENGTH              MXLEN
 #define CSR_TDATA3_DATA                     (((1L<<MXLEN)-1) << CSR_TDATA3_DATA_OFFSET)
 #define CSR_TINFO                           0x7a4
-/*
-* One bit for each possible \Ftype enumerated in \Rtdataone. Bit N
-* corresponds to type N. If the bit is set, then that type is
-* supported by the currently selected trigger.
-*
-* If the currently selected trigger doesn't exist, this field
-* contains 1.
-*
-* If \Ftype is not writable, this register may be unimplemented, in
-* which case reading it causes an illegal instruction exception. In
-* this case the debugger can read the only supported type from
-* \Rtdataone.
- */
+/**@}*/
+
+/**
+One bit for each possible @c type enumerated in @c tdataone.
+Bit N corresponds to type N.
+If the bit is set, then that type is supported by the currently selected trigger.
+
+If the currently selected trigger doesn't exist, this field contains 1.
+
+If @c type is not writable, this register may be unimplemented,
+in which case reading it causes an illegal instruction exception.
+In this case the debugger can read the only supported type from
+@c tdataone.
+
+@{
+*/
 #define CSR_TINFO_INFO_OFFSET               0
 #define CSR_TINFO_INFO_LENGTH               16
 #define CSR_TINFO_INFO                      (0xffffULL << CSR_TINFO_INFO_OFFSET)
@@ -381,155 +448,216 @@
 #define CSR_MCONTROL_DMODE_OFFSET           (MXLEN-5)
 #define CSR_MCONTROL_DMODE_LENGTH           1
 #define CSR_MCONTROL_DMODE                  (0x1ULL << CSR_MCONTROL_DMODE_OFFSET)
-/*
-* Specifies the largest naturally aligned powers-of-two (NAPOT) range
-* supported by the hardware when \Fmatch is 1. The value is the
-* logarithm base 2 of the
-* number of bytes in that range.  A value of 0 indicates that only
-* exact value matches are supported (one byte range). A value of 63
-* corresponds to the maximum NAPOT range, which is $2^{63}$ bytes in
-* size.
- */
+/**@}*/
+
+/**
+Specifies the largest naturally aligned powers-of-two (NAPOT) range
+supported by the hardware when \Fmatch is 1. The value is the
+logarithm base 2 of the
+number of bytes in that range.  A value of 0 indicates that only
+exact value matches are supported (one byte range). A value of 63
+corresponds to the maximum NAPOT range, which is $2^{63}$ bytes in
+size.
+
+@{
+*/
 #define CSR_MCONTROL_MASKMAX_OFFSET         (MXLEN-11)
 #define CSR_MCONTROL_MASKMAX_LENGTH         6
 #define CSR_MCONTROL_MASKMAX                (0x3fULL << CSR_MCONTROL_MASKMAX_OFFSET)
-/*
-* If this optional bit is implemented, the hardware sets it when this
-* trigger matches. The trigger's user can set or clear it at any
-* time. The trigger's user can use this bit to determine which
-* trigger(s) matched.  If the bit is not implemented, it is always 0
-* and writing it has no effect.
- */
+/**@}*/
+
+/**
+If this optional bit is implemented, the hardware sets it when this
+trigger matches. The trigger's user can set or clear it at any
+time. The trigger's user can use this bit to determine which
+trigger(s) matched.  If the bit is not implemented, it is always 0
+and writing it has no effect.
+
+@{
+*/
 #define CSR_MCONTROL_HIT_OFFSET             20
 #define CSR_MCONTROL_HIT_LENGTH             1
 #define CSR_MCONTROL_HIT                    (0x1ULL << CSR_MCONTROL_HIT_OFFSET)
-/*
-* 0: Perform a match on the virtual address.
-*
-* 1: Perform a match on the data value loaded/stored, or the
-* instruction executed.
- */
+/**@}*/
+
+/**
+0: Perform a match on the virtual address.
+
+1: Perform a match on the data value loaded/stored, or the
+instruction executed.
+
+@{
+*/
 #define CSR_MCONTROL_SELECT_OFFSET          19
 #define CSR_MCONTROL_SELECT_LENGTH          1
 #define CSR_MCONTROL_SELECT                 (0x1ULL << CSR_MCONTROL_SELECT_OFFSET)
-/*
-* 0: The action for this trigger will be taken just before the
-* instruction that triggered it is executed, but after all preceding
-* instructions are are committed.
-*
-* 1: The action for this trigger will be taken after the instruction
-* that triggered it is executed. It should be taken before the next
-* instruction is executed, but it is better to implement triggers and
-* not implement that suggestion than to not implement them at all.
-*
-* Most hardware will only implement one timing or the other, possibly
-* dependent on \Fselect, \Fexecute, \Fload, and \Fstore. This bit
-* primarily exists for the hardware to communicate to the debugger
-* what will happen. Hardware may implement the bit fully writable, in
-* which case the debugger has a little more control.
-*
-* Data load triggers with \Ftiming of 0 will result in the same load
-* happening again when the debugger lets the hart run. For data load
-* triggers, debuggers must first attempt to set the breakpoint with
-* \Ftiming of 1.
-*
-* A chain of triggers that don't all have the same \Ftiming value
-* will never fire (unless consecutive instructions match the
-* appropriate triggers).
- */
+/**@}*/
+
+/**
+0: The action for this trigger will be taken just before the
+instruction that triggered it is executed, but after all preceding
+instructions are are committed.
+
+1: The action for this trigger will be taken after the instruction
+that triggered it is executed. It should be taken before the next
+instruction is executed, but it is better to implement triggers and
+not implement that suggestion than to not implement them at all.
+
+Most hardware will only implement one timing or the other, possibly
+dependent on @c select, @c execute, @c load, and @c store.
+This bit primarily exists for the hardware to communicate to the debugger
+what will happen. Hardware may implement the bit fully writable, in
+which case the debugger has a little more control.
+
+Data load triggers with @c timing of 0 will result in the same load
+happening again when the debugger lets the hart run. For data load
+triggers, debuggers must first attempt to set the breakpoint with
+@c timing of 1.
+
+A chain of triggers that don't all have the same @c timing value
+will never fire (unless consecutive instructions match the
+appropriate triggers).
+
+@{
+*/
 #define CSR_MCONTROL_TIMING_OFFSET          18
 #define CSR_MCONTROL_TIMING_LENGTH          1
 #define CSR_MCONTROL_TIMING                 (0x1ULL << CSR_MCONTROL_TIMING_OFFSET)
-/*
-* The action to take when the trigger fires. The values are explained
-* in Table~\ref{tab:action}.
- */
+/**@}*/
+
+/**
+The action to take when the trigger fires. The values are explained
+in Table \ref{tab:action}.
+
+@{
+*/
 #define CSR_MCONTROL_ACTION_OFFSET          12
 #define CSR_MCONTROL_ACTION_LENGTH          6
 #define CSR_MCONTROL_ACTION                 (0x3fULL << CSR_MCONTROL_ACTION_OFFSET)
-/*
-* 0: When this trigger matches, the configured action is taken.
-*
-* 1: While this trigger does not match, it prevents the trigger with
-* the next index from matching.
-*
-* Because \Fchain affects the next trigger, hardware must zero it in
-* writes to \Rmcontrol that set \Fdmode to 0 if the next trigger has
-* \Fdmode of 1.
-* In addition hardware should ignore writes to \Rmcontrol that set
-* \Fdmode to 1 if the previous trigger has both \Fdmode of 0 and
-* \Fchain of 1. Debuggers must avoid the latter case by checking
-* \Fchain on the previous trigger if they're writing \Rmcontrol.
-*
-* Implementations that wish to limit the maximum length of a trigger
-* chain (eg. to meet timing requirements) may do so by zeroing
-* \Fchain in writes to \Rmcontrol that would make the chain too long.
- */
+/**@}*/
+
+/** @name CSR_MCONTROL_CHAIN
+
+0: When this trigger matches, the configured action is taken.
+
+1: While this trigger does not match, it prevents the trigger with
+the next index from matching.
+
+Because @c chain affects the next trigger, hardware must zero it in
+writes to @c mcontrol that set @c dmode to 0 if the next trigger has
+@c dmode of 1.
+
+In addition hardware should ignore writes to @c mcontrol that set
+@c dmode to 1 if the previous trigger has both @c dmode of 0 and
+@c chain of 1. Debuggers must avoid the latter case by checking
+@c chain on the previous trigger if they're writing @c mcontrol.
+
+Implementations that wish to limit the maximum length of a trigger
+chain (e.g. to meet timing requirements) may do so by zeroing
+@c chain in writes to @c mcontrol that would make the chain too long.
+
+@{
+*/
 #define CSR_MCONTROL_CHAIN_OFFSET           11
 #define CSR_MCONTROL_CHAIN_LENGTH           1
 #define CSR_MCONTROL_CHAIN                  (0x1ULL << CSR_MCONTROL_CHAIN_OFFSET)
-/*
-* 0: Matches when the value equals \Rtdatatwo.
-*
-* 1: Matches when the top M bits of the value match the top M bits of
-* \Rtdatatwo. M is MXLEN-1 minus the index of the least-significant
-* bit containing 0 in \Rtdatatwo.
-*
-* 2: Matches when the value is greater than (unsigned) or equal to
-* \Rtdatatwo.
-*
-* 3: Matches when the value is less than (unsigned) \Rtdatatwo.
-*
-* 4: Matches when the lower half of the value equals the lower half
-* of \Rtdatatwo after the lower half of the value is ANDed with the
-* upper half of \Rtdatatwo.
-*
-* 5: Matches when the upper half of the value equals the lower half
-* of \Rtdatatwo after the upper half of the value is ANDed with the
-* upper half of \Rtdatatwo.
-*
-* Other values are reserved for future use.
- */
+/**@}*/
+
+/** @name CSR_MCONTROL_MATCH
+
+0: Matches when the value equals @c tdatatwo.
+
+1: Matches when the top M bits of the value match the top M bits of
+@c tdatatwo. M is MXLEN-1 minus the index of the least-significant
+bit containing 0 in @c tdatatwo.
+
+2: Matches when the value is greater than (unsigned) or equal to
+@c tdatatwo.
+
+3: Matches when the value is less than (unsigned) @c tdatatwo.
+
+4: Matches when the lower half of the value equals the lower half
+of @c tdatatwo after the lower half of the value is ANDed with the
+upper half of @c tdatatwo.
+
+5: Matches when the upper half of the value equals the lower half
+of @c tdatatwo after the upper half of the value is ANDed with the
+upper half of @c tdatatwo.
+
+Other values are reserved for future use.
+*/
+/**@{*/
 #define CSR_MCONTROL_MATCH_OFFSET           7
 #define CSR_MCONTROL_MATCH_LENGTH           4
 #define CSR_MCONTROL_MATCH                  (0xfULL << CSR_MCONTROL_MATCH_OFFSET)
-/*
-* When set, enable this trigger in M mode.
+/**@}*/
+
+/** @name CSR_MCONTROL_M
+
+When set, enable this trigger in M mode.
  */
+ /**@{*/
 #define CSR_MCONTROL_M_OFFSET               6
 #define CSR_MCONTROL_M_LENGTH               1
 #define CSR_MCONTROL_M                      (0x1ULL << CSR_MCONTROL_M_OFFSET)
-/*
-* When set, enable this trigger in S mode.
- */
+/**@}*/
+
+/** @name CSR_MCONTROL_S
+
+When set, enable this trigger in S mode.
+*/
+/**@{*/
 #define CSR_MCONTROL_S_OFFSET               4
 #define CSR_MCONTROL_S_LENGTH               1
 #define CSR_MCONTROL_S                      (0x1ULL << CSR_MCONTROL_S_OFFSET)
-/*
-* When set, enable this trigger in U mode.
- */
+/**@}*/
+
+/** @name CSR_MCONTROL_U
+
+When set, enable this trigger in U mode.
+*/
+/**@{*/
 #define CSR_MCONTROL_U_OFFSET               3
 #define CSR_MCONTROL_U_LENGTH               1
 #define CSR_MCONTROL_U                      (0x1ULL << CSR_MCONTROL_U_OFFSET)
-/*
-* When set, the trigger fires on the virtual address or opcode of an
-* instruction that is executed.
- */
+/**@}*/
+
+/** @name CSR_MCONTROL_EXECUTE
+
+When set, the trigger fires on the virtual address or opcode of an
+instruction that is executed.
+*/
+/**@{*/
 #define CSR_MCONTROL_EXECUTE_OFFSET         2
 #define CSR_MCONTROL_EXECUTE_LENGTH         1
 #define CSR_MCONTROL_EXECUTE                (0x1ULL << CSR_MCONTROL_EXECUTE_OFFSET)
-/*
-* When set, the trigger fires on the virtual address or data of a store.
- */
+/**@}*/
+
+/** @name CSR_MCONTROL_STORE
+
+When set, the trigger fires on the virtual address or data of a store.
+*/
+/**@{*/
 #define CSR_MCONTROL_STORE_OFFSET           1
 #define CSR_MCONTROL_STORE_LENGTH           1
 #define CSR_MCONTROL_STORE                  (0x1ULL << CSR_MCONTROL_STORE_OFFSET)
-/*
-* When set, the trigger fires on the virtual address or data of a load.
- */
+/**@}*/
+
+/** @name CSR_MCONTROL_LOAD
+
+When set, the trigger fires on the virtual address or data of a load.
+*/
+/**@{*/
 #define CSR_MCONTROL_LOAD_OFFSET            0
 #define CSR_MCONTROL_LOAD_LENGTH            1
 #define CSR_MCONTROL_LOAD                   (0x1ULL << CSR_MCONTROL_LOAD_OFFSET)
+/**@}*/
+
+/** @name CSR_ICOUNT
+
+When set, the trigger fires on the virtual address or data of a load.
+*/
+/**@{*/
 #define CSR_ICOUNT                          0x7a1
 #define CSR_ICOUNT_TYPE_OFFSET              (MXLEN-4)
 #define CSR_ICOUNT_TYPE_LENGTH              4
@@ -537,50 +665,71 @@
 #define CSR_ICOUNT_DMODE_OFFSET             (MXLEN-5)
 #define CSR_ICOUNT_DMODE_LENGTH             1
 #define CSR_ICOUNT_DMODE                    (0x1ULL << CSR_ICOUNT_DMODE_OFFSET)
-/*
-* If this optional bit is implemented, the hardware sets it when this
-* trigger matches. The trigger's user can set or clear it at any
-* time. The trigger's user can use this bit to determine which
-* trigger(s) matched.  If the bit is not implemented, it is always 0
-* and writing it has no effect.
- */
+/**@}*/
+
+/** @name CSR_ICOUNT_HIT
+
+If this optional bit is implemented, the hardware sets it when this
+trigger matches. The trigger's user can set or clear it at any
+time. The trigger's user can use this bit to determine which
+trigger(s) matched.  If the bit is not implemented, it is always 0
+and writing it has no effect.
+*/
+/**@{*/
 #define CSR_ICOUNT_HIT_OFFSET               24
 #define CSR_ICOUNT_HIT_LENGTH               1
 #define CSR_ICOUNT_HIT                      (0x1ULL << CSR_ICOUNT_HIT_OFFSET)
-/*
-* When count is decremented to 0, the trigger fires. Instead of
-* changing \Fcount from 1 to 0, it is also acceptable for hardware to
-* clear \Fm, \Fs, and \Fu. This allows \Fcount to be hard-wired
-* to 1 if this register just exists for single step.
- */
+/**@}*/
+
+/** @name CSR_ICOUNT_COUNT
+
+When count is decremented to 0, the trigger fires. Instead of
+changing \Fcount from 1 to 0, it is also acceptable for hardware to
+clear \Fm, \Fs, and \Fu. This allows \Fcount to be hard-wired
+to 1 if this register just exists for single step.
+*/
+/**@{*/
 #define CSR_ICOUNT_COUNT_OFFSET             10
 #define CSR_ICOUNT_COUNT_LENGTH             14
 #define CSR_ICOUNT_COUNT                    (0x3fffULL << CSR_ICOUNT_COUNT_OFFSET)
-/*
-* When set, every instruction completed or exception taken in M mode decrements \Fcount
-* by 1.
- */
+/**@}*/
+
+/** @name CSR_ICOUNT_M
+
+When set, every instruction completed or exception taken in M mode decrements @c count by 1.
+*/
+/**@{*/
 #define CSR_ICOUNT_M_OFFSET                 9
 #define CSR_ICOUNT_M_LENGTH                 1
 #define CSR_ICOUNT_M                        (0x1ULL << CSR_ICOUNT_M_OFFSET)
-/*
-* When set, every instruction completed or exception taken in S mode decrements \Fcount
-* by 1.
- */
+/**@}*/
+
+/** @name CSR_ICOUNT_S
+
+When set, every instruction completed or exception taken in S mode decrements @c count by 1.
+*/
+/**@{*/
 #define CSR_ICOUNT_S_OFFSET                 7
 #define CSR_ICOUNT_S_LENGTH                 1
 #define CSR_ICOUNT_S                        (0x1ULL << CSR_ICOUNT_S_OFFSET)
-/*
-* When set, every instruction completed or exception taken in U mode decrements \Fcount
-* by 1.
- */
+/**@}*/
+
+/** @ name CSR_ICOUNT_U
+
+When set, every instruction completed or exception taken in U mode decrements @c count by 1.
+*/
+/**@{*/
 #define CSR_ICOUNT_U_OFFSET                 6
 #define CSR_ICOUNT_U_LENGTH                 1
 #define CSR_ICOUNT_U                        (0x1ULL << CSR_ICOUNT_U_OFFSET)
-/*
-* The action to take when the trigger fires. The values are explained
-* in Table~\ref{tab:action}.
- */
+/**@}*/
+
+/** @name CSR_ICOUNT_ACTION
+The action to take when the trigger fires.
+
+The values are explained in Table~\ref{tab:action}.
+*/
+/**@{*/
 #define CSR_ICOUNT_ACTION_OFFSET            0
 #define CSR_ICOUNT_ACTION_LENGTH            6
 #define CSR_ICOUNT_ACTION                   (0x3fULL << CSR_ICOUNT_ACTION_OFFSET)
@@ -591,41 +740,57 @@
 #define CSR_ITRIGGER_DMODE_OFFSET           (MXLEN-5)
 #define CSR_ITRIGGER_DMODE_LENGTH           1
 #define CSR_ITRIGGER_DMODE                  (0x1ULL << CSR_ITRIGGER_DMODE_OFFSET)
-/*
-* If this optional bit is implemented, the hardware sets it when this
-* trigger matches. The trigger's user can set or clear it at any
-* time. The trigger's user can use this bit to determine which
-* trigger(s) matched.  If the bit is not implemented, it is always 0
-* and writing it has no effect.
- */
+/**@}*/
+
+/** @name CSR_ITRIGGER_HIT
+
+If this optional bit is implemented, the hardware sets it when this
+trigger matches. The trigger's user can set or clear it at any
+time. The trigger's user can use this bit to determine which
+trigger(s) matched.  If the bit is not implemented, it is always 0
+and writing it has no effect.
+*/
+/**@{*/
 #define CSR_ITRIGGER_HIT_OFFSET             (MXLEN-6)
 #define CSR_ITRIGGER_HIT_LENGTH             1
 #define CSR_ITRIGGER_HIT                    (0x1ULL << CSR_ITRIGGER_HIT_OFFSET)
-/*
-* When set, enable this trigger for interrupts that are taken from M
-* mode.
- */
+/**@}*/
+
+/** @name CSR_ITRIGGER_M
+
+When set, enable this trigger for interrupts that are taken from M mode.
+*/
+/**@{*/
 #define CSR_ITRIGGER_M_OFFSET               9
 #define CSR_ITRIGGER_M_LENGTH               1
 #define CSR_ITRIGGER_M                      (0x1ULL << CSR_ITRIGGER_M_OFFSET)
-/*
-* When set, enable this trigger for interrupts that are taken from S
-* mode.
- */
+/**@}*/
+
+/** @name CSR_ITRIGGER_S
+
+When set, enable this trigger for interrupts that are taken from S mode.
+*/
+/**@{*/
 #define CSR_ITRIGGER_S_OFFSET               7
 #define CSR_ITRIGGER_S_LENGTH               1
 #define CSR_ITRIGGER_S                      (0x1ULL << CSR_ITRIGGER_S_OFFSET)
-/*
-* When set, enable this trigger for interrupts that are taken from U
-* mode.
- */
+/**@}*/
+
+/** @name CSR_ITRIGGER_U
+When set, enable this trigger for interrupts that are taken from U mode.
+*/
+/**@{*/
 #define CSR_ITRIGGER_U_OFFSET               6
 #define CSR_ITRIGGER_U_LENGTH               1
 #define CSR_ITRIGGER_U                      (0x1ULL << CSR_ITRIGGER_U_OFFSET)
-/*
-* The action to take when the trigger fires. The values are explained
-* in Table~\ref{tab:action}.
- */
+/**@}*/
+
+/** @name CSR_ETRIGGER
+
+The action to take when the trigger fires.
+The values are explained in Table~\ref{tab:action}.
+*/
+/**@{*/
 #define CSR_ITRIGGER_ACTION_OFFSET          0
 #define CSR_ITRIGGER_ACTION_LENGTH          6
 #define CSR_ITRIGGER_ACTION                 (0x3fULL << CSR_ITRIGGER_ACTION_OFFSET)
@@ -636,56 +801,83 @@
 #define CSR_ETRIGGER_DMODE_OFFSET           (MXLEN-5)
 #define CSR_ETRIGGER_DMODE_LENGTH           1
 #define CSR_ETRIGGER_DMODE                  (0x1ULL << CSR_ETRIGGER_DMODE_OFFSET)
-/*
-* If this optional bit is implemented, the hardware sets it when this
-* trigger matches. The trigger's user can set or clear it at any
-* time. The trigger's user can use this bit to determine which
-* trigger(s) matched.  If the bit is not implemented, it is always 0
-* and writing it has no effect.
- */
+/**@}*/
+
+/** @name CSR_ETRIGGER_HIT
+
+If this optional bit is implemented, the hardware sets it when this
+trigger matches. The trigger's user can set or clear it at any
+time. The trigger's user can use this bit to determine which
+trigger(s) matched.  If the bit is not implemented, it is always 0
+and writing it has no effect.
+*/
+/**@{*/
 #define CSR_ETRIGGER_HIT_OFFSET             (MXLEN-6)
 #define CSR_ETRIGGER_HIT_LENGTH             1
 #define CSR_ETRIGGER_HIT                    (0x1ULL << CSR_ETRIGGER_HIT_OFFSET)
-/*
-* When set, enable this trigger for exceptions that are taken from M
-* mode.
- */
+/**@}*/
+
+/** @name CSR_ETRIGGER_mode */
+/**@{*/
+/** @name CSR_ETRIGGER_M
+
+When set, enable this trigger for exceptions that are taken from M mode.
+*/
+/**@{*/
 #define CSR_ETRIGGER_M_OFFSET               9
 #define CSR_ETRIGGER_M_LENGTH               1
 #define CSR_ETRIGGER_M                      (0x1ULL << CSR_ETRIGGER_M_OFFSET)
-/*
-* When set, enable this trigger for exceptions that are taken from S
-* mode.
- */
+/**@}*/
+
+/** @name CSR_ETRIGGER_S
+
+When set, enable this trigger for exceptions that are taken from S mode.
+*/
+/**@{*/
 #define CSR_ETRIGGER_S_OFFSET               7
 #define CSR_ETRIGGER_S_LENGTH               1
 #define CSR_ETRIGGER_S                      (0x1ULL << CSR_ETRIGGER_S_OFFSET)
-/*
-* When set, enable this trigger for exceptions that are taken from U
-* mode.
+/**@}*/
+
+/** @name CSR_ETRIGGER_U
+
+When set, enable this trigger for exceptions that are taken from U mode.
  */
+ /**@{*/
 #define CSR_ETRIGGER_U_OFFSET               6
 #define CSR_ETRIGGER_U_LENGTH               1
 #define CSR_ETRIGGER_U                      (0x1ULL << CSR_ETRIGGER_U_OFFSET)
-/*
-* The action to take when the trigger fires. The values are explained
-* in Table~\ref{tab:action}.
- */
+/**@}*/
+/**@}*/
+
+/** @name CSR_ETRIGGER_ACTION
+
+The action to take when the trigger fires. The values are explained
+in Table~\ref{tab:action}.
+*/
+/**@{*/
 #define CSR_ETRIGGER_ACTION_OFFSET          0
 #define CSR_ETRIGGER_ACTION_LENGTH          6
 #define CSR_ETRIGGER_ACTION                 (0x3fULL << CSR_ETRIGGER_ACTION_OFFSET)
+/**@}*/
+
 #define DMI_DMSTATUS                        0x11
-/*
-* If 1, then there is an implicit {\tt ebreak} instruction at the
-* non-existent word immediately after the Program Buffer. This saves
-* the debugger from having to write the {\tt ebreak} itself, and
-* allows the Program Buffer to be one word smaller.
-*
-* This must be 1 when \Fprogbufsize is 1.
- */
+
+/** @name DMI_DMSTATUS_IMPEBREAK
+
+If 1, then there is an implicit {\tt ebreak} instruction at the
+non-existent word immediately after the Program Buffer. This saves
+the debugger from having to write the {\tt ebreak} itself, and
+allows the Program Buffer to be one word smaller.
+
+This must be 1 when \Fprogbufsize is 1.
+*/
+/**@{*/
 #define DMI_DMSTATUS_IMPEBREAK_OFFSET       22
 #define DMI_DMSTATUS_IMPEBREAK_LENGTH       1
 #define DMI_DMSTATUS_IMPEBREAK              (0x1U << DMI_DMSTATUS_IMPEBREAK_OFFSET)
+/**@}*/
+
 /*
 * This field is 1 when all currently selected harts have been reset but the reset has not been acknowledged.
  */
