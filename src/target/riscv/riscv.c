@@ -93,12 +93,10 @@ static uint8_t const ir_dtmcontrol[1] = {DTMCONTROL};
 static uint8_t const ir_dbus[1] = {DBUS};
 static uint8_t const ir_idcode[1] = {0x1};
 struct scan_field select_dtmcontrol = {
-	.in_value = NULL,
 	.out_value = ir_dtmcontrol
 };
 
 struct scan_field select_dbus = {
-	.in_value = NULL,
 	.out_value = ir_dbus
 };
 
@@ -1183,17 +1181,23 @@ riscv_arch_state(struct target *const target)
 	return tt->arch_state(target);
 }
 
-/* Algorithm must end with a software breakpoint instruction. */
+#if 0
+/** Algorithm must end with a software breakpoint instruction. */
 static int
-riscv_run_algorithm(struct target *const target, int const num_mem_params,
-		struct mem_param *const mem_params, int const num_reg_params,
-		struct reg_param *const reg_params, target_addr_t const entry_point,
-		target_addr_t const exit_point, int const timeout_ms, void *const arch_info)
+riscv_run_algorithm(struct target *const target,
+	int const num_mem_params,
+	struct mem_param *const mem_params,
+	int const num_reg_params,
+	struct reg_param *const reg_params,
+	target_addr_t const entry_point,
+	target_addr_t const exit_point,
+	int const timeout_ms,
+	void *const arch_info)
 {
 	assert(target);
 	struct riscv_info_t *const info = target->arch_info;
 
-	if (num_mem_params > 0) {
+	if (0 < num_mem_params) {
 		LOG_ERROR("%s: Memory parameters are not supported for RISC-V algorithms.",
 				target->cmd_name);
 		return ERROR_COMMAND_ARGUMENT_INVALID;
@@ -1242,7 +1246,7 @@ riscv_run_algorithm(struct target *const target, int const num_mem_params,
 			return ERROR_TARGET_INVALID;
 		}
 
-		if (r->number > GDB_REGNO_XPR31) {
+		if (GDB_REGNO_XPR31 < r->number) {
 			LOG_ERROR("%s: Only GPRs can be use as argument registers.",
 					target->cmd_name);
 			return ERROR_COMMAND_ARGUMENT_INVALID;
@@ -1403,6 +1407,7 @@ riscv_checksum_memory(struct target *const target,
 	*checksum = 0xFFFFFFFF;
 	return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 }
+#endif
 
 enum riscv_poll_hart_e {
 	RPH_NO_CHANGE,
@@ -3316,9 +3321,7 @@ struct target_type riscv_target = {
 #if 0
     .read_buffer = NULL,
 	.write_buffer = NULL,
-#endif
 	.checksum_memory = riscv_checksum_memory,
-#if 0
 	.blank_check_memory = NULL,
 #endif
 	.add_breakpoint = riscv_add_breakpoint,
@@ -3330,8 +3333,8 @@ struct target_type riscv_target = {
 	.add_watchpoint = riscv_add_watchpoint,
 	.remove_watchpoint = riscv_remove_watchpoint,
 	.hit_watchpoint = riscv_hit_watchpoint,
-	.run_algorithm = riscv_run_algorithm,
 #if 0
+	.run_algorithm = riscv_run_algorithm,
 	.start_algorithm = NULL,
 	.wait_algorithm = NULL,
 #endif

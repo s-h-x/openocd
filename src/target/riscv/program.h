@@ -27,7 +27,7 @@ struct riscv_program {
 };
 
 /* Initializes a program with the header. */
-int riscv_program_init(struct riscv_program *p, struct target *t);
+void riscv_program_init(struct riscv_program *p, struct target *t);
 
 /* Write the program to the program buffer. */
 int riscv_program_write(struct riscv_program *program);

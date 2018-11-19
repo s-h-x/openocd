@@ -3,26 +3,17 @@
 #include "opcodes.h"
 
 #include "target/register.h"
-#include "helper/log.h"
-
 
 /* Program interface. */
-int
+void
 riscv_program_init(struct riscv_program *const p,
 	struct target *const target)
 {
+	assert(p);
 	memset(p, 0, sizeof *p);
 	p->target = target;
-	p->instruction_count = 0;
+	memset(p->debug_buffer, -1, sizeof p->debug_buffer);
 	p->target_xlen = riscv_xlen(target);
-
-	for (size_t i = 0; i < RISCV_REGISTER_COUNT; ++i)
-		p->writes_xreg[i] = 0;
-
-	for (size_t i = 0; i < RISCV_MAX_DEBUG_BUFFER_SIZE; ++i)
-		p->debug_buffer[i] = -1;
-
-	return ERROR_OK;
 }
 
 static inline int
@@ -30,7 +21,7 @@ riscv_write_debug_buffer(struct target *const target,
 	int const index,
 	riscv_insn_t const insn)
 {
-	struct riscv_info_t *const rvi = riscv_info(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
 	assert(rvi && rvi->write_debug_buffer);
 	return rvi->write_debug_buffer(target, index, insn);
 }
@@ -60,7 +51,7 @@ riscv_program_write(struct riscv_program *const program)
 static inline int
 riscv_execute_debug_buffer(struct target *const target)
 {
-	struct riscv_info_t *const rvi = riscv_info(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
 	assert(rvi && rvi->execute_debug_buffer);
 	return rvi->execute_debug_buffer(target);
 }
@@ -69,7 +60,7 @@ static inline riscv_insn_t
 riscv_read_debug_buffer(struct target *const target,
 	int const index)
 {
-	struct riscv_info_t *const rvi = riscv_info(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
 	assert(rvi && rvi->read_debug_buffer);
 	return rvi->read_debug_buffer(target, index);
 }
@@ -77,10 +68,10 @@ riscv_read_debug_buffer(struct target *const target,
 static size_t
 riscv_debug_buffer_size(struct target *const target)
 {
-	struct riscv_info_t *const rvi = riscv_info(target);
+	struct riscv_info_t const *const rvi = riscv_info(target);
 	assert(rvi);
 	int const hart = riscv_current_hartid(target);
-	assert(hart < RISCV_MAX_HARTS);
+	assert(0<= hart && hart < RISCV_MAX_HARTS);
 	return rvi->harts[hart].debug_buffer_size;
 }
 
@@ -92,6 +83,7 @@ riscv_program_exec(struct riscv_program *const p,
 	keep_alive();
 
 	riscv_reg_t saved_registers[GDB_REGNO_XPR31 + 1];
+
 	for (size_t i = GDB_REGNO_ZERO + 1; i <= GDB_REGNO_XPR31; ++i) {
 		if (p->writes_xreg[i]) {
 			LOG_DEBUG("%s: Saving register %d as used by program", t->cmd_name, (int)(i));
@@ -145,7 +137,8 @@ riscv_program_exec(struct riscv_program *const p,
 	return ERROR_OK;
 }
 
-int riscv_program_swr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno b, int offset)
+int
+riscv_program_swr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno b, int offset)
 {
 	return riscv_program_insert(p, sw(d, b, offset));
 }
@@ -187,7 +180,8 @@ int riscv_program_csrw(struct riscv_program *p, enum gdb_regno s, enum gdb_regno
 	return riscv_program_insert(p, csrrw(GDB_REGNO_ZERO, s, csr - GDB_REGNO_CSR0));
 }
 
-int riscv_program_fence_i(struct riscv_program *p)
+int
+riscv_program_fence_i(struct riscv_program *p)
 {
 	return riscv_program_insert(p, fence_i());
 }
@@ -202,15 +196,20 @@ int
 riscv_program_ebreak(struct riscv_program *p)
 {
 	struct target *const target = p->target;
-	struct riscv_info_t *const r = riscv_info(target);
+	struct riscv_info_t *const rvi = riscv_info(target);
+	assert(rvi);
 
-	if (p->instruction_count == riscv_debug_buffer_size(p->target) && r->impebreak)
+	if (riscv_debug_buffer_size(p->target) == p->instruction_count && rvi->impebreak)
 		return ERROR_OK;
 
 	return riscv_program_insert(p, ebreak());
 }
 
-int riscv_program_addi(struct riscv_program *p, enum gdb_regno d, enum gdb_regno s, int16_t u)
+int
+riscv_program_addi(struct riscv_program *p,
+	enum gdb_regno d,
+	enum gdb_regno s,
+	int16_t u)
 {
 	return riscv_program_insert(p, addi(d, s, u));
 }
