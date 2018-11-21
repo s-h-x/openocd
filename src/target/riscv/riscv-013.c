@@ -14,7 +14,6 @@
 #include "target/target_type.h"
 #include "target/register.h"
 #include "target/breakpoints.h"
-#include "helper/time_support.h"
 #include "rtos/riscv_debug.h"
 
 #define DMI_DATA1 (DMI_DATA0 + 1)
@@ -354,7 +353,9 @@ dump_field(struct scan_field const *const restrict field)
 }
 
 static inline riscv013_info_t *
-__attribute__((pure))
+get_info(struct target const *const target)__attribute__((pure));
+
+static inline riscv013_info_t *
 get_info(struct target const *const target)
 {
 	assert(target);
@@ -575,18 +576,18 @@ static int
 register_read(struct target *const target, uint64_t *value, uint32_t number);
 
 static int
-__attribute__((warn_unused_result))
-register_read_direct(struct target *const target, uint64_t *value, uint32_t number);
+register_read_direct(struct target *const target, uint64_t *value, uint32_t number)
+__attribute__((warn_unused_result));
 
 static int
-__attribute__((warn_unused_result))
-register_write_direct(struct target *const target, unsigned number, uint64_t value);
+register_write_direct(struct target *const target, unsigned number, uint64_t value)
+__attribute__((warn_unused_result));
 
 static int
-read_memory(struct target *const target, target_addr_t address, uint32_t size, uint32_t count, uint8_t *buffer);
+riscv_013_read_memory(struct target *const target, target_addr_t address, uint32_t size, uint32_t count, uint8_t *buffer);
 
 static int
-write_memory(struct target *const target, target_addr_t address, uint32_t size, uint32_t count, const uint8_t *buffer);
+riscv_013_write_memory(struct target *const target, target_addr_t address, uint32_t size, uint32_t count, const uint8_t *buffer);
 
 /**
  * @return the DM structure for this target. If there isn't one, find it in the
@@ -594,7 +595,9 @@ write_memory(struct target *const target, target_addr_t address, uint32_t size, 
  * to 0.
  */
 static dm013_info_t *
-__attribute__((warn_unused_result))
+get_dm(struct target *const target) __attribute__((warn_unused_result));
+
+static dm013_info_t *
 get_dm(struct target *const target)
 {
 	riscv013_info_t *const info = get_info(target);
@@ -641,7 +644,9 @@ get_dm(struct target *const target)
 }
 
 static uint32_t
-__attribute__((const))
+set_hartsel(uint32_t initial, uint32_t const index) __attribute__((const));
+	
+static uint32_t
 set_hartsel(uint32_t initial,
 	uint32_t const index)
 {
@@ -685,7 +690,11 @@ dmi_op(struct target *const target,
 	@param[out] value
 */
 static inline int
-__attribute__((warn_unused_result))
+dmi_read(struct target *const target,
+	uint32_t *const value,
+	uint32_t const address) __attribute__((warn_unused_result));
+
+static inline int
 dmi_read(struct target *const target,
 	uint32_t *const value,
 	uint32_t const address)
@@ -1237,7 +1246,7 @@ scratch_read64(struct target *const target,
 		{
 			uint8_t buffer[8];
 			{
-				int const err = read_memory(target, scratch->debug_address, 4, 2, buffer);
+				int const err = riscv_013_read_memory(target, scratch->debug_address, 4, 2, buffer);
 				if (ERROR_OK != err)
 					return err;
 			}
@@ -1292,7 +1301,7 @@ scratch_write64(struct target *const target,
 
 				{
 					int const err =
-						write_memory(target, scratch->debug_address, 4, 2, buffer);
+						riscv_013_write_memory(target, scratch->debug_address, 4, 2, buffer);
 					if (ERROR_OK != err)
 						return err;
 				}
@@ -1635,7 +1644,7 @@ wait_for_authbusy(struct target *const target, uint32_t *dmstatus)
 }
 
 static void
-deinit_target(struct target *const target)
+riscv_013_deinit_target(struct target *const target)
 {
 	LOG_DEBUG("%s: riscv_deinit_target()", target->cmd_name);
 	struct riscv_info_t *const info = target->arch_info;
@@ -1739,7 +1748,7 @@ riscv013_authdata_read(struct target *const target, uint32_t *value)
 }
 
 static int
-assert_reset(struct target *const target)
+riscv_013_assert_reset(struct target *const target)
 {
 	select_dmi(target);
 
@@ -1785,7 +1794,7 @@ assert_reset(struct target *const target)
 }
 
 static int
-deassert_reset(struct target *const target)
+riscv_013_deassert_reset(struct target *const target)
 {
 	riscv013_info_t *const info = get_info(target);
 	select_dmi(target);
@@ -2622,7 +2631,7 @@ finish:
 }
 
 static int
-read_memory(struct target *const target,
+riscv_013_read_memory(struct target *const target,
 	target_addr_t const address,
 	uint32_t const size,
 	uint32_t const count,
@@ -3034,7 +3043,7 @@ error:
 }
 
 static int
-write_memory(struct target *const target,
+riscv_013_write_memory(struct target *const target,
 	target_addr_t address,
 	uint32_t const size,
 	uint32_t const count,
@@ -3071,7 +3080,12 @@ write_memory(struct target *const target,
 }
 
 static int
-__attribute__((warn_unused_result))
+riscv013_get_register(struct target *const target,
+	riscv_reg_t *const value,
+	int const hid,
+	int const rid) __attribute__((warn_unused_result));
+
+static int
 riscv013_get_register(struct target *const target,
 	riscv_reg_t *const value,
 	int const hid,
@@ -4204,8 +4218,8 @@ riscv013_test_compliance(struct target *const target)
 	/* Pulse reset. */
 	target->reset_halt = true;
 	COMPLIANCE_MUST_PASS(riscv_set_current_hartid(target, 0));
-	COMPLIANCE_TEST(ERROR_OK == assert_reset(target), "Must be able to assert NDMRESET");
-	COMPLIANCE_TEST(ERROR_OK == deassert_reset(target), "Must be able to deassert NDMRESET");
+	COMPLIANCE_TEST(ERROR_OK == riscv_013_assert_reset(target), "Must be able to assert NDMRESET");
+	COMPLIANCE_TEST(ERROR_OK == riscv_013_deassert_reset(target), "Must be able to deassert NDMRESET");
 
 	/* Verify that most stuff is not affected by ndmreset. */
 	COMPLIANCE_READ(target, &testvar_read, DMI_ABSTRACTCS);
@@ -4282,13 +4296,13 @@ riscv013_test_compliance(struct target *const target)
 }
 
 static int
-arch_state(struct target *const target)
+riscv_013_arch_state(struct target *const target)
 {
 	return ERROR_OK;
 }
 
 static int
-riscv013_examine(struct target *const target)
+riscv_013_examine(struct target *const target)
 {
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 
@@ -4568,7 +4582,7 @@ riscv013_authdata_write(struct target *const target,
 		target_list_t *entry;
 
 		list_for_each_entry(entry, &dm->target_list, list) {
-			int const err = riscv013_examine(entry->target);
+			int const err = riscv_013_examine(entry->target);
 			result = ERROR_OK == result ? err : result;
 		}
 
@@ -4579,7 +4593,7 @@ riscv013_authdata_write(struct target *const target,
 }
 
 static int
-init_target(struct command_context *const cmd_ctx,
+riscv_013_init_target(struct command_context *const cmd_ctx,
 	struct target *const target)
 {
 	assert(target);
@@ -4641,20 +4655,20 @@ init_target(struct command_context *const cmd_ctx,
 struct target_type const riscv013_target = {
 	.name = "riscv",
 
-	.init_target = init_target,
-	.deinit_target = deinit_target,
-	.examine = riscv013_examine,
+	.init_target = riscv_013_init_target,
+	.deinit_target = riscv_013_deinit_target,
+	.examine = riscv_013_examine,
 
 	.poll = &riscv_openocd_poll,
 	.halt = &riscv_openocd_halt,
 	.resume = &riscv_openocd_resume,
 	.step = &riscv_openocd_step,
 
-	.assert_reset = assert_reset,
-	.deassert_reset = deassert_reset,
+	.assert_reset = riscv_013_assert_reset,
+	.deassert_reset = riscv_013_deassert_reset,
 
-	.read_memory = read_memory,
-	.write_memory = write_memory,
+	.read_memory = riscv_013_read_memory,
+	.write_memory = riscv_013_write_memory,
 
-	.arch_state = arch_state,
+	.arch_state = riscv_013_arch_state,
 };

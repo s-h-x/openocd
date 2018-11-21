@@ -234,7 +234,7 @@ struct scans_s {
 typedef struct scans_s scans_t;
 
 /* Necessary prototypes. */
-static int riscv011_poll(struct target *const target);
+static int riscv_011_poll(struct target *const target);
 static int get_register(struct target *const target, riscv_reg_t *value, int hartid,
 		int regid);
 
@@ -290,7 +290,9 @@ store(struct target const *const target,
 /** @} */
 
 static riscv011_info_t *
-__attribute__((pure))
+get_info(const struct target *const target) __attribute__((pure));
+
+static riscv011_info_t *
 get_info(const struct target *const target)
 {
 	assert(target);
@@ -352,7 +354,6 @@ store_slot(struct target const *const target,
 }
 
 static inline uint16_t
-__attribute__((const))
 dram_address(unsigned const index)
 {
 	return index < 0x10 ? index : 0x40 + index - 0x10;
@@ -1146,7 +1147,7 @@ static int wait_for_state(struct target *const target, enum target_state state)
 	time_t const start = time(NULL);
 
 	for (;;) {
-		int const result = riscv011_poll(target);
+		int const result = riscv_011_poll(target);
 
 		if (result != ERROR_OK)
 			return result;
@@ -1535,7 +1536,7 @@ set_register(struct target *const target, int hartid, int regid, uint64_t value)
 	return register_write(target, regid, value);
 }
 
-static int halt(struct target *const target)
+static int riscv_011_halt(struct target *const target)
 {
 	LOG_DEBUG("%s: riscv_halt()", target->cmd_name);
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
@@ -1556,7 +1557,7 @@ static int halt(struct target *const target)
 	return ERROR_OK;
 }
 
-static int init_target(struct command_context *cmd_ctx,
+static int riscv_011_init_target(struct command_context *cmd_ctx,
 		struct target *const target)
 {
 	LOG_DEBUG("%s: init", target->cmd_name);
@@ -1575,7 +1576,7 @@ static int init_target(struct command_context *cmd_ctx,
 	return ERROR_OK;
 }
 
-static void deinit_target(struct target *const target)
+static void riscv_011_deinit_target(struct target *const target)
 {
 	LOG_DEBUG("%s: riscv_deinit_target()", target->cmd_name);
 	struct riscv_info_t *const info = target->arch_info;
@@ -1583,7 +1584,7 @@ static void deinit_target(struct target *const target)
 	info->version_specific = NULL;
 }
 
-static int examine(struct target *const target)
+static int riscv_011_examine(struct target *const target)
 {
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 
@@ -1723,7 +1724,7 @@ static int examine(struct target *const target)
 	info->never_halted = true;
 
 	{
-		int const err = riscv011_poll(target);
+		int const err = riscv_011_poll(target);
 		if (ERROR_OK != err)
 			return err;
 	}
@@ -2186,7 +2187,7 @@ strict_step(struct target *const target, bool announce)
 }
 
 static int
-step(struct target *const target,
+riscv_011_step(struct target *const target,
 	int const current,
 	target_addr_t const address,
 	int const handle_breakpoints)
@@ -2218,12 +2219,12 @@ step(struct target *const target,
 	return ERROR_OK;
 }
 
-static int riscv011_poll(struct target *const target)
+static int riscv_011_poll(struct target *const target)
 {
 	return poll_target(target, true);
 }
 
-static int riscv011_resume(struct target *const target, int current,
+static int riscv_011_resume(struct target *const target, int current,
 		target_addr_t address, int handle_breakpoints, int debug_execution)
 {
 	riscv011_info_t *info = get_info(target);
@@ -2249,7 +2250,7 @@ static int riscv011_resume(struct target *const target, int current,
 	return resume(target, debug_execution, false);
 }
 
-static int assert_reset(struct target *const target)
+static int riscv_011_assert_reset(struct target *const target)
 {
 	assert(target);
 
@@ -2287,7 +2288,7 @@ static int assert_reset(struct target *const target)
 	return ERROR_OK;
 }
 
-static int deassert_reset(struct target *const target)
+static int riscv_011_deassert_reset(struct target *const target)
 {
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 	if (target->reset_halt)
@@ -2296,7 +2297,7 @@ static int deassert_reset(struct target *const target)
 		return wait_for_state(target, TARGET_RUNNING);
 }
 
-static int read_memory(struct target *const target, target_addr_t address,
+static int riscv_011_read_memory(struct target *const target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer)
 {
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
@@ -2485,7 +2486,7 @@ static int setup_write_memory(struct target *const target, uint32_t size)
 }
 
 static int
-write_memory(struct target *const target,
+riscv_011_write_memory(struct target *const target,
 	target_addr_t const address,
 	uint32_t const size,
 	uint32_t const count,
@@ -2664,7 +2665,7 @@ error:
 	return ERROR_TARGET_FAILURE;
 }
 
-static int arch_state(struct target *const target)
+static int riscv_011_arch_state(struct target *const target)
 {
 	return ERROR_OK;
 }
@@ -2672,22 +2673,22 @@ static int arch_state(struct target *const target)
 struct target_type const riscv011_target = {
 	.name = "riscv",
 
-	.init_target = init_target,
-	.deinit_target = deinit_target,
-	.examine = examine,
+	.init_target = riscv_011_init_target,
+	.deinit_target = riscv_011_deinit_target,
+	.examine = riscv_011_examine,
 
 	/* poll current target status */
-	.poll = riscv011_poll,
+	.poll = riscv_011_poll,
 
-	.halt = halt,
-	.resume = riscv011_resume,
-	.step = step,
+	.halt = riscv_011_halt,
+	.resume = riscv_011_resume,
+	.step = riscv_011_step,
 
-	.assert_reset = assert_reset,
-	.deassert_reset = deassert_reset,
+	.assert_reset = riscv_011_assert_reset,
+	.deassert_reset = riscv_011_deassert_reset,
 
-	.read_memory = read_memory,
-	.write_memory = write_memory,
+	.read_memory = riscv_011_read_memory,
+	.write_memory = riscv_011_write_memory,
 
-	.arch_state = arch_state,
+	.arch_state = riscv_011_arch_state,
 };

@@ -10,7 +10,6 @@
 #define S1      9
 
 static inline uint32_t
-__attribute__((const))
 bits(uint32_t const value,
 	unsigned const hi,
 	unsigned const lo)
@@ -19,7 +18,6 @@ bits(uint32_t const value,
 }
 
 static inline uint32_t
-__attribute__((const))
 bit(uint32_t const value,
 	const unsigned b)
 {
@@ -27,7 +25,6 @@ bit(uint32_t const value,
 }
 
 static inline uint32_t
-__attribute__((const))
 jal(unsigned const rd,
 	uint32_t const imm)
 {
@@ -42,7 +39,6 @@ jal(unsigned const rd,
 }
 
 static inline uint32_t
-__attribute__((const))
 csrsi(unsigned const csr,
 	uint16_t const imm)
 {
@@ -53,7 +49,6 @@ csrsi(unsigned const csr,
 }
 
 static inline uint32_t
-__attribute__((const))
 sw(unsigned const src,
 	unsigned const base,
 	uint16_t const offset)
@@ -68,7 +63,6 @@ sw(unsigned const src,
 }
 
 static inline uint32_t
-__attribute__((const))
 sd(unsigned const src,
 	unsigned const base,
 	uint16_t const offset)
@@ -83,7 +77,6 @@ sd(unsigned const src,
 }
 
 static inline uint32_t
-__attribute__((const))
 sh(unsigned const src,
 	unsigned const base,
 	uint16_t const offset)
@@ -98,7 +91,6 @@ sh(unsigned const src,
 }
 
 static inline uint32_t
-__attribute__((const))
 sb(unsigned const src,
 	unsigned const base,
 	uint16_t const offset)
@@ -114,7 +106,6 @@ sb(unsigned const src,
 
 /** @bug @c offset should be signed */
 static inline uint32_t
-__attribute__((const))
 ld(unsigned const rd,
 	unsigned const base,
 	uint16_t const offset)
@@ -128,7 +119,6 @@ ld(unsigned const rd,
 }
 
 static inline uint32_t
-__attribute__((const))
 lw(unsigned const rd,
 	unsigned const base,
 	uint16_t const offset)
@@ -142,7 +132,6 @@ lw(unsigned const rd,
 }
 
 static inline uint32_t
-__attribute__((const))
 lh(unsigned const rd,
 	unsigned const base,
 	uint16_t const offset)
@@ -156,7 +145,6 @@ lh(unsigned const rd,
 }
 
 static inline uint32_t
-__attribute__((const))
 lb(unsigned const rd,
 	unsigned const base,
 	uint16_t const offset)
@@ -170,7 +158,6 @@ lb(unsigned const rd,
 }
 
 static inline uint32_t
-__attribute__((const))
 csrw(unsigned const source,
 	unsigned const csr)
 {
@@ -182,7 +169,6 @@ csrw(unsigned const source,
 }
 
 static inline uint32_t
-__attribute__((const))
 addi(unsigned const dest,
 	unsigned const src,
 	uint16_t const imm)
@@ -197,7 +183,6 @@ addi(unsigned const dest,
 
 /** @bug @c csr is 12 bits only */
 static inline uint32_t
-__attribute__((const))
 csrr(unsigned const rd,
 	unsigned const csr)
 {
@@ -209,7 +194,6 @@ csrr(unsigned const rd,
 }
 
 static inline uint32_t
-__attribute__((const))
 csrrs(unsigned const rd,
 	unsigned const rs,
 	unsigned const csr)
@@ -223,7 +207,6 @@ csrrs(unsigned const rd,
 }
 
 static inline uint32_t
-__attribute__((const))
 csrrw(unsigned const rd,
 	unsigned const rs,
 	unsigned const csr)
@@ -237,7 +220,6 @@ csrrw(unsigned const rd,
 }
 
 static inline uint32_t
-__attribute__((const))
 fsw(unsigned const src,
 	unsigned const base,
 	uint16_t const offset)
@@ -279,7 +261,6 @@ flw(unsigned const dest,
 }
 
 static inline uint32_t
-__attribute__((const))
 fld(unsigned const dest,
 	unsigned const base,
 	uint16_t const offset)
@@ -293,7 +274,6 @@ fld(unsigned const dest,
 }
 
 static inline uint32_t
-__attribute__((const))
 fmv_x_w(unsigned const dest,
 	unsigned const src)
 {
@@ -305,7 +285,6 @@ fmv_x_w(unsigned const dest,
 }
 
 static inline uint32_t
-__attribute__((const))
 fmv_x_d(unsigned const dest,
 	unsigned const src)
 {
@@ -317,7 +296,6 @@ fmv_x_d(unsigned const dest,
 }
 
 static inline uint32_t
-__attribute__((const))
 fmv_w_x(unsigned const dest,
 	unsigned const src)
 {
@@ -329,7 +307,6 @@ fmv_w_x(unsigned const dest,
 }
 
 static inline uint32_t
-__attribute__((const))
 fmv_d_x(unsigned const dest,
 	unsigned const src)
 {
@@ -341,7 +318,6 @@ fmv_d_x(unsigned const dest,
 }
 
 static inline uint32_t
-__attribute__((const))
 ebreak(void)
 {
 	return MATCH_EBREAK;
@@ -349,28 +325,24 @@ ebreak(void)
 
 /** @bug @c ebreak_c is 16 bit only*/
 static inline uint32_t
-__attribute__((const))
 ebreak_c(void)
 {
 	return MATCH_C_EBREAK;
 }
 
 static inline uint32_t
-__attribute__((const))
 wfi(void)
 {
 	return MATCH_WFI;
 }
 
 static inline uint32_t
-__attribute__((const))
 fence_i(void)
 {
 	return MATCH_FENCE_I;
 }
 
 static inline uint32_t
-__attribute__((const))
 lui(unsigned const dest,
 	uint32_t const imm)
 {
@@ -382,7 +354,6 @@ lui(unsigned const dest,
 }
 
 static inline uint32_t
-__attribute__((const))
 xori(unsigned const dest,
 	unsigned const src,
 	uint16_t const imm)
@@ -396,7 +367,6 @@ xori(unsigned const dest,
 }
 
 static inline uint32_t
-__attribute__((const))
 srli(unsigned const dest,
 	unsigned const src,
 	uint8_t const shamt)
@@ -410,14 +380,12 @@ srli(unsigned const dest,
 }
 
 static inline uint32_t
-__attribute__((const))
 fence(void)
 {
 	return MATCH_FENCE;
 }
 
 static inline uint32_t
-__attribute__((const))
 auipc(unsigned dest)
 {
 	assert(dest < 32);
