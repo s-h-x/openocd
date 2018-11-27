@@ -290,7 +290,7 @@ decode_dmi(char *restrict text,
 	*text = '\0';
 
 	for (unsigned i = 0; i < DIM(description); ++i) {
-		struct descr const *const restrict p_descr = &description[i];
+		struct descr const *const p_descr = &description[i];
 		if (p_descr->address == address) {
 			uint64_t const mask = p_descr->mask;
 			unsigned const value = get_field(data, mask);
@@ -458,9 +458,6 @@ dtmcontrol_scan(struct target *const target,
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
 	/* Always return to dmi. */
-	/**
-	@bug External JTAG/TAP operations is not possible?
-	*/
 	select_dmi(target);
 
 	{
@@ -952,8 +949,11 @@ register_read_abstract(struct target *const target,
 	assert(info);
 
 	if ((GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31 && !info->abstract_read_fpr_supported) ||
-		(GDB_REGNO_CSR0 <= number && number <= GDB_REGNO_CSR4095 && !info->abstract_read_csr_supported))
+		(GDB_REGNO_CSR0 <= number && number <= GDB_REGNO_CSR4095 && !info->abstract_read_csr_supported)) {
+		LOG_ERROR("%s: not supported abstract register read for register number %d",
+			target->cmd_name, number);
 		return ERROR_TARGET_INVALID;
+	}
 
 	uint32_t const command = access_register_command(target, number, size, AC_ACCESS_REGISTER_TRANSFER);
 
@@ -1481,11 +1481,7 @@ register_read(struct target *const target,
 
 	assert(target);
 
-	if (target->reg_cache &&
-		(number <= GDB_REGNO_XPR31 ||
-		(GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31))
-		) {
-
+	if (target->reg_cache && (number <= GDB_REGNO_XPR31 || (GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31))) {
 		/* Only check the cache for registers that we know won't spontaneously change. */
 		assert(target->reg_cache && target->reg_cache->reg_list && number < target->reg_cache->num_regs);
 		struct reg *const reg = &target->reg_cache->reg_list[number];
@@ -1530,7 +1526,7 @@ register_read_direct(struct target *const target,
 	struct riscv_info_t const *const rvi = riscv_info(target);
 	assert(rvi);
 
-	if (ERROR_OK != result && info->progbufsize + rvi->impebreak >= 2 && GDB_REGNO_XPR31 < number) {
+	if (ERROR_OK != result && 2 <= info->progbufsize + rvi->impebreak && GDB_REGNO_XPR31 < number) {
 		struct riscv_program program;
 		riscv_program_init(&program, target);
 
@@ -1573,19 +1569,21 @@ register_read_direct(struct target *const target,
 			} else {
 				(void)riscv_program_insert(&program, fmv_x_w(S0, number - GDB_REGNO_FPR0));
 			}
-		} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
-			if (ERROR_OK != riscv_program_csrr(&program, S0, number))
+		} else if (GDB_REGNO_CSR0 <= number && number <= GDB_REGNO_CSR4095) {
+			if (ERROR_OK != (result = riscv_program_csrr(&program, S0, number)))
 				return result;
 		} else {
 			LOG_ERROR("%s: Unsupported register (enum gdb_regno)(%d)",
-				target->cmd_name,
-				number);
+				target->cmd_name, number);
 			return result;
 		}
 
-		/* Execute program. */
+		/*
+		Execute program.
+		Don't message on error.
+		Probably the register doesn't exist.
+		*/
 		result = riscv_program_exec(&program, target);
-		/* Don't message on error. Probably the register doesn't exist. */
 
 		if (use_scratch) {
 			result = scratch_read64(target, &scratch, value);
