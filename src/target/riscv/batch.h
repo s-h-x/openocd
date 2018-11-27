@@ -43,8 +43,8 @@ struct riscv_batch {
 	and idle is the number of JTAG idle cycles between every real scan.
 */
 struct riscv_batch *
-	riscv_batch_alloc(struct target *target, size_t scans, size_t idle)
-	__attribute__((warn_unused_result));
+	__attribute__((warn_unused_result))
+	riscv_batch_alloc(struct target *target, size_t scans, size_t idle);
 
 void
 riscv_batch_free(struct riscv_batch *batch);
@@ -58,8 +58,8 @@ riscv_batch_full(struct riscv_batch const *const batch)
 
 /** Executes this scan batch. */
 int
-riscv_batch_run(struct riscv_batch *batch)
-__attribute__((warn_unused_result));
+__attribute__((warn_unused_result))
+riscv_batch_run(struct riscv_batch *batch);
 
 /** Adds a DMI write to this batch. */
 void

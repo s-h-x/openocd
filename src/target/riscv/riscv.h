@@ -197,11 +197,10 @@ extern struct scan_field select_idcode;
 
 /** Everything needs the RISC-V specific info structure, so here's a nice macro that provides that. */
 static inline struct riscv_info_t *
-riscv_info(struct target const *const target) __attribute__((warn_unused_result, pure));
-
-static inline struct riscv_info_t *
+__attribute__((warn_unused_result, pure))
 riscv_info(struct target const *const target)
 {
+	assert(target);
 	return target->arch_info;
 }
 
@@ -246,11 +245,7 @@ riscv_resume_all_harts(struct target *target);
 int riscv_step_rtos_hart(struct target *target);
 
 static inline bool
-riscv_supports_extension(struct target *const target,
-	int const hartid,
-	char const letter) __attribute__((pure));
-
-static inline bool
+__attribute__((pure))
 riscv_supports_extension(struct target *const target,
 	int const hartid,
 	char const letter)
@@ -270,9 +265,7 @@ riscv_supports_extension(struct target *const target,
 }
 
 static inline bool
-riscv_rtos_enabled(struct target const *const target) __attribute__((pure));
-
-static inline bool
+__attribute__((pure))
 riscv_rtos_enabled(struct target const *const target)
 {
 	assert(target);
@@ -285,9 +278,7 @@ riscv_rtos_enabled(struct target const *const target)
 int riscv_set_current_hartid(struct target *target, int hartid);
 
 static inline int
-riscv_current_hartid(struct target const *const target) __attribute__((warn_unused_result, pure));
-
-static inline int
+__attribute__((warn_unused_result, pure))
 riscv_current_hartid(struct target const *const target)
 {
 	struct riscv_info_t const *const rvi = riscv_info(target);
@@ -298,10 +289,7 @@ riscv_current_hartid(struct target const *const target)
 
 /** @returns XLEN for the given (or current) hart. */
 static inline int
-riscv_xlen_of_hart(struct target const *const target,
-	int const hartid)__attribute__((pure));
-
-static inline int
+__attribute__((pure))
 riscv_xlen_of_hart(struct target const *const target,
 	int const hartid)
 {
@@ -347,18 +335,15 @@ riscv_set_rtos_hartid(struct target *const target,
 /** Lists the number of harts in the system, which are assumed to be
  * consecutive and start with `mhartid=0`. */
 int
-riscv_count_harts(struct target const *target) __attribute__((pure));
+__attribute__((pure))
+riscv_count_harts(struct target const *target);
 
 /** @returns TRUE if the target has the given register on the given hart.
 
     @bug Always return true
 */
 static inline bool
-riscv_has_register(struct target *const target,
-	int const hartid,
-	int const regid) __attribute__((const));
-
-static inline bool
+__attribute__((const))
 riscv_has_register(struct target *const target,
 	int const hartid,
 	int const regid)

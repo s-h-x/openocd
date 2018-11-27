@@ -353,9 +353,7 @@ dump_field(struct scan_field const *const restrict field)
 }
 
 static inline riscv013_info_t *
-get_info(struct target const *const target)__attribute__((pure));
-
-static inline riscv013_info_t *
+__attribute__((pure))
 get_info(struct target const *const target)
 {
 	assert(target);
@@ -365,15 +363,17 @@ get_info(struct target const *const target)
 }
 
 static dmi_status_t
+__attribute__((warn_unused_result))
 dmi_scan(struct target *const target,
 	uint32_t *const address_in /*<[out]*/ ,
 	uint32_t *const data_in /*<[out]*/,
 	dmi_op_t const op,
 	uint32_t const address_out,
 	uint32_t const data_out,
-	/**[in] If this is set, assume the scan results in an execution,
-	so more run-test/idle cycles may be required. */
-	bool const exec)
+	bool const exec /**<[in] If this is set,
+					assume the scan results in an execution,
+					so more run-test/idle cycles may be required.
+					*/)
 {
 	riscv013_info_t *const info = get_info(target);
 
@@ -499,12 +499,10 @@ increase_dmi_busy_delay(struct target *const restrict target)
 	(void)dtmcontrol_scan(target, DTM_DTMCS_DMIRESET);
 }
 
-/**
-	@param[out] data_in
-*/
 static int
-dmi_op_timeout(struct target *const restrict target,
-	uint32_t *const data_in,
+__attribute__((warn_unused_result))
+dmi_op_timeout(struct target *const target,
+	uint32_t *const data_in /**[out]*/,
 	int const dmi_op_code,
 	uint32_t const address,
 	uint32_t const data_out,
@@ -586,12 +584,12 @@ static int
 register_read(struct target *const target, uint64_t *value, uint32_t number);
 
 static int
-register_read_direct(struct target *const target, uint64_t *value, uint32_t number)
-__attribute__((warn_unused_result));
+__attribute__((warn_unused_result))
+register_read_direct(struct target *const target, uint64_t *value, uint32_t number);
 
 static int
-register_write_direct(struct target *const target, unsigned number, uint64_t value)
-__attribute__((warn_unused_result));
+__attribute__((warn_unused_result))
+register_write_direct(struct target *const target, unsigned number, uint64_t value);
 
 static int
 riscv_013_read_memory(struct target *const target, target_addr_t address, uint32_t size, uint32_t count, uint8_t *buffer);
@@ -605,9 +603,7 @@ riscv_013_write_memory(struct target *const target, target_addr_t address, uint3
  * to 0.
  */
 static dm013_info_t *
-get_dm(struct target *const target) __attribute__((warn_unused_result));
-
-static dm013_info_t *
+__attribute__((warn_unused_result))
 get_dm(struct target *const target)
 {
 	riscv013_info_t *const info = get_info(target);
@@ -654,9 +650,7 @@ get_dm(struct target *const target)
 }
 
 static uint32_t
-set_hartsel(uint32_t initial, uint32_t const index) __attribute__((const));
-	
-static uint32_t
+__attribute__((const))
 set_hartsel(uint32_t initial,
 	uint32_t const index)
 {
@@ -696,29 +690,17 @@ dmi_op(struct target *const target,
 	return result;
 }
 
-/**
-	@param[out] value
-*/
 static inline int
+__attribute__((warn_unused_result))
 dmi_read(struct target *const target,
-	uint32_t *const value,
-	uint32_t const address) __attribute__((warn_unused_result));
-
-static inline int
-dmi_read(struct target *const target,
-	uint32_t *const value,
+	uint32_t *const value/**<[out]*/,
 	uint32_t const address)
 {
 	return dmi_op(target, value, DMI_OP_READ, address, 0);
 }
 
 static inline int
-dmi_write(struct target *const target,
-	uint32_t const address,
-	uint32_t const value)
-	__attribute__((warn_unused_result));
-
-static inline int
+__attribute__((warn_unused_result))
 dmi_write(struct target *const target,
 	uint32_t const address,
 	uint32_t const value)
@@ -3250,12 +3232,7 @@ riscv_013_write_memory(struct target *const target,
 }
 
 static int
-riscv013_get_register(struct target *const target,
-	riscv_reg_t *const value,
-	int const hid,
-	int const rid) __attribute__((warn_unused_result));
-
-static int
+__attribute__((warn_unused_result))
 riscv013_get_register(struct target *const target,
 	riscv_reg_t *const value,
 	int const hid,

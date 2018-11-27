@@ -165,9 +165,7 @@ dtmcontrol_scan(struct target *const target,
 }
 
 static struct target_type const *
-get_target_type(struct target *const target) __attribute__((warn_unused_result, pure));
-
-static struct target_type const *
+__attribute__((warn_unused_result, pure))
 get_target_type(struct target *const target)
 {
 	assert(target);
@@ -193,9 +191,7 @@ get_target_type(struct target *const target)
 
 /** Initializes the shared RISC-V structure. */
 static struct riscv_info_t *
-riscv_info_init(struct target *const target) __attribute__((warn_unused_result));
-
-static struct riscv_info_t *
+__attribute__((warn_unused_result))
 riscv_info_init(struct target *const target)
 {
 	struct riscv_info_t *const r = calloc(1, sizeof(struct riscv_info_t));

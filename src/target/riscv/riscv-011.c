@@ -291,9 +291,7 @@ store(struct target const *const target,
 /** @} */
 
 static riscv011_info_t *
-get_info(const struct target *const target) __attribute__((pure));
-
-static riscv011_info_t *
+__attribute__((pure))
 get_info(const struct target *const target)
 {
 	assert(target);
