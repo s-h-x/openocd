@@ -31,8 +31,8 @@ riscv_program_write(struct riscv_program *const program)
 {
 	assert(program && program->target);
 
-	for (unsigned i = 0; i < program->instruction_count; ++i) {
-		LOG_DEBUG("%s: %p: debug_buffer[%02x] = DASM(0x%08" PRIx32 ")",
+	for (size_t i = 0; i < program->instruction_count; ++i) {
+		LOG_DEBUG("%s: %p: debug_buffer[%02zx] = DASM(0x%08" PRIx32 ")",
 			program->target->cmd_name,
 			program,
 			i,
@@ -229,11 +229,11 @@ riscv_program_insert(struct riscv_program *const p,
 
 	if (riscv_debug_buffer_size(p->target) <= p->instruction_count) {
 		LOG_ERROR("%s: Unable to insert instruction:"
-				"  instruction_count=%d"
-				"  buffer size      =%d",
+				"  instruction_count=%zu"
+				"  buffer size      =%zu",
 				p->target->cmd_name,
-				(int)p->instruction_count,
-				(int)riscv_debug_buffer_size(p->target)
+				p->instruction_count,
+				riscv_debug_buffer_size(p->target)
 		);
 
 		return ERROR_BUF_TOO_SMALL;
