@@ -168,33 +168,40 @@ int riscv_program_lbr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno 
 	return riscv_program_insert(p, lb(d, b, offset));
 }
 
-int riscv_program_csrr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno csr)
+int
+riscv_program_csrr(struct riscv_program *const p,
+	enum gdb_regno const d,
+	enum gdb_regno const csr)
 {
-	assert(csr >= GDB_REGNO_CSR0 && csr <= GDB_REGNO_CSR4095);
+	assert(GDB_REGNO_CSR0 <= csr && csr <= GDB_REGNO_CSR4095);
 	return riscv_program_insert(p, csrrs(d, GDB_REGNO_ZERO, csr - GDB_REGNO_CSR0));
 }
 
-int riscv_program_csrw(struct riscv_program *p, enum gdb_regno s, enum gdb_regno csr)
+int
+riscv_program_csrw(struct riscv_program *const p,
+	enum gdb_regno const s,
+	enum gdb_regno const csr)
 {
-	assert(csr >= GDB_REGNO_CSR0);
+	assert(GDB_REGNO_CSR0 <= csr);
 	return riscv_program_insert(p, csrrw(GDB_REGNO_ZERO, s, csr - GDB_REGNO_CSR0));
 }
 
 int
-riscv_program_fence_i(struct riscv_program *p)
+riscv_program_fence_i(struct riscv_program *const p)
 {
 	return riscv_program_insert(p, fence_i());
 }
 
 int
-riscv_program_fence(struct riscv_program *p)
+riscv_program_fence(struct riscv_program *const p)
 {
 	return riscv_program_insert(p, fence());
 }
 
 int
-riscv_program_ebreak(struct riscv_program *p)
+riscv_program_ebreak(struct riscv_program *const p)
 {
+	assert(p);
 	struct target *const target = p->target;
 	struct riscv_info_t *const rvi = riscv_info(target);
 	assert(rvi);
@@ -206,19 +213,21 @@ riscv_program_ebreak(struct riscv_program *p)
 }
 
 int
-riscv_program_addi(struct riscv_program *p,
-	enum gdb_regno d,
-	enum gdb_regno s,
-	int16_t u)
+riscv_program_addi(struct riscv_program *const p,
+	enum gdb_regno const d,
+	enum gdb_regno const s,
+	int16_t const u)
 {
 	return riscv_program_insert(p, addi(d, s, u));
 }
 
 int
-riscv_program_insert(struct riscv_program *p, riscv_insn_t i)
+riscv_program_insert(struct riscv_program *const p,
+	riscv_insn_t const i)
 {
 	assert(p && p->target);
-	if (p->instruction_count >= riscv_debug_buffer_size(p->target)) {
+
+	if (riscv_debug_buffer_size(p->target) <= p->instruction_count) {
 		LOG_ERROR("%s: Unable to insert instruction:"
 				"  instruction_count=%d"
 				"  buffer size      =%d",
