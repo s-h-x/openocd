@@ -76,7 +76,9 @@ riscv_semihosting_post_result(struct target *const target)
 void
 riscv_semihosting_init(struct target *const target)
 {
-	/** @bug Non portable conversion of code pointer to data pointer */
+	/**
+	@bug Non portable conversion of code pointer to data pointer
+	*/
 	semihosting_common_init(target,
 		riscv_semihosting_setup,
 		riscv_semihosting_post_result);

@@ -229,7 +229,8 @@ struct scans_s {
 	struct scan_field *field;
 	struct target const *target;
 };
-/** @bug doc/manual/style.txt: "This should be reserved for types that should be passed by value"
+/**
+@bug doc/manual/style.txt: "This should be reserved for types that should be passed by value"
 */
 typedef struct scans_s scans_t;
 
@@ -314,19 +315,32 @@ slot_offset(struct target const *const target,
 				case SLOT0: return 4;
 				case SLOT1: return 5;
 				case SLOT_LAST: return info->dramsize-1;
-				/** @bug no default case */
+				/**
+				@bug no default case
+				*/
 			}
 			break;
 
 		case 64:
 			switch (slot) {
-				case SLOT0: return 4;
-				case SLOT1: return 6;
-				case SLOT_LAST: return info->dramsize-2;
-				/** @bug no default case */
+				case SLOT0:
+					return 4;
+
+				case SLOT1:
+					return 6;
+
+				case SLOT_LAST:
+					return info->dramsize-2;
+
+				/**
+				@bug no default case
+				*/
 			}
 			break;
-		/** @bug no default case */
+
+		/**
+		@bug no default case
+		*/
 	}
 
 	LOG_ERROR("%s: slot_offset called with xlen=%d, slot=%d",
@@ -797,7 +811,9 @@ static bits_t read_bits(struct target *const target)
 				}
 				increase_dbus_busy_delay(target);
 			} else if (status == DBUS_STATUS_FAILED) {
-				/** @todo return an actual error */
+				/**
+				@todo return an actual error
+				*/
 				return err_result;
 			}
 		} while (status == DBUS_STATUS_BUSY && i++ < 256);
@@ -1261,8 +1277,9 @@ static int execute_resume(struct target *const target, bool step)
 
 	maybe_write_tselect(target);
 
-	/** @todo check if dpc is dirty (which also is true if an exception was hit
-	 * at any time) */
+	/**
+	@todo check if dpc is dirty (which also is true if an exception was hit at any time)
+	*/
 	cache_set_load(target, 0, S0, SLOT0);
 	cache_set32(target, 1, csrw(S0, CSR_DPC));
 	cache_set_jump(target, 2);
@@ -1569,7 +1586,9 @@ static int riscv_011_init_target(struct command_context *cmd_ctx,
 	if (!generic_info->version_specific)
 		return ERROR_TARGET_INVALID;
 
-	/** @todo Now we assume 32-bit until we discover the real value in examine(). */
+	/**
+	@todo Now we assume 32-bit until we discover the real value in examine().
+	*/
 	generic_info->harts[0].xlen = 32;
 	riscv_init_registers(target);
 
@@ -1650,7 +1669,9 @@ static int riscv_011_examine(struct target *const target)
 		return ERROR_TARGET_INVALID;
 	}
 
-	/** @todo Pretend this is a 32-bit system until we have found out the true value. */
+	/**
+	@todo Pretend this is a 32-bit system until we have found out the true value.
+	*/
 	r->harts[0].xlen = 32;
 
 	/* Figure out XLEN, and test writing all of Debug RAM while we're at it. */
@@ -2003,7 +2024,9 @@ handle_halt_routine(struct target *const target)
 		return RE_AGAIN;
 	}
 
-	/** @todo get rid of those 2 variables and talk to the cache directly. */
+	/**
+	@todo get rid of those 2 variables and talk to the cache directly.
+	*/
 	info->dpc = reg_cache_get(target, CSR_DPC);
 	info->dcsr = reg_cache_get(target, CSR_DCSR);
 
@@ -2023,7 +2046,9 @@ static int handle_halt(struct target *const target, bool const announce)
 
 	riscv_error_t re;
 	do {
-		/** @bug Is possible infinite loop? */
+		/**
+		@bug Is possible infinite loop?
+		*/
 		re = handle_halt_routine(target);
 	} while (re == RE_AGAIN);
 
@@ -2254,7 +2279,9 @@ static int riscv_011_assert_reset(struct target *const target)
 {
 	assert(target);
 
-	/** @todo Maybe what I implemented here is more like soft_reset_halt()? */
+	/**
+	@todo Maybe what I implemented here is more like soft_reset_halt()?
+	*/
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
 	{
@@ -2409,7 +2436,9 @@ static int riscv_011_read_memory(struct target *const target, target_addr_t addr
 						buffer[offset + 3] = (uint8_t)(data >> 3 * CHAR_BIT);
 						break;
 
-					/** @bug no default case */
+					/**
+					@bug no default case
+					*/
 				}
 			}
 

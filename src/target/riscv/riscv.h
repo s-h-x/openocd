@@ -54,7 +54,9 @@ struct HART_register_s {
 
 struct HART_s {
 	/* Enough space to store all the registers we might need to save. */
-	/** @todo FIXME: This should probably be a bunch of register caches. */
+	/**
+	@todo FIXME: This should probably be a bunch of register caches.
+	*/
 	struct HART_register_s registers[RISCV_MAX_REGISTERS];
 	/* It's possible that each core has a different supported ISA set. */
 	int xlen;
@@ -117,29 +119,47 @@ struct riscv_info_t {
 	int (__attribute__((warn_unused_result)) *get_register)(struct target *target, riscv_reg_t *value, int hid, int rid);
 	int (__attribute__((warn_unused_result)) *set_register)(struct target *, int hartid, int regid, uint64_t value);
 	int (__attribute__((warn_unused_result)) *select_current_hart)(struct target *);
-	/** @todo check error code */
+	/**
+	@todo check error code
+	*/
 	bool (*is_halted)(struct target *target);
 	int (__attribute__((warn_unused_result)) *halt_current_hart)(struct target *);
 	int (__attribute__((warn_unused_result)) *resume_current_hart)(struct target *target);
 	int (__attribute__((warn_unused_result)) *step_current_hart)(struct target *target);
-	/** @todo check error code */
+	/**
+	@todo check error code
+	*/
 	int (*on_halt)(struct target *target);
 	int (__attribute__((warn_unused_result)) *on_resume)(struct target *target);
-	/** @todo check error code */
+	/**
+	@todo check error code
+	*/
 	int (*on_step)(struct target *target);
-	/** @todo check error code */
+	/**
+	@todo check error code
+	*/
 	enum riscv_halt_reason (*halt_reason)(struct target *target);
-	/** @todo check error code */
+	/**
+	@todo check error code
+	*/
 	int(*write_debug_buffer)(struct target *target, unsigned index, riscv_insn_t d);
-	/** @todo check error code */
+	/**
+	@todo check error code
+	*/
 	riscv_insn_t (*read_debug_buffer)(struct target *target, unsigned index);
 	int (__attribute__((warn_unused_result)) *execute_debug_buffer)(struct target *target);
 	int (__attribute__((warn_unused_result)) *dmi_write_u64_bits)(struct target *target);
-	/** @todo check error code */
+	/**
+	@todo check error code
+	*/
 	void (*fill_dmi_write_u64)(struct target *target, uint8_t *buf, int a, uint64_t d);
-	/** @todo check error code */
+	/**
+	@todo check error code
+	*/
 	void (*fill_dmi_read_u64)(struct target *target, uint8_t *buf, int a);
-	/** @todo check error code */
+	/**
+	@todo check error code
+	*/
 	void (*fill_dmi_nop_u64)(struct target *target, uint8_t *buf);
 
 	int (__attribute__((warn_unused_result)) *authdata_read)(struct target *target, uint32_t *value);
@@ -330,6 +350,7 @@ int
 riscv_count_harts(struct target const *target) __attribute__((pure));
 
 /** @returns TRUE if the target has the given register on the given hart.
+
     @bug Always return true
 */
 static inline bool

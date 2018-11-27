@@ -104,7 +104,9 @@ sb(unsigned const src,
 		MATCH_SB;
 }
 
-/** @bug @c offset should be signed */
+/**
+@bug @c offset should be signed
+*/
 static inline uint32_t
 ld(unsigned const rd,
 	unsigned const base,
@@ -181,7 +183,9 @@ addi(unsigned const dest,
 		MATCH_ADDI;
 }
 
-/** @bug @c csr is 12 bits only */
+/**
+@bug @c csr is 12 bits only
+*/
 static inline uint32_t
 csrr(unsigned const rd,
 	unsigned const csr)
@@ -323,7 +327,9 @@ ebreak(void)
 	return MATCH_EBREAK;
 }
 
-/** @bug @c ebreak_c is 16 bit only*/
+/**
+@bug @c ebreak_c is 16 bit only
+*/
 static inline uint32_t
 ebreak_c(void)
 {

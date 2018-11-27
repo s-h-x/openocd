@@ -97,7 +97,9 @@ riscv_fill_dmi_nop_u64(struct target *const target,
 	rvi->fill_dmi_nop_u64(target, buf);
 }
 
-/** @todo check error code */
+/**
+@todo check error code
+*/
 static inline void
 riscv_fill_dmi_write_u64(struct target *const target,
 	uint8_t *const buf,
