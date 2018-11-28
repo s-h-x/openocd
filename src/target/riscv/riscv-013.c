@@ -555,11 +555,11 @@ dmi_op_timeout(struct target *const target,
 }
 
 static int
-register_read(struct target *const target, uint64_t *value, uint32_t number);
+riscv013_register_read(struct target *const target, uint64_t *value, uint32_t number);
 
 static int
 __attribute__((warn_unused_result))
-register_read_direct(struct target *const target, uint64_t *value, uint32_t number);
+riscv013_register_read_direct(struct target *const target, uint64_t *value, uint32_t number);
 
 static int
 __attribute__((warn_unused_result))
@@ -782,6 +782,7 @@ wait_for_idle(struct target *const target,
 }
 
 static int
+__attribute__((warn_unused_result))
 execute_abstract_command(struct target *const target,
 	uint32_t const command)
 {
@@ -800,8 +801,8 @@ execute_abstract_command(struct target *const target,
 	info->cmderr = get_field(abstractcs, DMI_ABSTRACTCS_CMDERR);
 
 	if (0 != info->cmderr) {
-		LOG_DEBUG("%s: command 0x%x failed; abstractcs=0x%x",
-			target->cmd_name, command, abstractcs);
+		LOG_DEBUG("%s: command 0x%" PRIx32 " failed; abstractcs=0x%" PRIx32 " cmderr=0x%" PRIx32,
+			target->cmd_name, command, abstractcs, info->cmderr);
 		/* Clear the error. */
 		int const error = dmi_write(target, DMI_ABSTRACTCS, set_field(0, DMI_ABSTRACTCS_CMDERR, info->cmderr));
 		(void)error;
@@ -934,12 +935,12 @@ register_read_abstract(struct target *const target,
 		int const err = execute_abstract_command(target, command);
 
 		if (ERROR_OK != err) {
-			if (info->cmderr == CMDERR_NOT_SUPPORTED) {
-				if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
+			if (CMDERR_NOT_SUPPORTED == info->cmderr) {
+				if (GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31) {
 					info->abstract_read_fpr_supported = false;
 					LOG_INFO("%s: Disabling abstract command reads from FPRs.",
 						target->cmd_name);
-				} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
+				} else if (GDB_REGNO_CSR0 <= number && number <= GDB_REGNO_CSR4095) {
 					info->abstract_read_csr_supported = false;
 					LOG_INFO("%s: Disabling abstract command reads from CSRs.", target->cmd_name);
 				}
@@ -1017,7 +1018,7 @@ examine_progbuf(struct target *const target)
 
 	uint64_t s0;
 	{
-		int const err = register_read(target, &s0, GDB_REGNO_S0);
+		int const err = riscv013_register_read(target, &s0, GDB_REGNO_S0);
 		if (ERROR_OK != err)
 			return err;
 	}
@@ -1034,7 +1035,7 @@ examine_progbuf(struct target *const target)
 
 	{
 		int const err =
-			register_read_direct(target, &info->progbuf_address, GDB_REGNO_S0);
+			riscv013_register_read_direct(target, &info->progbuf_address, GDB_REGNO_S0);
 		if (ERROR_OK != err)
 			return err;
 	}
@@ -1066,17 +1067,11 @@ examine_progbuf(struct target *const target)
 	/**
 	@todo check or eliminate cast
 	*/
-	if (written == (uint32_t)info->progbuf_address) {
-		LOG_INFO("%s: progbuf is writable at 0x%" PRIx64,
-			target->cmd_name,
-			info->progbuf_address);
-		info->progbuf_writable = YNM_YES;
-	} else {
-		LOG_INFO("%s: progbuf is not writeable at 0x%" PRIx64,
-			target->cmd_name,
-			info->progbuf_address);
-		info->progbuf_writable = YNM_NO;
-	}
+	info->progbuf_writable = written == (uint32_t)info->progbuf_address ? YNM_YES : YNM_NO;
+	LOG_INFO("%s: progbuf %s at 0x%" PRIx64,
+		target->cmd_name,
+		YNM_YES == info->progbuf_writable ? "is writeable" : "is not writeable",
+		info->progbuf_address);
 
 	return ERROR_OK;
 }
@@ -1330,7 +1325,7 @@ register_write_direct(struct target *const target,
 
 	assert(target);
 
-	if (result == ERROR_OK && target->reg_cache) {
+	if (ERROR_OK == result && target->reg_cache) {
 		assert(target->reg_cache->reg_list && number < target->reg_cache->num_regs);
 		struct reg *const reg = &target->reg_cache->reg_list[number];
 		buf_set_u64(reg->value, 0, reg->size, value);
@@ -1351,7 +1346,7 @@ register_write_direct(struct target *const target,
 
 	uint64_t s0;
 	{
-		int const err = register_read(target, &s0, GDB_REGNO_S0);
+		int const err = riscv013_register_read(target, &s0, GDB_REGNO_S0);
 		if (ERROR_OK != err)
 			return err;
 	}
@@ -1359,8 +1354,7 @@ register_write_direct(struct target *const target,
 	scratch_mem_t scratch;
 	bool use_scratch = false;
 
-	if (number >= GDB_REGNO_FPR0 &&
-		number <= GDB_REGNO_FPR31 &&
+	if (GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31 &&
 		riscv_supports_extension(target, riscv_current_hartid(target), 'D') &&
 		riscv_xlen(target) < 64) {
 		/* There are no instructions to move all the bits from a register, so
@@ -1397,7 +1391,7 @@ register_write_direct(struct target *const target,
 				return err;
 		}
 
-		if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
+		if (GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31) {
 			if (riscv_supports_extension(target, riscv_current_hartid(target), 'D')) {
 				int const err = riscv_program_insert(&program, fmv_d_x(number - GDB_REGNO_FPR0, S0));
 				if (ERROR_OK != err)
@@ -1407,10 +1401,13 @@ register_write_direct(struct target *const target,
 				if (ERROR_OK != err)
 					return err;
 			}
-		} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
-			int const err = riscv_program_csrw(&program, S0, number);
-			if (ERROR_OK != err)
-				return err;
+		} else if (GDB_REGNO_CSR0 <= number && number <= GDB_REGNO_CSR4095) {
+			int const error_code = riscv_program_csrw(&program, S0, number);
+			if (ERROR_OK != error_code) {
+				LOG_ERROR("%s: csr%d write error=%d",
+					target->cmd_name, number - GDB_REGNO_CSR0, error_code);
+				return error_code;
+			}
 		} else {
 			LOG_ERROR("%s: Unsupported register (enum gdb_regno)(%d)",
 				target->cmd_name, number);
@@ -1423,7 +1420,7 @@ register_write_direct(struct target *const target,
 	/**
 	@todo check Don't message on error. Probably the register doesn't exist.
 	*/
-	if (exec_out == ERROR_OK && target->reg_cache) {
+	if (ERROR_OK == exec_out && target->reg_cache) {
 		assert(target->reg_cache->reg_list && number < target->reg_cache->num_regs);
 		struct reg *const reg = &target->reg_cache->reg_list[number];
 		buf_set_u64(reg->value, 0, reg->size, value);
@@ -1445,7 +1442,7 @@ register_write_direct(struct target *const target,
 
 /** @return the cached value, or read from the target if necessary. */
 static int
-register_read(struct target *const target,
+riscv013_register_read(struct target *const target,
 	uint64_t *const value,
 	uint32_t const number)
 {
@@ -1470,7 +1467,7 @@ register_read(struct target *const target,
 	}
 
 	{
-		int const err = register_read_direct(target, value, number);
+		int const err = riscv013_register_read_direct(target, value, number);
 
 		if (ERROR_OK != err)
 			return err;
@@ -1489,7 +1486,7 @@ register_read(struct target *const target,
 
 /** Actually read registers from the target right now. */
 static int
-register_read_direct(struct target *const target,
+riscv013_register_read_direct(struct target *const target,
 	uint64_t *const value,
 	uint32_t const number)
 {
@@ -1511,7 +1508,7 @@ register_read_direct(struct target *const target,
 
 		uint64_t s0;
 		{
-			int const err = register_read(target, &s0, GDB_REGNO_S0);
+			int const err = riscv013_register_read(target, &s0, GDB_REGNO_S0);
 			if (ERROR_OK != err)
 				return result;
 		}
@@ -1520,7 +1517,7 @@ register_read_direct(struct target *const target,
 		uint64_t mstatus;
 
 		if (GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31) {
-			if (ERROR_OK != register_read(target, &mstatus, GDB_REGNO_MSTATUS) ||
+			if (ERROR_OK != riscv013_register_read(target, &mstatus, GDB_REGNO_MSTATUS) ||
 				(0 == (mstatus & MSTATUS_FS) && 
 				ERROR_OK != register_write_direct(target, GDB_REGNO_MSTATUS, set_field(mstatus, MSTATUS_FS, 1))))
 				return result;
@@ -1568,7 +1565,7 @@ register_read_direct(struct target *const target,
 				return result;
 		} else {
 			/* Read S0 */
-			int const err = register_read_direct(target, value, GDB_REGNO_S0);
+			int const err = riscv013_register_read_direct(target, value, GDB_REGNO_S0);
 			if (ERROR_OK != err)
 				return err;
 		}
@@ -2423,14 +2420,14 @@ read_memory_progbuf(struct target *const target,
 	 */
 	uint64_t s0;
 	{
-		int const err = register_read(target, &s0, GDB_REGNO_S0);
+		int const err = riscv013_register_read(target, &s0, GDB_REGNO_S0);
 		if (ERROR_OK != err)
 			return err;
 	}
 
 	uint64_t s1;
 	{
-		int const err = register_read(target, &s1, GDB_REGNO_S1);
+		int const err = riscv013_register_read(target, &s1, GDB_REGNO_S1);
 		if (ERROR_OK != err)
 			return err;
 	}
@@ -2464,26 +2461,26 @@ read_memory_progbuf(struct target *const target,
 	}
 
 	{
-		int const err = riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	{
-		int const err = riscv_program_ebreak(&program);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = riscv_program_ebreak(&program);
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	{
-		int const err = riscv_program_write(&program);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = riscv_program_write(&program);
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	/* Write address to S0, and execute buffer. */
 	int result = register_write_direct(target, GDB_REGNO_S0, address);
-	if (result != ERROR_OK)
+	if (ERROR_OK != result)
 		goto error;
 
 	uint32_t const command =
@@ -2492,8 +2489,7 @@ read_memory_progbuf(struct target *const target,
 			riscv_xlen(target),
 			AC_ACCESS_REGISTER_TRANSFER | AC_ACCESS_REGISTER_POSTEXEC);
 
-	result = execute_abstract_command(target, command);
-	if (ERROR_OK != result)
+	if (ERROR_OK != (result = execute_abstract_command(target, command)))
 		goto error;
 
 	/* First read has just triggered. Result is in s1. */
@@ -2509,27 +2505,27 @@ read_memory_progbuf(struct target *const target,
 	riscv_addr_t read_addr = address + size;
 	/* The next address that we need to receive data for. */
 	riscv_addr_t receive_addr = address;
-	riscv_addr_t fin_addr = address + (count * size);
+	riscv_addr_t const fin_addr = address + (count * size);
 	unsigned skip = 1;
 
 	while (read_addr < fin_addr) {
 		LOG_DEBUG("%s: read_addr=0x%" PRIx64 ", receive_addr=0x%" PRIx64 ", fin_addr=0x%" PRIx64,
 			target->cmd_name, read_addr, receive_addr, fin_addr);
 
-		/* The pipeline looks like this:
-		 * memory -> s1 -> dm_data0 -> debugger
-		 * It advances every time the debugger reads dmdata0.
-		 * So at any time the debugger has just read mem[s0 - 3*size],
-		 * dm_data0 contains mem[s0 - 2*size]
-		 * s1 contains mem[s0-size] */
+		/* The pipeline looks like this: memory -> s1 -> dm_data0 -> debugger
+		It advances every time the debugger reads dmdata0.
+		So at any time the debugger has just read mem[s0 - 3*size],
+		dm_data0 contains mem[s0 - 2*size]
+		s1 contains mem[s0-size]
+		*/
 
-		LOG_DEBUG("%s: creating burst to read from 0x%" PRIx64
-				" up to 0x%" PRIx64, target->cmd_name, read_addr, fin_addr);
-		assert(read_addr >= address && read_addr < fin_addr);
+		LOG_DEBUG("%s: creating burst to read from 0x%" PRIx64 " up to 0x%" PRIx64,
+			target->cmd_name, read_addr, fin_addr);
+		assert(address <= read_addr && read_addr < fin_addr);
 		struct riscv_batch *const batch =
 			riscv_batch_alloc(target, 32, info->dmi_busy_delay + info->ac_busy_delay);
-
 		size_t reads = 0;
+
 		for (riscv_addr_t addr = read_addr; addr < fin_addr; addr += size) {
 			riscv_batch_add_dmi_read(batch, DMI_DATA0);
 			++reads;
@@ -2538,20 +2534,16 @@ read_memory_progbuf(struct target *const target,
 				break;
 		}
 
-		{
-			int const err = riscv_batch_run(batch);
-			if (ERROR_OK != err)
-				return err;
-		}
+		if (ERROR_OK != (result = riscv_batch_run(batch)))
+			goto error;
 
 		/* Wait for the target to finish performing the last abstract command,
 		 * and update our copy of cmderr. */
 		uint32_t abstractcs;
 
 		do {
-			int const err = dmi_read(target, &abstractcs, DMI_ABSTRACTCS);
-			if (ERROR_OK != err)
-				return err;
+			if (ERROR_OK != (result = dmi_read(target, &abstractcs, DMI_ABSTRACTCS)))
+				goto error;
 		} while (0 != get_field(abstractcs, DMI_ABSTRACTCS_BUSY));
 
 		info->cmderr = get_field(abstractcs, DMI_ABSTRACTCS_CMDERR);
@@ -2581,23 +2573,21 @@ read_memory_progbuf(struct target *const target,
 					/* This is definitely a good version of the value that we
 					 * attempted to read when we discovered that the target was
 					 * busy. */
-					if (dmi_read(target, &dmi_data0, DMI_DATA0) != ERROR_OK) {
+					if (ERROR_OK != (result = dmi_read(target, &dmi_data0, DMI_DATA0))) {
 						riscv_batch_free(batch);
 						goto error;
 					}
 
 					/* Clobbers DMI_DATA0. */
-					result =
-						register_read_direct(target, &next_read_addr, GDB_REGNO_S0);
-
-					if (ERROR_OK != result) {
+					if (ERROR_OK != (result = riscv013_register_read_direct(target, &next_read_addr, GDB_REGNO_S0))) {
 						riscv_batch_free(batch);
 						goto error;
 					}
 
-					/* Restore the command, and execute it.
-					 * Now DMI_DATA0 contains the next value just as it would if no
-					 * error had occurred. */
+					/*
+					Restore the command, and execute it.
+					Now DMI_DATA0 contains the next value just as it would if no error had occurred.
+					*/
 					if (!(
 						ERROR_OK == (result = dmi_write(target, DMI_COMMAND, command)) &&
 						ERROR_OK == (result = dmi_write(target, DMI_ABSTRACTAUTO, 1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET))
@@ -2648,14 +2638,14 @@ read_memory_progbuf(struct target *const target,
 		}
 	}
 
-	if (ERROR_OK != dmi_write(target, DMI_ABSTRACTAUTO, 0))
+	if (ERROR_OK != (result = dmi_write(target, DMI_ABSTRACTAUTO, 0)))
 		goto error;
 
 	if (count > 1) {
 		/* Read the penultimate word. */
 		uint32_t value;
 
-		if (dmi_read(target, &value, DMI_DATA0) != ERROR_OK)
+		if (ERROR_OK != (result = dmi_read(target, &value, DMI_DATA0)))
 			goto error;
 
 		write_to_buf(buffer + receive_addr - address, value, size);
@@ -2666,9 +2656,7 @@ read_memory_progbuf(struct target *const target,
 	{
 		/* Read the last word. */
 		uint64_t value;
-		result = register_read_direct(target, &value, GDB_REGNO_S1);
-
-		if (ERROR_OK != result)
+		if (ERROR_OK != (result = riscv013_register_read_direct(target, &value, GDB_REGNO_S1)))
 			goto error;
 
 		write_to_buf(buffer + receive_addr - address, value, size);
@@ -2679,8 +2667,9 @@ read_memory_progbuf(struct target *const target,
 
 error:
 	{
-		int const error = dmi_write(target, DMI_ABSTRACTAUTO, 0);
-		(void)error;
+		LOG_ERROR("%s: read_memory_progbuf error (%d)", target->cmd_name, result);
+		int const error_code = dmi_write(target, DMI_ABSTRACTAUTO, 0);
+		(void)error_code;
 	}
 
 finish:
@@ -2972,7 +2961,7 @@ write_memory_progbuf(struct target *const target,
 	/* s0 holds the next address to write to */
 	uint64_t s0;
 	{
-		int const err = register_read(target, &s0, GDB_REGNO_S0);
+		int const err = riscv013_register_read(target, &s0, GDB_REGNO_S0);
 		if (ERROR_OK != err)
 			return err;
 	}
@@ -2980,7 +2969,7 @@ write_memory_progbuf(struct target *const target,
 	/* s1 holds the next data value to write */
 	uint64_t s1;
 	{
-		int const err = register_read(target, &s1, GDB_REGNO_S1);
+		int const err = riscv013_register_read(target, &s1, GDB_REGNO_S1);
 		if (ERROR_OK != err)
 			return err;
 	}
@@ -3092,8 +3081,7 @@ write_memory_progbuf(struct target *const target,
 							AC_ACCESS_REGISTER_TRANSFER |
 							AC_ACCESS_REGISTER_WRITE);
 
-					result = execute_abstract_command(target, command);
-					if (ERROR_OK == result) {
+					if (ERROR_OK == (result = execute_abstract_command(target, command))) {
 						/* Turn on autoexec */
 						result =
 							dmi_write(target, DMI_ABSTRACTAUTO, 1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET);
@@ -3115,7 +3103,7 @@ write_memory_progbuf(struct target *const target,
 
 		result = riscv_batch_run(batch);
 		riscv_batch_free(batch);
-		if (result != ERROR_OK)
+		if (ERROR_OK != result)
 			goto error;
 
 		/* Note that if the scan resulted in a Busy DMI response, it
@@ -3144,7 +3132,7 @@ write_memory_progbuf(struct target *const target,
 
 				if (!(
 					(ERROR_OK == (result = dmi_write(target, DMI_ABSTRACTAUTO, 0))) &&
-					(ERROR_OK == (result = register_read_direct(target, &cur_addr, GDB_REGNO_S0)))
+					(ERROR_OK == (result = riscv013_register_read_direct(target, &cur_addr, GDB_REGNO_S0)))
 					))
 					goto error;
 				setup_needed = true;
@@ -3157,8 +3145,13 @@ write_memory_progbuf(struct target *const target,
 				goto error;
 		}
 	}
+	goto finish;
 
 error:
+	LOG_ERROR("%s: write_memory_progbuf error (%d)",
+		target->cmd_name, result);
+
+finish:
 	{
 		int const err =
 			dmi_write(target, DMI_ABSTRACTAUTO, 0) |
@@ -3222,15 +3215,15 @@ riscv013_get_register(struct target *const target,
 	int result = ERROR_OK;
 
 	if (GDB_REGNO_PC == rid) {
-		result = register_read(target, value, GDB_REGNO_DPC);
+		result = riscv013_register_read(target, value, GDB_REGNO_DPC);
 		LOG_DEBUG("%s: read PC from DPC: 0x%016" PRIx64,
 			target->cmd_name, *value);
 	} else if (GDB_REGNO_PRIV == rid) {
 		uint64_t dcsr;
-		result = register_read(target, &dcsr, GDB_REGNO_DCSR);
+		result = riscv013_register_read(target, &dcsr, GDB_REGNO_DCSR);
 		*value = get_field(dcsr, CSR_DCSR_PRV);
 	} else {
-		result = register_read(target, value, rid);
+		result = riscv013_register_read(target, value, rid);
 		if (ERROR_OK != result)
 			*value = -1;
 	}
@@ -3257,7 +3250,7 @@ riscv013_set_register(struct target *const target, int hid, int rid, uint64_t va
 		}
 		uint64_t actual_value;
 		{
-			int const err = register_read_direct(target, &actual_value, GDB_REGNO_DPC);
+			int const err = riscv013_register_read_direct(target, &actual_value, GDB_REGNO_DPC);
 			if (ERROR_OK != err)
 				return err;
 		}
@@ -3269,7 +3262,7 @@ riscv013_set_register(struct target *const target, int hid, int rid, uint64_t va
 		}
 	} else if (rid == GDB_REGNO_PRIV) {
 		uint64_t dcsr;
-		register_read(target, &dcsr, GDB_REGNO_DCSR);
+		riscv013_register_read(target, &dcsr, GDB_REGNO_DCSR);
 		dcsr = set_field(dcsr, CSR_DCSR_PRV, value);
 		return register_write_direct(target, GDB_REGNO_DCSR, dcsr);
 	} else {
@@ -3334,7 +3327,7 @@ static enum riscv_halt_reason
 riscv013_halt_reason(struct target *const target)
 {
 	riscv_reg_t dcsr;
-	int const result = register_read(target, &dcsr, GDB_REGNO_DCSR);
+	int const result = riscv013_register_read(target, &dcsr, GDB_REGNO_DCSR);
 
 	if (result != ERROR_OK)
 		return RISCV_HALT_UNKNOWN;
@@ -3955,7 +3948,7 @@ riscv013_on_step_or_resume(struct target *const target,
 	/* We want to twiddle some bits in the debug CSR so debugging works. */
 	riscv_reg_t dcsr;
 	{
-		int const err = register_read(target, &dcsr, GDB_REGNO_DCSR);
+		int const err = riscv013_register_read(target, &dcsr, GDB_REGNO_DCSR);
 		if (ERROR_OK != err)
 			return err;
 	}
@@ -4147,7 +4140,7 @@ riscv013_test_compliance(struct target *const target)
 					riscv_program_ebreak(&program32);
 					COMPLIANCE_TEST(riscv_program_exec(&program32, target) == ERROR_OK,
 							"Accessing DSCRATCH with program buffer should succeed.");
-					COMPLIANCE_TEST(register_read_direct(target, &testval_read, GDB_REGNO_S1) == ERROR_OK,
+					COMPLIANCE_TEST(riscv013_register_read_direct(target, &testval_read, GDB_REGNO_S1) == ERROR_OK,
 							"Need to be able to read S1 in order to test DSCRATCH.");
 					if (riscv_xlen(target) > 32) {
 						COMPLIANCE_TEST(testval == testval_read,
@@ -4302,7 +4295,7 @@ riscv013_test_compliance(struct target *const target)
 		COMPLIANCE_TEST(ERROR_OK == register_write_direct(target, GDB_REGNO_ZERO + i, testval),
 				"GPR Writes should be supported.");
 		COMPLIANCE_MUST_PASS(write_abstract_arg(target, 0, 0xDEADBEEFDEADBEEF, 64));
-		COMPLIANCE_TEST(ERROR_OK == register_read_direct(target, &testval_read, GDB_REGNO_ZERO + i),
+		COMPLIANCE_TEST(ERROR_OK == riscv013_register_read_direct(target, &testval_read, GDB_REGNO_ZERO + i),
 				"GPR Reads should be supported.");
 		if (riscv_xlen(target) > 32) {
 			/* Dummy comment to satisfy linter, since removing the brances here doesn't actually compile. */
@@ -4369,7 +4362,7 @@ riscv013_test_compliance(struct target *const target)
 			}
 
 			COMPLIANCE_WRITE(target, DMI_ABSTRACTAUTO, 0);
-			COMPLIANCE_TEST(ERROR_OK == register_read_direct(target, &value, GDB_REGNO_S0),
+			COMPLIANCE_TEST(ERROR_OK == riscv013_register_read_direct(target, &value, GDB_REGNO_S0),
 					"Need to be able to read S0 to test ABSTRACTAUTO");
 
 			COMPLIANCE_TEST(testvar == value,
@@ -4393,10 +4386,10 @@ riscv013_test_compliance(struct target *const target)
 
 		/* DCSR Tests */
 		COMPLIANCE_MUST_PASS(register_write_direct(target, GDB_REGNO_DCSR, 0x0));
-		COMPLIANCE_MUST_PASS(register_read_direct(target, &value, GDB_REGNO_DCSR));
+		COMPLIANCE_MUST_PASS(riscv013_register_read_direct(target, &value, GDB_REGNO_DCSR));
 		COMPLIANCE_TEST(value != 0,	"Not all bits in DCSR are writable by Debugger");
 		COMPLIANCE_MUST_PASS(register_write_direct(target, GDB_REGNO_DCSR, 0xFFFFFFFF));
-		COMPLIANCE_MUST_PASS(register_read_direct(target, &value, GDB_REGNO_DCSR));
+		COMPLIANCE_MUST_PASS(riscv013_register_read_direct(target, &value, GDB_REGNO_DCSR));
 		COMPLIANCE_TEST(value != 0,	"At least some bits in DCSR must be 1");
 
 		/* DPC. Note that DPC is sign-extended. */
@@ -4410,11 +4403,11 @@ riscv013_test_compliance(struct target *const target)
 			dpcmask |= 0x2;
 
 		COMPLIANCE_MUST_PASS(register_write_direct(target, GDB_REGNO_DPC, dpcmask));
-		COMPLIANCE_MUST_PASS(register_read_direct(target, &dpc, GDB_REGNO_DPC));
+		COMPLIANCE_MUST_PASS(riscv013_register_read_direct(target, &dpc, GDB_REGNO_DPC));
 		COMPLIANCE_TEST(dpcmask == dpc,
 				"DPC must be sign-extended to XLEN and writable to all-1s (except the least significant bits)");
 		COMPLIANCE_MUST_PASS(register_write_direct(target, GDB_REGNO_DPC, 0));
-		COMPLIANCE_MUST_PASS(register_read_direct(target, &dpc, GDB_REGNO_DPC));
+		COMPLIANCE_MUST_PASS(riscv013_register_read_direct(target, &dpc, GDB_REGNO_DPC));
 		COMPLIANCE_TEST(dpc == 0, "DPC must be writable to 0.");
 		if (hartsel == 0)
 			bogus_dpc = dpc; /* For a later test step */
@@ -4475,7 +4468,7 @@ riscv013_test_compliance(struct target *const target)
 	just verify that at least it's not the bogus value anymore. */
 
 	COMPLIANCE_TEST(bogus_dpc != 0xdeadbeef, "BOGUS DPC should have been set somehow (bug in compliance test)");
-	COMPLIANCE_MUST_PASS(register_read_direct(target, &value, GDB_REGNO_DPC));
+	COMPLIANCE_MUST_PASS(riscv013_register_read_direct(target, &value, GDB_REGNO_DPC));
 	COMPLIANCE_TEST(bogus_dpc != value, "NDMRESET should move DPC to reset value.");
 
 	COMPLIANCE_TEST(riscv_halt_reason(target, 0) == RISCV_HALT_INTERRUPT,
@@ -4736,7 +4729,7 @@ riscv_013_examine(struct target *const target)
 		}
 
 		{
-			int const err = register_read(target, &rvi->harts[i].misa, GDB_REGNO_MISA);
+			int const err = riscv013_register_read(target, &rvi->harts[i].misa, GDB_REGNO_MISA);
 			if (ERROR_OK != err) {
 				LOG_ERROR("%s: Fatal: Failed to read MISA from hart %d.", target->cmd_name, i);
 				return err;
