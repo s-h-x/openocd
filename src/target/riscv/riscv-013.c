@@ -75,20 +75,6 @@ enum dmi_status_e {
 };
 typedef enum dmi_status_e dmi_status_t;
 
-enum riscv_error_e {
-	RE_OK,
-	RE_FAIL,
-	RE_AGAIN
-};
-typedef enum riscv_error_e riscv_error_t;
-
-enum slot_e {
-	SLOT0,
-	SLOT1,
-	SLOT_LAST,
-};
-typedef enum slot_e slot_t;
-
 /** Debug Bus registers. */
 enum CMDERR_e {
 	CMDERR_NONE          = 0,
@@ -112,16 +98,6 @@ enum memory_space_e {
 	SPACE_DMI_RAM
 };
 typedef enum memory_space_e memory_space_t;
-
-/** Info about the core being debugged. */
-struct trigger {
-	uint64_t address;
-	uint32_t length;
-	uint64_t mask;
-	uint64_t value;
-	bool read, write, execute;
-	int unique_id;
-};
 
 struct dm013_info_s {
 	struct list_head list;

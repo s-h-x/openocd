@@ -73,15 +73,6 @@ __COMMAND_HANDLER(handle_common_semihosting_resumable_exit_command);
 __COMMAND_HANDLER(handle_common_semihosting_cmdline);
 /**@}*/
 
-struct trigger {
-	uint64_t address;
-	uint32_t length;
-	uint64_t mask;
-	uint64_t value;
-	bool read, write, execute;
-	int unique_id;
-};
-
 struct range_s {
 	uint16_t low;
 	uint16_t high;

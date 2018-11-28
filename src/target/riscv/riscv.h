@@ -6,8 +6,6 @@
 #include "target/target.h"
 #include "helper/log.h"
 
-#include <stdbool.h>
-
 #define DIM(x) (sizeof (x) / sizeof (x)[0])
 
 /* The register cache is statically allocated. */
@@ -67,6 +65,17 @@ struct HART_s {
 
 	/* The number of entries in the debug buffer. */
 	int debug_buffer_size;
+};
+
+struct trigger {
+	uint64_t address;
+	uint32_t length;
+	uint64_t mask;
+	uint64_t value;
+	bool read;
+	bool write;
+	bool execute;
+	int unique_id;
 };
 
 struct riscv_info_t {
