@@ -37,14 +37,11 @@
 
 #define COMPLIANCE_TEST(b, message) \
 {                                   \
-	int pass = 0;		    \
-	if (b) {		    \
-		pass = 1;	    \
+	bool const pass = !!(b); \
+	if (pass) {		    \
 		++passed_tests;     \
 	}			    \
-	LOG_INFO("%s test %d (%s)\n", pass ? "PASSED" : "FAILED",  total_tests, message); \
-	assert(pass);		    \
-	++total_tests;		    \
+	LOG_INFO("%s test %d (%s)", pass ? "PASSED" : "FAILED",  ++total_tests, message); \
 }
 
 #define COMPLIANCE_MUST_PASS(b) COMPLIANCE_TEST(ERROR_OK == (b), "Regular calls must return ERROR_OK")
@@ -3377,8 +3374,8 @@ riscv013_halt_reason(struct target *const target)
 		return RISCV_HALT_INTERRUPT;
 	}
 
-	LOG_ERROR("%s: Unknown DCSR cause field: %x", target->cmd_name, (int)get_field(dcsr, CSR_DCSR_CAUSE));
-	LOG_ERROR("%s:   dcsr=0x%016lx", target->cmd_name, (long)dcsr);
+	LOG_ERROR("%s: Unknown cause field (%" PRIx64 ") of DCSR (0x%016" PRIx64 ")",
+		target->cmd_name, get_field(dcsr, CSR_DCSR_CAUSE), dcsr);
 	return RISCV_HALT_UNKNOWN;
 }
 
