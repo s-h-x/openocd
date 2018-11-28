@@ -228,14 +228,8 @@ riscv_program_insert(struct riscv_program *const p,
 	assert(p && p->target);
 
 	if (riscv_debug_buffer_size(p->target) <= p->instruction_count) {
-		LOG_ERROR("%s: Unable to insert instruction:"
-				"  instruction_count=%zu"
-				"  buffer size      =%zu",
-				p->target->cmd_name,
-				p->instruction_count,
-				riscv_debug_buffer_size(p->target)
-		);
-
+		LOG_ERROR("%s: Unable to insert instruction: instruction_count=%zu buffer size=%zu",
+				p->target->cmd_name, p->instruction_count, riscv_debug_buffer_size(p->target));
 		return ERROR_BUF_TOO_SMALL;
 	}
 

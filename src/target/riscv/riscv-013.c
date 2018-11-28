@@ -452,7 +452,7 @@ dtmcontrol_scan(struct target *const target,
 }
 
 static void
-increase_dmi_busy_delay(struct target *const restrict target)
+increase_dmi_busy_delay(struct target *const target)
 {
 	riscv013_info_t *const info = get_info(target);
 	assert(info);
@@ -521,8 +521,10 @@ dmi_op_timeout(struct target *const target,
 
 		increase_dmi_busy_delay(target);
 
-		if (time(NULL) > start + timeout_sec)
+		if (start + timeout_sec < time(NULL)) {
+			LOG_ERROR("%s: timeout", target->cmd_name);
 			return ERROR_TARGET_TIMEOUT;
+		}
 	}
 
 	/* This second loop ensures the request succeeded, and gets back data.
@@ -543,8 +545,10 @@ dmi_op_timeout(struct target *const target,
 
 		increase_dmi_busy_delay(target);
 
-		if (time(NULL) > start + timeout_sec)
+		if (start + timeout_sec < time(NULL)) {
+			LOG_ERROR("%s: timeout", target->cmd_name);
 			return ERROR_TARGET_TIMEOUT;
+		}
 	}
 
 	return ERROR_OK;
@@ -649,12 +653,11 @@ dmi_op(struct target *const target,
 	int const result =
 		dmi_op_timeout(target, data_in, dmi_oper, address, data_out, riscv_command_timeout_sec);
 
-	if (result == ERROR_TARGET_FAILURE) {
-		LOG_ERROR("%s: DMI operation didn't complete in %d seconds. The target is "
-				"either really slow or broken. You could increase the "
-				"timeout with riscv set_command_timeout_sec.", target->cmd_name,
-				riscv_command_timeout_sec);
-		return ERROR_TARGET_FAILURE;
+	if (ERROR_TARGET_TIMEOUT == result) {
+		LOG_ERROR("%s: DMI operation didn't complete in %d seconds."
+			" The target is either really slow or broken."
+			" You could increase the timeout with riscv set_command_timeout_sec.",
+			target->cmd_name, riscv_command_timeout_sec);
 	}
 
 	return result;
@@ -699,8 +702,7 @@ dmstatus_read_timeout(struct target *const target,
 		assert(dmstatus);
 		LOG_ERROR("%s: Debugger is not authenticated to target Debug Module (dmstatus=0x%x)."
 			" Use `riscv authdata_read` and `riscv authdata_write` commands to authenticate.",
-			target->cmd_name,
-			*dmstatus);
+			target->cmd_name, *dmstatus);
 		return ERROR_TARGET_FAILURE;
 	}
 
@@ -772,9 +774,7 @@ wait_for_idle(struct target *const target,
 
 			LOG_ERROR("%s: Timed out after %ds waiting for busy to go low (abstractcs=0x%x). "
 				"Increase the timeout with riscv set_command_timeout_sec.",
-				target->cmd_name,
-				riscv_command_timeout_sec,
-				*abstractcs);
+				target->cmd_name, riscv_command_timeout_sec, *abstractcs);
 
 			return ERROR_TARGET_TIMEOUT;
 		}
@@ -799,7 +799,7 @@ execute_abstract_command(struct target *const target,
 	assert(info);
 	info->cmderr = get_field(abstractcs, DMI_ABSTRACTCS_CMDERR);
 
-	if (info->cmderr != 0) {
+	if (0 != info->cmderr) {
 		LOG_DEBUG("%s: command 0x%x failed; abstractcs=0x%x",
 			target->cmd_name, command, abstractcs);
 		/* Clear the error. */
@@ -966,8 +966,11 @@ register_write_abstract(struct target *const target,
 
 	if (!info->abstract_write_fpr_supported &&
 		((GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31) ||
-		(GDB_REGNO_CSR0 <= number && number <= GDB_REGNO_CSR4095)))
+		(GDB_REGNO_CSR0 <= number && number <= GDB_REGNO_CSR4095))
+		) {
+		LOG_ERROR("%s:", target->cmd_name);
 		return ERROR_TARGET_INVALID;
+	}
 
 	uint32_t const command =
 		access_register_command(target, number, size,
@@ -1612,9 +1615,8 @@ wait_for_authbusy(struct target *const target, uint32_t *dmstatus)
 
 		if (time(NULL) > start + riscv_command_timeout_sec) {
 			LOG_ERROR("%s: Timed out after %ds waiting for authbusy to go low (dmstatus=0x%x). "
-					"Increase the timeout with riscv set_command_timeout_sec.", target->cmd_name,
-					riscv_command_timeout_sec,
-					value);
+					"Increase the timeout with riscv set_command_timeout_sec.",
+				target->cmd_name, riscv_command_timeout_sec, value);
 			return ERROR_TARGET_TIMEOUT;
 		}
 	}
@@ -1712,9 +1714,8 @@ riscv013_halt_current_hart(struct target *const target)
 		/**
 		@todo Make single message
 		*/
-		LOG_ERROR("%s: unable to halt hart %d", target->cmd_name, rvi->current_hartid);
-		LOG_ERROR("%s:   dmcontrol=0x%08x", target->cmd_name, dmcontrol);
-		LOG_ERROR("%s:   dmstatus =0x%08x", target->cmd_name, dmstatus);
+		LOG_ERROR("%s: unable to halt hart %d dmcontrol=0x%08" PRIx32 " dmstatus =0x%08" PRIx32,
+			target->cmd_name, rvi->current_hartid, dmcontrol, dmstatus);
 		return ERROR_TARGET_FAILURE;
 	}
 
@@ -1861,7 +1862,7 @@ riscv_013_deassert_reset(struct target *const target)
 			if (get_field(dmstatus, expected_field))
 				break;
 
-			if (time(NULL) > start + riscv_reset_timeout_sec) {
+			if (start + riscv_reset_timeout_sec < time(NULL)) {
 				LOG_ERROR("%s: Hart %d didn't %s coming out of reset in %ds; "
 						"dmstatus=0x%x; "
 						"Increase the timeout with riscv set_reset_timeout_sec.",
@@ -2131,8 +2132,8 @@ read_sbcs_nonbusy(struct target *const target,
 
 		if (time(NULL) > start + riscv_command_timeout_sec) {
 			LOG_ERROR("%s: Timed out after %ds waiting for sbbusy to go low (sbcs=0x%x). "
-					"Increase the timeout with riscv set_command_timeout_sec.", target->cmd_name,
-					riscv_command_timeout_sec, *sbcs);
+					"Increase the timeout with riscv set_command_timeout_sec.",
+				target->cmd_name, riscv_command_timeout_sec, *sbcs);
 			return ERROR_TARGET_TIMEOUT;
 		}
 	}
@@ -2352,8 +2353,10 @@ read_memory_bus_v1(struct target *const target,
 			}
 
 			if (0 != get_field(sbcs_1, DMI_SBCS_SBERROR)) {
-				/* Some error indicating the bus access failed, but not because of
-				 * something we did wrong. */
+				/* Some error indicating the bus access failed,
+				but not because of something we did wrong. */
+				LOG_WARNING("%s: sbcs error %" PRIx32,
+					target->cmd_name, get_field(sbcs_1, DMI_SBCS_SBERROR));
 				int const error = dmi_write(target, DMI_SBCS, DMI_SBCS_SBERROR);
 				(void)error;
 				return ERROR_TARGET_FAILURE;
@@ -2935,13 +2938,15 @@ write_memory_bus_v1(struct target *const target,
 			continue;
 		}
 
-		unsigned error = get_field(sbcs, DMI_SBCS_SBERROR);
+		unsigned const error = get_field(sbcs, DMI_SBCS_SBERROR);
 
-		if (error == 0) {
+		if (0 == error) {
 			next_address = end_address;
 		} else {
 			/* Some error indicating the bus access failed, but not because of
 			 * something we did wrong. */
+			LOG_WARNING("%s: sbcs error %" PRIx32,
+				target->cmd_name, error);
 			int const err_code = dmi_write(target, DMI_SBCS, DMI_SBCS_SBERROR);
 			(void)err_code;
 			return ERROR_TARGET_FAILURE;
@@ -3258,8 +3263,8 @@ riscv013_set_register(struct target *const target, int hid, int rid, uint64_t va
 		}
 		LOG_DEBUG("%s:   actual DPC written: 0x%016" PRIx64, target->cmd_name, actual_value);
 		if (value != actual_value) {
-			LOG_ERROR("%s: Written PC (0x%" PRIx64 ") does not match read back "
-					"value (0x%" PRIx64 ")", target->cmd_name, value, actual_value);
+			LOG_ERROR("%s: Written pc (0x%" PRIx64 ") does not match read back value (0x%" PRIx64 ")",
+				target->cmd_name, value, actual_value);
 			return ERROR_TARGET_FAILURE;
 		}
 	} else if (rid == GDB_REGNO_PRIV) {
@@ -4544,10 +4549,8 @@ riscv_013_examine(struct target *const target)
 	}
 
 	if (get_field(dtmcontrol, DTM_DTMCS_VERSION) != 1) {
-		LOG_ERROR("%s: Unsupported DTM version %d. (dtmcontrol=0x%x)",
-			target->cmd_name,
-			get_field(dtmcontrol, DTM_DTMCS_VERSION),
-			dtmcontrol);
+		LOG_ERROR("%s: Unsupported DTM version %" PRId32 " (dtmcontrol=0x%" PRIx32 ")",
+			target->cmd_name, get_field(dtmcontrol, DTM_DTMCS_VERSION), dtmcontrol);
 		return ERROR_TARGET_INVALID;
 	}
 
@@ -4566,8 +4569,8 @@ riscv_013_examine(struct target *const target)
 	LOG_DEBUG("%s: dmstatus:  0x%08x", target->cmd_name, dmstatus);
 
 	if (get_field(dmstatus, DMI_DMSTATUS_VERSION) != 2) {
-		LOG_ERROR("%s: OpenOCD only supports Debug Module version 2, not %d "
-				"(dmstatus=0x%x)", target->cmd_name, get_field(dmstatus, DMI_DMSTATUS_VERSION), dmstatus);
+		LOG_ERROR("%s: OpenOCD only supports Debug Module version 2, not %" PRId32 " (dmstatus=0x%" PRIx32 ")",
+			target->cmd_name, get_field(dmstatus, DMI_DMSTATUS_VERSION), dmstatus);
 		return ERROR_TARGET_FAILURE;
 	}
 
@@ -4632,9 +4635,9 @@ riscv_013_examine(struct target *const target)
 	info->dataaddr = get_field(hartinfo, DMI_HARTINFO_DATAADDR);
 
 	if (!get_field(dmstatus, DMI_DMSTATUS_AUTHENTICATED)) {
-		LOG_ERROR("%s: Debugger is not authenticated to target Debug Module. "
-				"(dmstatus=0x%x). Use `riscv authdata_read` and "
-				"`riscv authdata_write` commands to authenticate.", target->cmd_name, dmstatus);
+		LOG_ERROR("%s: Debugger is not authenticated to target Debug Module (dmstatus=0x%x)."
+			" Use `riscv authdata_read` and `riscv authdata_write` commands to authenticate.",
+			target->cmd_name, dmstatus);
 		/**
 		@todo If we return ERROR_FAIL here,
 		then in a multicore setup the next core won't be examined,
@@ -4759,7 +4762,7 @@ riscv_013_examine(struct target *const target)
 	LOG_DEBUG("%s: Enumerated %d harts",
 		target->cmd_name, rvi->hart_count);
 
-	if (rvi->hart_count == 0) {
+	if (0 == rvi->hart_count) {
 		LOG_ERROR("%s: No harts found!", target->cmd_name);
 		return ERROR_TARGET_INVALID;
 	}
@@ -4867,8 +4870,10 @@ riscv_013_init_target(struct command_context *const cmd_ctx,
 	generic_info->test_compliance = &riscv013_test_compliance;
 	generic_info->version_specific = calloc(1, sizeof(riscv013_info_t));
 
-	if (!generic_info->version_specific)
+	if (!generic_info->version_specific) {
+		LOG_ERROR("%s: Can't allocate memory", target->cmd_name);
 		return ERROR_TARGET_INIT_FAILED;
+	}
 
 	riscv013_info_t *const info = get_info(target);
 	assert(info);

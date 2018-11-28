@@ -925,13 +925,15 @@ static void cache_set_store(struct target *const target, unsigned index,
 	cache_set32(target, index, store(target, reg, ZERO, offset));
 }
 
-static void dump_debug_ram(struct target *const target)
+static int
+dump_debug_ram(struct target *const target)
 {
 	for (unsigned i = 0; i < DRAM_CACHE_SIZE; ++i) {
 		uint32_t value = dram_read32(target, i);
 		LOG_ERROR("%s: Debug RAM 0x%x: 0x%08x",
 				target->cmd_name, i, value);
 	}
+	return ERROR_TARGET_FAILURE;
 }
 
 /* Call this if the code you just ran writes to debug RAM entries 0 through 3. */
@@ -970,8 +972,7 @@ cache_check(struct target *const target)
 	}
 
 	if (error) {
-		dump_debug_ram(target);
-		return ERROR_TARGET_FAILURE;
+		return dump_debug_ram(target);
 	}
 
 	return ERROR_OK;
@@ -1474,9 +1475,8 @@ static int register_write(struct target *const target, unsigned number,
 
 	uint32_t const exception = cache_get32(target, info->dramsize-1);
 	if (exception) {
-		LOG_WARNING("%s: Got exception 0x%x when writing %s",
-					target->cmd_name, exception,
-					gdb_regno_name(number));
+		LOG_WARNING("%s: Got exception 0x%" PRIx32 " when writing %s",
+					target->cmd_name, exception, gdb_regno_name(number));
 		return ERROR_TARGET_FAILURE;
 	}
 
@@ -1571,6 +1571,7 @@ static int riscv_011_init_target(struct command_context *cmd_ctx,
 
 	generic_info->version_specific = calloc(1, sizeof(riscv011_info_t));
 	if (!generic_info->version_specific)
+		LOG_ERROR("%s: Fatal - not enough memory", target->cmd_name);
 		return ERROR_TARGET_INVALID;
 
 	/**
@@ -1606,8 +1607,8 @@ static int riscv_011_examine(struct target *const target)
 	}
 
 	if (get_field(dtmcontrol, DTMCONTROL_VERSION) != 0) {
-		LOG_ERROR("%s: Unsupported DTM version %d. (dtmcontrol=0x%x)", target->cmd_name,
-				get_field(dtmcontrol, DTMCONTROL_VERSION), dtmcontrol);
+		LOG_ERROR("%s: Unsupported DTM version %d. (dtmcontrol=0x%x)",
+			target->cmd_name, get_field(dtmcontrol, DTMCONTROL_VERSION), dtmcontrol);
 		return ERROR_TARGET_INVALID;
 	}
 
@@ -1701,8 +1702,7 @@ static int riscv_011_examine(struct target *const target)
 		uint32_t const exception = cache_get32(target, info->dramsize-1);
 		LOG_ERROR("%s: Failed to discover xlen; word0=0x%x, word1=0x%x, exception=0x%x",
 			target->cmd_name, word0, word1, exception);
-		dump_debug_ram(target);
-		return ERROR_TARGET_FAILURE;
+		return dump_debug_ram(target);
 	}
 
 	LOG_DEBUG("%s: Discovered XLEN is %d", target->cmd_name, riscv_xlen(target));
@@ -2318,19 +2318,24 @@ static int riscv_011_read_memory(struct target *const target, target_addr_t addr
 
 	cache_set32(target, 0, lw(S0, ZERO, DEBUG_RAM_START + 16));
 
+	int error_code = ERROR_OK;
+
 	switch (size) {
 		case 1:
 			cache_set32(target, 1, lb(S1, S0, 0));
 			cache_set32(target, 2, sw(S1, ZERO, DEBUG_RAM_START + 16));
 			break;
+
 		case 2:
 			cache_set32(target, 1, lh(S1, S0, 0));
 			cache_set32(target, 2, sw(S1, ZERO, DEBUG_RAM_START + 16));
 			break;
+
 		case 4:
 			cache_set32(target, 1, lw(S1, S0, 0));
 			cache_set32(target, 2, sw(S1, ZERO, DEBUG_RAM_START + 16));
 			break;
+
 		default:
 			LOG_ERROR("%s: Unsupported size: %d", target->cmd_name, size);
 			return ERROR_COMMAND_ARGUMENT_INVALID;
@@ -2460,15 +2465,15 @@ static int riscv_011_read_memory(struct target *const target, target_addr_t addr
 		}
 		goto error;
 	}
-
-	scans_delete(scans);
-	cache_clean(target);
-	return ERROR_OK;
+	goto finish;
 
 error:
+	error_code = ERROR_TARGET_FAILURE;
+
+finish:
 	scans_delete(scans);
 	cache_clean(target);
-	return ERROR_TARGET_FAILURE;
+	return error_code;
 }
 
 static int setup_write_memory(struct target *const target, uint32_t size)
