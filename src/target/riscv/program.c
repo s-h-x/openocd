@@ -121,7 +121,7 @@ riscv_program_exec(struct riscv_program *const p,
 		int const result = riscv_execute_debug_buffer(t);
 
 		if (ERROR_OK != result) {
-			LOG_DEBUG("%s: Unable to execute program %p", t->cmd_name, p);
+			LOG_ERROR("%s: Unable to execute program %p", t->cmd_name, p);
 			return result;
 		}
 	}
