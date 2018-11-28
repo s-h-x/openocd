@@ -1,9 +1,5 @@
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #include "riscv_debug.h"
-#include "target/target.h"
+
 #include "target/riscv/riscv.h"
 #include "server/gdb_server.h"
 
