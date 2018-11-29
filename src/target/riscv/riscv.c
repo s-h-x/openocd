@@ -8,11 +8,13 @@
 #include "target/breakpoints.h"
 #include "rtos/rtos.h"
 
-/*
- * Since almost everything can be accomplish by scanning the dbus register, all
- * functions here assume dbus is already selected. The exception are functions
- * called directly by OpenOCD, which can't assume anything about what's
- * currently in IR. They should set IR to dbus explicitly.
+/** @file
+ Since almost everything can be accomplish by scanning the dbus register, all
+ functions here assume dbus is already selected. The exception are functions
+ called directly by OpenOCD, which can't assume anything about what's
+ currently in IR. They should set IR to dbus explicitly.
+
+ @bug not robust
  */
 
 /** @file
@@ -52,8 +54,13 @@
 	to the target. Afterwards use cache_get... to read results.
  */
 
+/**
+@todo Move to common separate file
+*/
+/**@{*/
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
+/**@}*/
 
 /** JTAG registers. */
 /** @{ */
@@ -82,6 +89,11 @@ typedef struct range_s range_t;
 static uint8_t const ir_dtmcontrol[1] = {DTMCONTROL};
 static uint8_t const ir_dbus[1] = {DBUS};
 static uint8_t const ir_idcode[1] = {0x1};
+
+/**
+@bug Global non-const variable
+*/
+/**@{*/
 struct scan_field select_dtmcontrol = {
 	.out_value = ir_dtmcontrol
 };
@@ -94,19 +106,23 @@ struct scan_field select_idcode = {
 	.in_value = NULL,
 	.out_value = ir_idcode
 };
+/**@}*/
 
 int riscv_command_timeout_sec = DEFAULT_COMMAND_TIMEOUT_SEC;
 int riscv_reset_timeout_sec = DEFAULT_RESET_TIMEOUT_SEC;
 
 bool riscv_prefer_sba = false;
 
-/** In addition to the ones in the standard spec, we'll also expose additional
- * CSRs in this list.
- * The list is either NULL, or a series of ranges (inclusive), terminated with
- * 1,0. */
+/** In addition to the ones in the standard spec, we'll also expose additional CSRs in this list.
+
+The list is either NULL, or a series of ranges (inclusive), terminated with
+1,0.
+
+@bug Different targets can use different lists
+*/
 range_t *expose_csr = NULL;
 
-/** Same, but for custom registers. */
+/** In addition to the ones in the standard spec, we'll also expose additional custom registers. */
 range_t *expose_custom = NULL;
 
 static uint32_t
@@ -129,7 +145,7 @@ dtmcontrol_scan(struct target *const target,
 
 	/* Always return to dbus. */
 	/**
-	@bug Non robust strategy
+		@bug Non robust strategy
 	*/
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
@@ -140,10 +156,10 @@ dtmcontrol_scan(struct target *const target,
 			LOG_ERROR("%s: failed jtag scan: %d",
 				target->cmd_name, err);
 			/**
-			@todo Propagate error code
+				@todo Propagate error code
 			*/
 			/**
-			@bug Invalid result on error
+				@bug Result is invalid on jtag_execute_queue error
 			*/
 			return 0xBADC0DE;
 		}
@@ -155,6 +171,10 @@ dtmcontrol_scan(struct target *const target,
 	return in;
 }
 
+/**
+
+@todo Replace target->type by examine
+*/
 static struct target_type const *
 __attribute__((warn_unused_result, pure))
 get_target_type(struct target *const target)

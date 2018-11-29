@@ -17,16 +17,12 @@
 #define DEFAULT_COMMAND_TIMEOUT_SEC		2
 #define DEFAULT_RESET_TIMEOUT_SEC		30
 
-#if 0
-struct riscv_program;
-#endif
-
-/*
- * Definitions shared by code supporting all RISC-V versions.
- */
+/** Definitions shared by code supporting all RISC-V versions. */
+/**@{*/
 typedef uint64_t riscv_reg_t;
 typedef uint32_t riscv_insn_t;
 typedef uint64_t riscv_addr_t;
+/**@}*/
 
 enum riscv_halt_reason {
 	RISCV_HALT_INTERRUPT,
@@ -100,76 +96,79 @@ struct riscv_info_t {
 
 	This is not per-hart because we just invalidate
 	the entire cache when we change which hart is selected.
+
+	@bug Use target cache instead 
 	*/
 	uint64_t reg_cache_values[RISCV_MAX_REGISTERS];
 
 	/* Single buffer that contains all register names, instead of calling
-	* malloc for each register. Needs to be freed when reg_list is freed. */
+	malloc for each register. Needs to be freed when reg_list is freed.
+
+	@bug Use target cache instead
+	*/
 	char *reg_names;
 
+	/**
+	@bug Bad design - non-local hart information! Problem with JRC!
+	*/
 	struct HART_s harts[RISCV_MAX_HARTS];
 
-	/* For each physical trigger, contains -1 if the hwbp is available, or the
-	* unique_id of the breakpoint/watchpoint that is using it.
-	* Note that in RTOS mode the triggers are the same across all harts the
-	* target controls, while otherwise only a single hart is controlled. */
+	/** For each physical trigger, contains -1 if the hwbp is available, or the
+	unique_id of the breakpoint/watchpoint that is using it.
+
+	@note Note that in RTOS mode the triggers are the same across all harts the
+	target controls, while otherwise only a single hart is controlled.
+	*/
 	int trigger_unique_id[RISCV_MAX_HWBPS];
 
 	/* This avoids invalidating the register cache too often. */
 	bool registers_initialized;
 
-	/* This hart contains an implicit ebreak at the end of the program buffer. */
+	/** This hart contains an implicit ebreak at the end of the program buffer. */
 	bool impebreak;
 
 	bool triggers_enumerated;
 
-	/* Helper functions that target the various RISC-V debug spec
-	 * implementations. */
+	/** Helper functions that target the various RISC-V debug spec implementations. */
 	int (__attribute__((warn_unused_result)) *get_register)(struct target *target, riscv_reg_t *value, int hid, int rid);
 	int (__attribute__((warn_unused_result)) *set_register)(struct target *, int hartid, int regid, uint64_t value);
 	int (__attribute__((warn_unused_result)) *select_current_hart)(struct target *);
+
 	/**
 	@todo check error code
 	*/
 	bool (*is_halted)(struct target *target);
+
 	int (__attribute__((warn_unused_result)) *halt_current_hart)(struct target *);
 	int (__attribute__((warn_unused_result)) *resume_current_hart)(struct target *target);
 	int (__attribute__((warn_unused_result)) *step_current_hart)(struct target *target);
+
 	/**
 	@todo check error code
 	*/
 	int (*on_halt)(struct target *target);
+
 	int (__attribute__((warn_unused_result)) *on_resume)(struct target *target);
 	/**
 	@todo check error code
 	*/
+	/**@{*/
 	int (*on_step)(struct target *target);
-	/**
-	@todo check error code
-	*/
 	enum riscv_halt_reason (*halt_reason)(struct target *target);
-	/**
-	@todo check error code
-	*/
 	int(*write_debug_buffer)(struct target *target, unsigned index, riscv_insn_t d);
-	/**
-	@todo check error code
-	*/
 	riscv_insn_t (*read_debug_buffer)(struct target *target, unsigned index);
+	/**@}*/
+
 	int (__attribute__((warn_unused_result)) *execute_debug_buffer)(struct target *target);
 	int (__attribute__((warn_unused_result)) *dmi_write_u64_bits)(struct target *target);
 	/**
 	@todo check error code
 	*/
+	/**@{*/
 	void (*fill_dmi_write_u64)(struct target *target, uint8_t *buf, int a, uint64_t d);
-	/**
-	@todo check error code
-	*/
 	void (*fill_dmi_read_u64)(struct target *target, uint8_t *buf, int a);
-	/**
-	@todo check error code
-	*/
 	void (*fill_dmi_nop_u64)(struct target *target, uint8_t *buf);
+	/**@}*/
 
 	int (__attribute__((warn_unused_result)) *authdata_read)(struct target *target, uint32_t *value);
 	int (__attribute__((warn_unused_result)) *authdata_write)(struct target *target, uint32_t value);
@@ -185,9 +184,16 @@ struct riscv_info_t {
 	int (__attribute__((warn_unused_result)) *test_compliance)(struct target *target);
 };
 
+/**
+	@todo Move to separate version-related files
+*/
 extern struct target_type const riscv011_target;
 extern struct target_type const riscv013_target;
 
+/**
+	@bug Different targets can use different options
+*/
+/**@{*/
 /**	Wall-clock timeout for a command/access.
 
 	Settable via RISC-V Target commands.
@@ -199,10 +205,18 @@ extern int riscv_command_timeout_sec;
 	Settable via RISC-V Target commands.
 */
 extern int riscv_reset_timeout_sec;
+
 extern bool riscv_prefer_sba;
+/**@}*/
+
+/**
+	@bug Non const global variables
+*/
+/**@{*/
 extern struct scan_field select_dtmcontrol;
 extern struct scan_field select_dbus;
 extern struct scan_field select_idcode;
+/**@}*/
 
 /** Everything needs the RISC-V specific info structure, so here's a nice macro that provides that. */
 static inline struct riscv_info_t *
@@ -245,14 +259,19 @@ riscv_openocd_step(struct target *target,
  /** @{ */
 int
 riscv_halt_all_harts(struct target *target);
+
 int
 riscv_resume_all_harts(struct target *target);
 /** @} */
 
 /** Steps the hart that's currently selected in the RTOS, or if there is no RTOS
 * then the only hart. */
-int riscv_step_rtos_hart(struct target *target);
+int
+riscv_step_rtos_hart(struct target *target);
 
+/**
+	@bug Target already associated with hart with hartid
+*/
 static inline bool
 __attribute__((pure))
 riscv_supports_extension(struct target *const target,
