@@ -370,7 +370,7 @@ static void jtag_add_ir_scan_noverify_callback(struct jtag_tap *active,
 }
 
 /* If fields->in_value is filled out, then the captured IR value will be checked */
-void jtag_add_ir_scan(struct jtag_tap *active, struct scan_field *in_fields, tap_state_t state)
+void jtag_add_ir_scan(struct jtag_tap *active, struct scan_field const *const in_fields, tap_state_t state)
 {
 	assert(state != TAP_RESET);
 
@@ -380,9 +380,10 @@ void jtag_add_ir_scan(struct jtag_tap *active, struct scan_field *in_fields, tap
 		/* if we are to run a verification of the ir scan, we need to get the input back.
 		 * We may have to allocate space if the caller didn't ask for the input back.
 		 */
-		in_fields->check_value = active->expected;
-		in_fields->check_mask = active->expected_mask;
-		jtag_add_scan_check(active, jtag_add_ir_scan_noverify_callback, 1, in_fields,
+		struct scan_field in_field_copy = *in_fields;
+		in_field_copy.check_value = active->expected;
+		in_field_copy.check_mask = active->expected_mask;
+		jtag_add_scan_check(active, jtag_add_ir_scan_noverify_callback, 1, &in_field_copy,
 			state);
 	} else
 		jtag_add_ir_scan_noverify(active, in_fields, state);

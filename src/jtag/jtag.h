@@ -341,7 +341,7 @@ int jtag_init_inner(struct command_context *cmd_ctx);
  *
  */
 void jtag_add_ir_scan(struct jtag_tap *tap,
-		struct scan_field *fields, tap_state_t endstate);
+		struct scan_field const *fields, tap_state_t endstate);
 /**
  * The same as jtag_add_ir_scan except no verification is performed out
  * the output values.
