@@ -2684,9 +2684,9 @@ gdb_regno_name(enum gdb_regno const regno)
 
 				if (regno <= GDB_REGNO_XPR31)
 					snprintf(buf, sizeof buf - 1, "x%d", regno - GDB_REGNO_ZERO);
-				else if (regno >= GDB_REGNO_CSR0 && regno <= GDB_REGNO_CSR4095)
+				else if (GDB_REGNO_CSR0 <= regno && regno <= GDB_REGNO_CSR4095)
 					snprintf(buf, sizeof buf - 1, "csr%d", regno - GDB_REGNO_CSR0);
-				else if (regno >= GDB_REGNO_FPR0 && regno <= GDB_REGNO_FPR31)
+				else if (GDB_REGNO_FPR0 <= regno && regno <= GDB_REGNO_FPR31)
 					snprintf(buf, sizeof buf - 1, "f%d", regno - GDB_REGNO_FPR0);
 				else
 					snprintf(buf, sizeof buf - 1, "gdb_regno_%d", regno);

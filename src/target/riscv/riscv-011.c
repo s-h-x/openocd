@@ -1434,7 +1434,7 @@ static int register_write(struct target *const target, unsigned number,
 	} else if (number == GDB_REGNO_PC) {
 		info->dpc = value;
 		return ERROR_OK;
-	} else if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
+	} else if (GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31) {
 		int result = update_mstatus_actual(target);
 		if (result != ERROR_OK)
 			return result;
@@ -1496,7 +1496,7 @@ static int get_register(struct target *const target, riscv_reg_t *value, int har
 		*value = reg_cache_get(target, regid);
 	} else if (regid == GDB_REGNO_PC) {
 		*value = info->dpc;
-	} else if (regid >= GDB_REGNO_FPR0 && regid <= GDB_REGNO_FPR31) {
+	} else if (GDB_REGNO_FPR0 <= regid && regid <= GDB_REGNO_FPR31) {
 		int result = update_mstatus_actual(target);
 		if (result != ERROR_OK)
 			return result;
