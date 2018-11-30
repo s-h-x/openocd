@@ -16,18 +16,24 @@
 #include "target/breakpoints.h"
 #include "rtos/riscv_debug.h"
 
+ /** @file
+ Since almost everything can be accomplish by scanning the dbus register,
+ all functions here assume dbus is already selected.
+ The exception are functions called directly by OpenOCD,
+ which can't assume anything about what's currently in IR.
+ They should set IR to dbus explicitly.
+ */
+
 #define DMI_DATA1 (DMI_DATA0 + 1)
 #define DMI_PROGBUF1 (DMI_PROGBUF0 + 1)
 
-/*
- * Since almost everything can be accomplish by scanning the dbus register, all
- * functions here assume dbus is already selected. The exception are functions
- * called directly by OpenOCD, which can't assume anything about what's
- * currently in IR. They should set IR to dbus explicitly.
- */
-
+/**
+@todo Move to separate common header file
+*/
+/**@{*/
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
+/**@}*/
 
 #define CSR_DCSR_CAUSE_SWBP		1
 #define CSR_DCSR_CAUSE_TRIGGER	2
@@ -164,9 +170,9 @@ struct riscv013_info_s {
 	bool abstract_read_fpr_supported;
 	bool abstract_write_fpr_supported;
 
-	/** When a function returns some error due to a failure indicated by the
-	 * target in cmderr, the caller can look here to see what that error was.
-	 * (Compare with errno.) */
+	/**	When a function returns some error due to a failure indicated by the target in cmderr,
+	the caller can look here to see what that error was.
+	(Compare with errno.) */
 	uint8_t cmderr;
 
 	/** Some fields from hartinfo. */
@@ -184,14 +190,19 @@ struct riscv013_info_s {
 };
 typedef struct riscv013_info_s riscv013_info_t;
 
+/**
+@todo Possible duplicates struct target fields
+*/
 struct scratch_mem_s {
-	/* How can the debugger access this memory? */
+	/**
+	@todo How can the debugger access this memory?
+	*/
 	memory_space_t memory_space;
 
-	/* Memory address to access the scratch memory from the hart. */
+	/** Memory address to access the scratch memory from the hart. */
 	riscv_addr_t hart_address;
 
-	/* Memory address to access the scratch memory from the debugger. */
+	/** Memory address to access the scratch memory from the debugger. */
 	riscv_addr_t debug_address;
 
 	struct working_area *area;
@@ -256,38 +267,47 @@ static struct descr const description[] = {
 };
 
 static void
-decode_dmi(char *restrict text,
+decode_dmi(char buffer[DUMP_FIELD_BUFFER_SIZE]/**<[out]*/,
 	unsigned const address,
 	unsigned const data)
 {
-	*text = '\0';
+	char *p_text = buffer;
+	*p_text = '\0';
 
-	for (unsigned i = 0; i < DIM(description); ++i) {
-		struct descr const *const p_descr = &description[i];
-		if (p_descr->address == address) {
-			uint64_t const mask = p_descr->mask;
-			unsigned const value = get_field(data, mask);
+	char *const end_of_buffer = p_text + DUMP_FIELD_BUFFER_SIZE - 1;
+	*end_of_buffer = '\0';
 
-			if (value) {
-				if (i > 0)
-					*text++ = ' ';
+	struct descr const *p_descr = description;
+	struct descr const *p_descr_end = description + DIM(description);
+	
+	for (; p_descr != p_descr_end; ++p_descr) {
+		if (p_descr->address != address)
+			continue;
 
-				text[DUMP_FIELD_BUFFER_SIZE - 1] = '\0';
-				if (mask & (mask >> 1)) {
-					/* If the field is more than 1 bit wide. */
-					snprintf(text, DUMP_FIELD_BUFFER_SIZE - 1, "%s=%d", p_descr->name, value);
-				} else {
-					strncpy(text, p_descr->name, DUMP_FIELD_BUFFER_SIZE - 1);
-				}
+		uint64_t const mask = p_descr->mask;
+		unsigned const value = get_field(data, mask);
 
-				text += strlen(text);
-			}
+		/**
+		@todo Posiible is break?
+		*/
+		if (0 == value)
+			continue;
+
+		if (buffer != p_text)
+			*p_text++ = ' ';
+
+		if (mask & (mask >> 1)) {
+			/* If the field is more than 1 bit wide. */
+			snprintf(p_text, end_of_buffer - p_text, "%s=%d", p_descr->name, value);
+		} else {
+			strncpy(p_text, p_descr->name, end_of_buffer - p_text);
 		}
+		p_text = strchr(p_text, '\0');
 	}
 }
 
 static void
-dump_field(struct scan_field const *const restrict field)
+dump_field(struct scan_field const *const field)
 {
 	static char const *const op_string[] = {"-", "r", "w", "?"};
 	static char const *const status_string[] = {"+", "?", "F", "b"};
@@ -366,9 +386,7 @@ dmi_scan(struct target *const target,
 		.in_value = in
 	};
 
-	/**
-	@bug Assumed dbus is already selected.
-	*/
+	/** @pre Assumed dbus is already selected. */
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
 	{
@@ -414,6 +432,7 @@ dtmcontrol_scan(struct target *const target,
 	uint32_t const out)
 {
 	assert(target);
+
 	/**
 	@bug @c select_dtmcontrol is global non-const variable
 	*/
@@ -472,7 +491,7 @@ increase_dmi_busy_delay(struct target *const target)
 static int
 __attribute__((warn_unused_result))
 dmi_op_timeout(struct target *const target,
-	uint32_t *const data_in /**[out]*/,
+	uint32_t *const data_in /**<[out]*/,
 	int const dmi_op_code,
 	uint32_t const address,
 	uint32_t const data_out,
@@ -812,6 +831,9 @@ execute_abstract_command(struct target *const target,
 	return ERROR_OK;
 }
 
+/**
+@bug Unhandled errors
+*/
 static riscv_reg_t
 read_abstract_arg(struct target *const target,
 	unsigned const index,
@@ -874,13 +896,10 @@ write_abstract_arg(struct target *const target,
 	return error;
 }
 
-/**
- * @param size in bits
- */
 static uint32_t
 access_register_command(struct target *const target,
 	uint32_t const number,
-	unsigned const size,
+	unsigned const size/**<[in] in bits*/,
 	uint32_t const flags)
 {
 	uint32_t command = set_field(0, DMI_COMMAND_CMDTYPE, 0);
