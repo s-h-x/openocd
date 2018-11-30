@@ -3,7 +3,6 @@ noinst_LTLIBRARIES += %D%/libriscv.la
        %D%/batch.h \
        %D%/debug_defines.h \
        %D%/encoding.h \
-       %D%/gdb_regs.h \
        %D%/opcodes.h \
        %D%/program.h \
        %D%/riscv.h \

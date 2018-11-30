@@ -35,10 +35,9 @@
  * from ARM Ltd.
  */
 
-#include "riscv.h"
-
 #include "target/semihosting_common.h"
-#include "helper/log.h"
+
+#include "riscv.h"
 
 /**
 * Called via semihosting->setup() later, after the target is known,

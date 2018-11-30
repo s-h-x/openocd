@@ -200,7 +200,9 @@ get_target_type(struct target *const target)
 	}
 }
 
-/** Initializes the shared RISC-V structure. */
+/** Initializes the shared RISC-V structure. 
+	@see struct riscv_info_t
+*/
 static struct riscv_info_t *
 __attribute__((warn_unused_result))
 riscv_info_init(struct target *const target)
