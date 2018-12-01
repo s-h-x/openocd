@@ -280,6 +280,7 @@ static int riscv_get_thread_reg_list(struct rtos *rtos, int64_t thread_id, char 
 	char *p = hex_reg_list[0];
 	for (size_t i = 0; i < n_regs; ++i) {
 		assert(p - hex_reg_list[0] > 3);
+		/** @bug Condition is always true */
 		if (riscv_has_register(rtos->target, thread_id, i)) {
 			uint64_t reg_value;
 			int result = riscv_get_register_on_hart(rtos->target, &reg_value,
