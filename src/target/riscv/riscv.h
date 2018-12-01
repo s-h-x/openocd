@@ -475,16 +475,20 @@ riscv_has_register(struct target *const target,
 	return true;
 }
 
-
 /* @returns the value of the given register on the given hart.  32-bit registers
  * are zero extended to 64 bits.  */
  /**@{*/
-int riscv_set_register(struct target *target, enum gdb_regno i, riscv_reg_t v);
-int riscv_set_register_on_hart(struct target *target, int hid, enum gdb_regno rid, uint64_t v);
-int riscv_get_register(struct target *target, riscv_reg_t *value,
-		enum gdb_regno r);
-int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
-		int hartid, enum gdb_regno regid);
+int
+riscv_set_register(struct target *target, enum gdb_regno i, riscv_reg_t v);
+
+int
+riscv_set_register_on_hart(struct target *target, int hid, enum gdb_regno rid, uint64_t v);
+
+int
+riscv_get_register(struct target *target, riscv_reg_t *value, enum gdb_regno r);
+
+int
+riscv_get_register_on_hart(struct target *target, riscv_reg_t *value, int hartid, enum gdb_regno regid);
 /**@}*/
 
 /** Checks the state of the current hart -- "is_halted" checks the actual
