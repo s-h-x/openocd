@@ -67,11 +67,11 @@ riscv_batch_add_dmi_write(struct riscv_batch *batch,
 	unsigned address,
 	uint64_t data);
 
-/*	DMI reads must be handled in two parts:
+/**	DMI reads must be handled in two parts:
 	the first one schedules a read and provides a key,
 	the second one actually obtains the value of that read.
-	@{
 */
+/**@{*/
 size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address);
 uint64_t riscv_batch_get_dmi_read(struct riscv_batch const *batch, size_t key);
 /**@}*/

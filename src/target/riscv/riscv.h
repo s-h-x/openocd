@@ -341,21 +341,21 @@ riscv_openocd_step(struct target *target,
 	target_addr_t address,
 	int handle_breakpoints);
 
-/** @} */
+/**@}*/
 
 /** RISC-V Interface */
-/** @{ */
+/**@{*/
 
 /** Run control, possibly for multiple harts.  The _all_harts versions resume
  * all the enabled harts, which when running in RTOS mode is all the harts on
  * the system. */
- /** @{ */
+ /**@{*/
 int
 riscv_halt_all_harts(struct target *target);
 
 int
 riscv_resume_all_harts(struct target *target);
-/** @} */
+/**@}*/
 
 /** Steps the hart that's currently selected in the RTOS, or if there is no RTOS
 * then the only hart. */
@@ -395,7 +395,7 @@ riscv_rtos_enabled(struct target const *const target)
 
 /** Sets the current hart, which is the hart that will actually be used when
  * issuing debug commands. */
- /** @{ */
+ /**@{*/
 int riscv_set_current_hartid(struct target *target, int hartid);
 
 static inline int
@@ -406,7 +406,7 @@ riscv_current_hartid(struct target const *const target)
 	assert(rvi);
 	return rvi->current_hartid;
 }
-/** @} */
+/**@}*/
 
 /** @returns XLEN for the given (or current) hart. */
 static inline int
@@ -420,7 +420,7 @@ riscv_xlen_of_hart(struct target const *const target,
 	return rvi->harts[hartid].xlen;
 }
 
-/** @returns XLEN for the given (or current) hart. */
+/** @returns XLEN for current hart. */
 static inline int
 riscv_xlen(struct target const *const target)
 {
@@ -432,7 +432,7 @@ riscv_xlen(struct target const *const target)
 
 /** When using the RTOS to debug, this selects the hart that is currently being
  * debugged.  This doesn't propogate to the hardware. */
- /** @{ */
+ /**@{*/
 static inline void
 riscv_set_all_rtos_harts(struct target *const target)
 {
@@ -451,7 +451,7 @@ riscv_set_rtos_hartid(struct target *const target,
 	rvi->rtos_hartid = hartid;
 }
 
-/** @} */
+/**@}*/
 
 /** Lists the number of harts in the system, which are assumed to be
  * consecutive and start with `mhartid=0`. */
@@ -478,14 +478,14 @@ riscv_has_register(struct target *const target,
 
 /* @returns the value of the given register on the given hart.  32-bit registers
  * are zero extended to 64 bits.  */
- /** @{ */
+ /**@{*/
 int riscv_set_register(struct target *target, enum gdb_regno i, riscv_reg_t v);
 int riscv_set_register_on_hart(struct target *target, int hid, enum gdb_regno rid, uint64_t v);
 int riscv_get_register(struct target *target, riscv_reg_t *value,
 		enum gdb_regno r);
 int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
 		int hartid, enum gdb_regno regid);
-/** @} */
+/**@}*/
 
 /** Checks the state of the current hart -- "is_halted" checks the actual
  * on-device register. */
@@ -505,6 +505,6 @@ int riscv_init_registers(struct target *target);
 
 void riscv_semihosting_init(struct target *target);
 int riscv_semihosting(struct target *target, int *retval);
-/** @} */
+/**@}*/
 
 #endif  /* TARGET_RISCV_RISCV_H_ */

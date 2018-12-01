@@ -63,11 +63,11 @@
 /**@}*/
 
 /** JTAG registers. */
-/** @{ */
+/**@{*/
 #define DTMCONTROL					0x10
 #define DTMCONTROL_VERSION			(0xf)
 #define DBUS						0x11
-/** @} */
+/**@}*/
 
 /** External handlers
 
@@ -2409,7 +2409,7 @@ riscv_invalidate_register_cache(struct target *const target)
 
 /**
 	@return number of HARTs
-	@bag return signed value
+	@bug return signed value
 */
 int
 riscv_count_harts(struct target const *const target)

@@ -176,11 +176,11 @@ struct riscv013_info_s {
 	uint8_t cmderr;
 
 	/** Some fields from hartinfo. */
-	/** @{ */
+	/**@{*/
 	uint8_t datasize;
 	uint8_t dataaccess;
 	int16_t dataaddr;
-	/** @} */
+	/**@}*/
 
 	/** The width of the hartsel field. */
 	unsigned hartsellen;

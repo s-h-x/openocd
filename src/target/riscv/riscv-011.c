@@ -218,6 +218,7 @@ struct scans_s {
 	struct scan_field *field;
 	struct target const *target;
 };
+
 /**
 @bug doc/manual/style.txt: "This should be reserved for types that should be passed by value"
 */
@@ -233,7 +234,7 @@ static int get_register(struct target *const target, riscv_reg_t *value, int har
 #define DEBUG_LENGTH	264
 
 /** Version-independent functions that we don't want in the main address space. */
-/** @{ */
+/**@{*/
 static inline uint32_t
 load(struct target const *const target,
 	unsigned const rd,
@@ -277,7 +278,7 @@ store(struct target const *const target,
 	/* Silence -Werror=return-type */
 	return 0;
 }
-/** @} */
+/**@}*/
 
 static riscv011_info_t *
 __attribute__((pure))
