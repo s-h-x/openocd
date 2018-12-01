@@ -200,7 +200,7 @@ get_target_type(struct target *const target)
 	}
 }
 
-/** Initializes the shared RISC-V structure. 
+/** Create the shared RISC-V structure. 
 	@see struct riscv_info_t
 */
 static struct riscv_info_t *
@@ -233,6 +233,7 @@ riscv_info_init(struct target *const target)
 	return r;
 }
 
+/** @return error code */
 static int
 riscv_init_target(struct command_context *const cmd_ctx,
 	struct target *const target)
@@ -250,6 +251,9 @@ riscv_init_target(struct command_context *const cmd_ctx,
 	info->cmd_ctx = cmd_ctx;
 
 	assert(target->tap);
+	/**
+	@bug Here is bug if there are some TAPs with different ir_length
+	*/
 	select_dtmcontrol.num_bits = target->tap->ir_length;
 	select_dbus.num_bits = target->tap->ir_length;
 	select_idcode.num_bits = target->tap->ir_length;
@@ -286,6 +290,7 @@ riscv_deinit_target(struct target *const target)
 	target->arch_info = NULL;
 }
 
+/** @return error code */
 static int
 oldriscv_halt(struct target *const target)
 {
@@ -309,6 +314,7 @@ trigger_from_breakpoint(struct trigger *const trigger,
 	trigger->unique_id = breakpoint->unique_id;
 }
 
+/** @return error code */
 static int
 maybe_add_trigger_t1(struct target *const target,
 	unsigned const hartid,
@@ -368,6 +374,7 @@ maybe_add_trigger_t1(struct target *const target,
 	return ERROR_OK;
 }
 
+/** @return error code */
 static int
 maybe_add_trigger_t2(struct target *const target,
 	unsigned const hartid,
@@ -436,6 +443,7 @@ maybe_add_trigger_t2(struct target *const target,
 	return riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA2, trigger->address);
 }
 
+/** @return error code */
 static int
 add_trigger(struct target *const target,
 	struct trigger *const trigger)
@@ -558,6 +566,7 @@ add_trigger(struct target *const target,
 	return ERROR_OK;
 }
 
+/** @return error code */
 static int
 riscv_add_breakpoint(struct target *const target,
 	struct breakpoint *const breakpoint)
@@ -634,6 +643,7 @@ riscv_add_breakpoint(struct target *const target,
 	return ERROR_OK;
 }
 
+/** @return error code */
 static int
 remove_trigger(struct target *const target,
 	struct trigger *const trigger)
@@ -699,6 +709,7 @@ remove_trigger(struct target *const target,
 	return ERROR_OK;
 }
 
+/** @return error code */
 static int
 riscv_remove_breakpoint(struct target *const target,
 	struct breakpoint *breakpoint)
@@ -745,6 +756,7 @@ riscv_remove_breakpoint(struct target *const target,
 	return ERROR_OK;
 }
 
+/** @return error code */
 static void
 trigger_from_watchpoint(struct trigger *const trigger,
 	struct watchpoint const *const watchpoint)
@@ -763,6 +775,7 @@ trigger_from_watchpoint(struct trigger *const trigger,
 	trigger->unique_id = watchpoint->unique_id;
 }
 
+/** @return error code */
 static int
 riscv_add_watchpoint(struct target *const target,
 	struct watchpoint *const watchpoint)
@@ -783,6 +796,7 @@ riscv_add_watchpoint(struct target *const target,
 	return ERROR_OK;
 }
 
+/** @return error code */
 static int
 riscv_remove_watchpoint(struct target *const target,
 	struct watchpoint *const watchpoint)
@@ -802,12 +816,14 @@ riscv_remove_watchpoint(struct target *const target,
 	return ERROR_OK;
 }
 
-/* Sets *hit_watchpoint to the first watchpoint identified as causing the
- * current halt.
- *
- * The GDB server uses this information to tell GDB what data address has
- * been hit, which enables GDB to print the hit variable along with its old
- * and new value. */
+/** Sets @c hit_watchpoint to the first watchpoint identified as causing the
+current halt.
+
+The GDB server uses this information to tell GDB what data address has
+been hit, which enables GDB to print the hit variable along with its old
+and new value.
+*/
+/** @return error code */
 static int
 riscv_hit_watchpoint(struct target *const target,
 	struct watchpoint **const hit_watchpoint)
@@ -915,8 +931,9 @@ riscv_hit_watchpoint(struct target *const target,
 	return ERROR_TARGET_INVALID;
 }
 
-
-static int oldriscv_step(struct target *const target, int const current, uint32_t const address,
+/** @return error code */
+static int
+oldriscv_step(struct target *const target, int const current, uint32_t const address,
 		int const handle_breakpoints)
 {
 	struct target_type const *const tt = get_target_type(target);
@@ -924,7 +941,9 @@ static int oldriscv_step(struct target *const target, int const current, uint32_
 	return tt->step(target, current, address, handle_breakpoints);
 }
 
-static int old_or_new_riscv_step(struct target *const target,
+/** @return error code */
+static int
+old_or_new_riscv_step(struct target *const target,
 	int const current,
 	target_addr_t const address,
 	int const handle_breakpoints)
@@ -941,6 +960,7 @@ static int old_or_new_riscv_step(struct target *const target,
 		return riscv_openocd_step(target, current, address, handle_breakpoints);
 }
 
+/** @return error code */
 static int
 riscv_examine(struct target *const target)
 {
@@ -974,6 +994,7 @@ riscv_examine(struct target *const target)
 	return tt->examine(target);
 }
 
+/** @return error code */
 static int
 oldriscv_poll(struct target *const target)
 {
@@ -981,6 +1002,7 @@ oldriscv_poll(struct target *const target)
 	return tt->poll(target);
 }
 
+/** @return error code */
 static int
 old_or_new_riscv_poll(struct target *const target)
 {
@@ -989,6 +1011,7 @@ old_or_new_riscv_poll(struct target *const target)
 	return rvi->is_halted ? riscv_openocd_poll(target) : oldriscv_poll(target);
 }
 
+/** @return error code */
 static int
 old_or_new_riscv_halt(struct target *const target)
 {
@@ -997,6 +1020,7 @@ old_or_new_riscv_halt(struct target *const target)
 	return rvi->is_halted ? riscv_openocd_halt(target) : oldriscv_halt(target);
 }
 
+/** @return error code */
 static int
 riscv_assert_reset(struct target *const target)
 {
@@ -1004,6 +1028,7 @@ riscv_assert_reset(struct target *const target)
 	return tt->assert_reset(target);
 }
 
+/** @return error code */
 static int
 riscv_deassert_reset(struct target *const target)
 {
@@ -1013,6 +1038,7 @@ riscv_deassert_reset(struct target *const target)
 	return tt->deassert_reset(target);
 }
 
+/** @return error code */
 static int
 oldriscv_resume(struct target *const target,
 	int const current,
@@ -1026,6 +1052,7 @@ oldriscv_resume(struct target *const target,
 		tt->resume(target, current, address, handle_breakpoints, debug_execution);
 }
 
+/** @return error code */
 static int
 old_or_new_riscv_resume(struct target *const target,
 	int const current,
@@ -1047,6 +1074,7 @@ old_or_new_riscv_resume(struct target *const target,
 		oldriscv_resume(target, current, address, handle_breakpoints, debug_execution);
 }
 
+/** @return error code */
 static int
 riscv_select_current_hart(struct target *const target)
 {
@@ -1071,6 +1099,7 @@ is_valid_size_and_alignment(target_addr_t const address,
 		0 == (address % size);
 }
 
+/** @return error code */
 static int
 riscv_read_memory(struct target *const target,
 	target_addr_t const address,
@@ -1133,6 +1162,7 @@ riscv_write_memory(struct target *const target,
 	return tt->write_memory(target, address, size, count, buffer);
 }
 
+/** @return error code */
 static int
 riscv_get_gdb_reg_list(struct target *const target,
 	struct reg **reg_list[],
@@ -1193,6 +1223,7 @@ riscv_get_gdb_reg_list(struct target *const target,
 	return ERROR_OK;
 }
 
+/** @return error code */
 static int
 riscv_arch_state(struct target *const target)
 {
@@ -2295,6 +2326,7 @@ struct command_registration const riscv_command_handlers[] = {
 	COMMAND_REGISTRATION_DONE
 };
 
+/** @return error code*/
 int
 riscv_halt_all_harts(struct target *const target)
 {
@@ -2310,6 +2342,7 @@ riscv_halt_all_harts(struct target *const target)
 	return ERROR_OK;
 }
 
+/** @return error code*/
 static int
 riscv_resume_one_hart(struct target *const target, int const hartid)
 {
@@ -2339,6 +2372,7 @@ riscv_resume_one_hart(struct target *const target, int const hartid)
 	return rvi->resume_current_hart(target);
 }
 
+/** @return error code*/
 int
 riscv_resume_all_harts(struct target *const target)
 {
@@ -2468,13 +2502,10 @@ riscv_get_register(struct target *const target,
 		riscv_get_register_on_hart(target, value, riscv_current_hartid(target), r);
 }
 
-/**
-	@param[out] value
-	@return error code
-*/
+/** @return error code*/
 int
 riscv_get_register_on_hart(struct target *const target,
-	riscv_reg_t *const value,
+	riscv_reg_t *const value/**<[out]*/,
 	int const hartid,
 	enum gdb_regno const regid)
 {
@@ -2518,9 +2549,13 @@ enum riscv_halt_reason
 	return rvi->halt_reason(target);
 }
 
-bool riscv_hart_enabled(struct target *const target, int hartid)
+bool
+riscv_hart_enabled(struct target *const target,
+	int hartid)
 {
-	/* FIXME: Add a hart mask to the RTOS. */
+	/**
+	@todo FIXME: Add a hart mask to the RTOS.
+	*/
 	if (riscv_rtos_enabled(target))
 		return hartid < riscv_count_harts(target);
 
@@ -2535,6 +2570,7 @@ bool riscv_hart_enabled(struct target *const target, int hartid)
 	We can't have set them ourselves.
 	Maybe they're left over from some killed debug session.
 */
+/** @return error code*/
 int
 riscv_enumerate_triggers(struct target *const target)
 {
@@ -2698,6 +2734,7 @@ gdb_regno_name(enum gdb_regno const regno)
 	}
 }
 
+/** @return error code*/
 static int
 register_get(struct reg *const reg)
 {
@@ -2717,6 +2754,7 @@ register_get(struct reg *const reg)
 	return ERROR_OK;
 }
 
+/** @return error code*/
 static int
 register_set(struct reg *const reg,
 	uint8_t *const buf)
@@ -2747,6 +2785,7 @@ struct csr_info {
 	char const *name;
 };
 
+/** @return signed value for ordering */
 static int
 cmp_csr_info(void const *p1, void const *p2)
 {
@@ -2763,6 +2802,7 @@ static struct csr_info csr_info[] = {
 #undef DECLARE_CSR
 };
 
+/** @return error code*/
 int
 riscv_init_registers(struct target *const target)
 {
