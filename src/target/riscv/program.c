@@ -86,7 +86,8 @@ riscv_program_exec(struct riscv_program *const p,
 
 	for (size_t i = GDB_REGNO_ZERO + 1; i <= GDB_REGNO_XPR31; ++i) {
 		if (p->writes_xreg[i]) {
-			LOG_DEBUG("%s: Saving register %d as used by program", t->cmd_name, (int)(i));
+			LOG_DEBUG("%s: Saving register %" PRIdPTR " as used by program",
+				t->cmd_name, i);
 			int const result = riscv_get_register(t, &saved_registers[i], i);
 
 			if (ERROR_OK != result)
