@@ -189,10 +189,10 @@ get_target_type(struct target *const target)
 
 	switch (info->dtm_version) {
 		case 0:
-			return &riscv011_target;
+			return &riscv_011_target;
 
 		case 1:
-			return &riscv013_target;
+			return &riscv_013_target;
 
 		default:
 			LOG_ERROR("%s: Unsupported DTM version: %d", target->cmd_name, info->dtm_version);

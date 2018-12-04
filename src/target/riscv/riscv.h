@@ -280,8 +280,8 @@ struct riscv_info_t {
 /**
 	@todo Move to separate version-related files
 */
-extern struct target_type const riscv011_target;
-extern struct target_type const riscv013_target;
+extern struct target_type const riscv_011_target;
+extern struct target_type const riscv_013_target;
 
 /**
 	@bug Different targets can use different options
@@ -469,9 +469,9 @@ riscv_has_register(struct target *const target,
 	int const hartid,
 	int const regid)
 {
-	(void)target;
-	(void)hartid;
-	(void)regid;
+	(void)(target);
+	(void)(hartid);
+	(void)(regid);
 	return true;
 }
 

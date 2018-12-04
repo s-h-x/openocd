@@ -161,7 +161,7 @@ struct memory_cache_line {
 	bool dirty;
 };
 
-struct riscv011_info_s {
+struct riscv_011_info_s {
 	/** Number of address bits in the dbus register. */
 	uint8_t addrbits;
 
@@ -198,7 +198,7 @@ struct riscv011_info_s {
 	bool need_strict_step;
 	bool never_halted;
 };
-typedef struct riscv011_info_s riscv011_info_t;
+typedef struct riscv_011_info_s riscv_011_info_t;
 
 struct bits_s {
 	bool haltnot;
@@ -226,7 +226,7 @@ typedef struct scans_s scans_t;
 
 /* Necessary prototypes. */
 static int riscv_011_poll(struct target *const target);
-static int get_register(struct target *const target, riscv_reg_t *value, int hartid,
+static int riscv_011_get_register(struct target *const target, riscv_reg_t *value, int hartid,
 		int regid);
 
 /* Utility functions. */
@@ -280,7 +280,7 @@ store(struct target const *const target,
 }
 /**@}*/
 
-static riscv011_info_t *
+static riscv_011_info_t *
 __attribute__((pure))
 get_info(const struct target *const target)
 {
@@ -294,7 +294,7 @@ static unsigned
 slot_offset(struct target const *const target,
 	slot_t const slot)
 {
-	riscv011_info_t const *const info = get_info(target);
+	riscv_011_info_t const *const info = get_info(target);
 	assert(info);
 
 	switch (riscv_xlen(target)) {
@@ -428,7 +428,7 @@ idcode_scan(struct target *const target)
 static void
 increase_dbus_busy_delay(struct target *const target)
 {
-	riscv011_info_t *const info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 	assert(info);
 	info->dbus_busy_delay += info->dbus_busy_delay / 10 + 1;
 	LOG_DEBUG("%s: dtmcontrol_idle=%d, dbus_busy_delay=%d, interrupt_high_delay=%d",
@@ -440,7 +440,7 @@ increase_dbus_busy_delay(struct target *const target)
 static void
 increase_interrupt_high_delay(struct target *const target)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 	assert(info);
 
 	info->interrupt_high_delay += info->interrupt_high_delay / 10 + 1;
@@ -458,7 +458,7 @@ add_dbus_scan(struct target const *const target,
 	uint16_t address,
 	uint64_t data)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 	assert(info);
 	assert(field);
 	field->num_bits = info->addrbits + DBUS_OP_SIZE + DBUS_DATA_SIZE;
@@ -520,7 +520,7 @@ dbus_scan(struct target *const target,
 	uint16_t const address_out,
 	uint64_t const data_out)
 {
-	riscv011_info_t *const info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 	assert(info);
 	assert(info->addrbits != 0);
 
@@ -780,7 +780,7 @@ static bits_t read_bits(struct target *const target)
 	uint64_t value;
 	dbus_status_t status;
 	uint16_t address_in;
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 
 	bits_t err_result = {
 		.haltnot = 0,
@@ -872,7 +872,7 @@ cache_set32(struct target *const target,
 	unsigned const index,
 	uint32_t const data)
 {
-	riscv011_info_t *const info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 	assert(info);
 
 	if (info->dram_cache[index].valid && info->dram_cache[index].data == data) {
@@ -938,9 +938,10 @@ dump_debug_ram(struct target *const target)
 }
 
 /* Call this if the code you just ran writes to debug RAM entries 0 through 3. */
-static void cache_invalidate(struct target *const target)
+static void
+cache_invalidate(struct target *const target)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 	for (unsigned i = 0; i < info->dramsize; ++i) {
 		info->dram_cache[i].valid = false;
 		info->dram_cache[i].dirty = false;
@@ -949,9 +950,10 @@ static void cache_invalidate(struct target *const target)
 
 /* Called by cache_write() after the program has run. Also call this if you're
  * running programs without calling cache_write(). */
-static void cache_clean(struct target *const target)
+static void
+cache_clean(struct target *const target)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 	for (unsigned i = 0; i < info->dramsize; ++i) {
 		if (i >= 4)
 			info->dram_cache[i].valid = false;
@@ -962,7 +964,7 @@ static void cache_clean(struct target *const target)
 static int
 cache_check(struct target *const target)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 	int error = 0;
 
 	for (unsigned i = 0; i < info->dramsize; ++i) {
@@ -984,7 +986,7 @@ cache_check(struct target *const target)
 static int cache_write(struct target *const target, unsigned address, bool run)
 {
 	LOG_DEBUG("%s: enter", target->cmd_name);
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 	scans_t *scans = scans_new(target, info->dramsize + 2);
 
 	unsigned last = info->dramsize;
@@ -1118,28 +1120,38 @@ static int cache_write(struct target *const target, unsigned address, bool run)
 	return ERROR_OK;
 }
 
-static uint32_t cache_get32(struct target *const target, unsigned address)
+static uint32_t
+cache_get32(struct target *const target,
+	unsigned const address)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
+	assert(info);
+
 	if (!info->dram_cache[address].valid) {
 		info->dram_cache[address].data = dram_read32(target, address);
 		info->dram_cache[address].valid = true;
 	}
+
 	return info->dram_cache[address].data;
 }
 
-static uint64_t cache_get(struct target *const target, slot_t slot)
+static uint64_t
+cache_get(struct target *const target,
+	slot_t const slot)
 {
 	unsigned offset = slot_offset(target, slot);
 	uint64_t value = cache_get32(target, offset);
+
 	if (riscv_xlen(target) > 32)
-		value |= ((uint64_t) cache_get32(target, offset + 1)) << 32;
+		value |= (uint64_t)(cache_get32(target, offset + 1)) << 32;
+
 	return value;
 }
 
 /* Write instruction that jumps from the specified word in Debug RAM to resume
  * in Debug ROM. */
-static void dram_write_jump(struct target *const target, unsigned index,
+static void
+dram_write_jump(struct target *const target, unsigned index,
 		bool set_interrupt)
 {
 	dram_write32(target, index,
@@ -1184,7 +1196,7 @@ static int read_csr(struct target *const target, uint64_t *value, uint32_t csr)
 	*value = cache_get(target, SLOT0);
 	LOG_DEBUG("%s: csr 0x%x = 0x%" PRIx64, target->cmd_name, csr, *value);
 
-	riscv011_info_t *const info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 	assert(info);
 	uint32_t const exception = cache_get32(target, info->dramsize-1);
 	if (exception) {
@@ -1232,7 +1244,7 @@ static int write_gpr(struct target *const target, unsigned gpr, uint64_t value)
 
 static int maybe_read_tselect(struct target *const target)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 
 	if (info->tselect_dirty) {
 		int result = read_csr(target, &info->tselect, CSR_TSELECT);
@@ -1246,7 +1258,7 @@ static int maybe_read_tselect(struct target *const target)
 
 static int maybe_write_tselect(struct target *const target)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 
 	if (!info->tselect_dirty) {
 		int result = write_csr(target, CSR_TSELECT, info->tselect);
@@ -1260,7 +1272,7 @@ static int maybe_write_tselect(struct target *const target)
 
 static int execute_resume(struct target *const target, bool step)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 
 	LOG_DEBUG("%s: step=%d", target->cmd_name, step);
 
@@ -1372,7 +1384,7 @@ static int update_mstatus_actual(struct target *const target)
 	/* Force reading the register. In that process mstatus_actual will be
 	 * updated. */
 	riscv_reg_t mstatus;
-	return get_register(target, &mstatus, 0, GDB_REGNO_MSTATUS);
+	return riscv_011_get_register(target, &mstatus, 0, GDB_REGNO_MSTATUS);
 }
 
 static int register_read(struct target *const target, riscv_reg_t *value, int regnum)
@@ -1392,7 +1404,7 @@ static int register_read(struct target *const target, riscv_reg_t *value, int re
 			return err;
 	}
 
-	riscv011_info_t *const info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 	assert(info);
 	uint32_t const exception = cache_get32(target, info->dramsize-1);
 	assert(value);
@@ -1417,7 +1429,7 @@ static int register_read(struct target *const target, riscv_reg_t *value, int re
 static int register_write(struct target *const target, unsigned number,
 		uint64_t value)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 
 	maybe_write_tselect(target);
 
@@ -1484,11 +1496,11 @@ static int register_write(struct target *const target, unsigned number,
 	return ERROR_OK;
 }
 
-static int get_register(struct target *const target, riscv_reg_t *value, int hartid,
+static int riscv_011_get_register(struct target *const target, riscv_reg_t *value, int hartid,
 		int regid)
 {
 	assert(hartid == 0);
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 
 	maybe_write_tselect(target);
 
@@ -1535,7 +1547,7 @@ static int get_register(struct target *const target, riscv_reg_t *value, int har
 }
 
 static int
-set_register(struct target *const target, int hartid, int regid, uint64_t value)
+riscv_011_set_register(struct target *const target, int hartid, int regid, uint64_t value)
 {
 	assert(hartid == 0);
 	return register_write(target, regid, value);
@@ -1567,10 +1579,10 @@ static int riscv_011_init_target(struct command_context *cmd_ctx,
 {
 	LOG_DEBUG("%s: init", target->cmd_name);
 	struct riscv_info_t *const generic_info = target->arch_info;
-	generic_info->get_register = get_register;
-	generic_info->set_register = set_register;
+	generic_info->get_register = riscv_011_get_register;
+	generic_info->set_register = riscv_011_set_register;
 
-	generic_info->version_specific = calloc(1, sizeof(riscv011_info_t));
+	generic_info->version_specific = calloc(1, sizeof(riscv_011_info_t));
 	if (!generic_info->version_specific)
 		LOG_ERROR("%s: Fatal - not enough memory", target->cmd_name);
 		return ERROR_TARGET_INVALID;
@@ -1617,7 +1629,7 @@ static int riscv_011_examine(struct target *const target)
 	assert(r);
 	r->hart_count = 1;
 
-	riscv011_info_t *const info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 	assert(info);
 	info->addrbits = get_field(dtmcontrol, DTMCONTROL_ADDRBITS);
 	info->dtmcontrol_idle = get_field(dtmcontrol, DTMCONTROL_IDLE);
@@ -1758,7 +1770,7 @@ static int riscv_011_examine(struct target *const target)
 static riscv_error_t
 handle_halt_routine(struct target *const target)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 
 	scans_t *scans = scans_new(target, 256);
 
@@ -2045,7 +2057,7 @@ static int handle_halt(struct target *const target, bool const announce)
 		return ERROR_TARGET_FAILURE;
 	}
 
-	riscv011_info_t *const info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 	assert(info);
 	int const cause = get_field(info->dcsr, DCSR_CAUSE);
 
@@ -2176,7 +2188,7 @@ static int full_step(struct target *const target, bool announce)
 static int
 strict_step(struct target *const target, bool announce)
 {
-	riscv011_info_t *const info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 
 	LOG_DEBUG("%s: enter", target->cmd_name);
 
@@ -2218,7 +2230,7 @@ riscv_011_step(struct target *const target,
 			return result;
 	}
 
-	riscv011_info_t *const info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 	assert(info);
 
 	if (info->need_strict_step || handle_breakpoints) {
@@ -2240,7 +2252,7 @@ static int riscv_011_poll(struct target *const target)
 static int riscv_011_resume(struct target *const target, int current,
 		target_addr_t address, int handle_breakpoints, int debug_execution)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
@@ -2281,7 +2293,7 @@ static int riscv_011_assert_reset(struct target *const target)
 		}
 	}
 
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 	assert(info);
 
 	/* Not sure what we should do when there are multiple cores.
@@ -2345,7 +2357,7 @@ static int riscv_011_read_memory(struct target *const target, target_addr_t addr
 	cache_set_jump(target, 3);
 	cache_write(target, CACHE_NO_READ, false);
 
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 	const unsigned max_batch_size = 256;
 	scans_t *scans = scans_new(target, max_batch_size);
 
@@ -2514,7 +2526,7 @@ riscv_011_write_memory(struct target *const target,
 	uint32_t const count,
 	uint8_t const *const buffer)
 {
-	riscv011_info_t *info = get_info(target);
+	riscv_011_info_t *info = get_info(target);
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
 	/* Set up the address. */
@@ -2557,21 +2569,21 @@ riscv_011_write_memory(struct target *const target,
 
 				switch (size) {
 					case 1:
-						value = buffer[offset];
+						value = (uint32_t)(buffer[offset]) << 0 * CHAR_BIT;
 						break;
 
 					case 2:
 						value =
-							(uint32_t)buffer[offset + 0] << 0 * CHAR_BIT | 
-							(uint32_t)buffer[offset + 1] << 1 * CHAR_BIT;
+							(uint32_t)(buffer[offset + 0]) << 0 * CHAR_BIT | 
+							(uint32_t)(buffer[offset + 1]) << 1 * CHAR_BIT;
 						break;
 
 					case 4:
 						value =
-							(uint32_t)buffer[offset + 0] << 0 * CHAR_BIT |
-							(uint32_t)buffer[offset + 1] << 1 * CHAR_BIT |
-							(uint32_t)buffer[offset + 2] << 2 * CHAR_BIT |
-							(uint32_t)buffer[offset + 3] << 3 * CHAR_BIT;
+							(uint32_t)(buffer[offset + 0]) << 0 * CHAR_BIT |
+							(uint32_t)(buffer[offset + 1]) << 1 * CHAR_BIT |
+							(uint32_t)(buffer[offset + 2]) << 2 * CHAR_BIT |
+							(uint32_t)(buffer[offset + 3]) << 3 * CHAR_BIT;
 						break;
 
 					default:
@@ -2692,7 +2704,7 @@ static int riscv_011_arch_state(struct target *const target)
 	return ERROR_OK;
 }
 
-struct target_type const riscv011_target = {
+struct target_type const riscv_011_target = {
 	.name = "riscv",
 
 	.init_target = riscv_011_init_target,
