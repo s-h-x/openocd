@@ -445,7 +445,7 @@ static inline void
 riscv_set_rtos_hartid(struct target *const target,
 	int const hartid)
 {
-	LOG_DEBUG("%s: setting RTOS hartid %d", target->cmd_name, hartid);
+	LOG_DEBUG("%s: setting RTOS hartid %d", target_name(target), hartid);
 	struct riscv_info_t *const rvi = riscv_info(target);
 	assert(rvi);
 	rvi->rtos_hartid = hartid;

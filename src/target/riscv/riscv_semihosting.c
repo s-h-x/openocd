@@ -46,7 +46,7 @@
 static int
 riscv_semihosting_setup(struct target *const target, int enable)
 {
-	LOG_DEBUG("%s: enable=%d", target->cmd_name, enable);
+	LOG_DEBUG("%s: enable=%d", target_name(target), enable);
 
 	struct semihosting *const semihosting = target->semihosting;
 
@@ -66,7 +66,7 @@ riscv_semihosting_post_result(struct target *const target)
 		return 0;
 	}
 
-	LOG_DEBUG("%s: 0x%" PRIx64, target->cmd_name, semihosting->result);
+	LOG_DEBUG("%s: 0x%" PRIx64, target_name(target), semihosting->result);
 	riscv_set_register(target, GDB_REGNO_A0, semihosting->result);
 	return 0;
 }
@@ -130,7 +130,7 @@ riscv_semihosting(struct target *const target, int *const retval)
 	uint32_t const pre = target_buffer_get_u32(target, tmp);
 	uint32_t const ebreak = target_buffer_get_u32(target, tmp + 4);
 	uint32_t const post = target_buffer_get_u32(target, tmp + 8);
-	LOG_DEBUG("%s: check %08x %08x %08x from 0x%" PRIx64 "-4", target->cmd_name, pre, ebreak, post, dpc);
+	LOG_DEBUG("%s: check %08x %08x %08x from 0x%" PRIx64 "-4", target_name(target), pre, ebreak, post, dpc);
 
 	if (pre != 0x01f01013 || ebreak != 0x00100073 || post != 0x40705013)
 		/* Not the magic sequence defining semihosting. */
@@ -160,7 +160,7 @@ riscv_semihosting(struct target *const target, int *const retval)
 		if (0 <= semihosting->op && semihosting->op <= 0x31) {
 			*retval = semihosting_common(target);
 			if (ERROR_OK != *retval) {
-				LOG_ERROR("%s: Failed semihosting operation", target->cmd_name);
+				LOG_ERROR("%s: Failed semihosting operation", target_name(target));
 				return 0;
 			}
 		} else {
@@ -177,7 +177,7 @@ riscv_semihosting(struct target *const target, int *const retval)
 		/* Resume right after the EBREAK 4 bytes instruction. */
 		*retval = target_resume(target, 0, dpc+4, 0, 0);
 		if (ERROR_OK != *retval) {
-			LOG_ERROR("%s: Failed to resume target", target->cmd_name);
+			LOG_ERROR("%s: Failed to resume target", target_name(target));
 			return 0;
 		}
 
