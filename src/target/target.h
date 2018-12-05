@@ -224,12 +224,12 @@ struct gdb_fileio_info {
 };
 
 /** Returns the instance-specific name of the specified target. */
-static inline const char *target_name(struct target *target)
+static inline const char *target_name(struct target const *target)
 {
 	return target->cmd_name;
 }
 
-const char *debug_reason_name(struct target *t);
+const char *debug_reason_name(struct target const *t);
 
 enum target_event {
 
@@ -285,7 +285,7 @@ struct target_event_action {
 	struct target_event_action *next;
 };
 
-bool target_has_event_action(struct target *target, enum target_event event);
+bool target_has_event_action(struct target const *target, enum target_event event);
 
 struct target_event_callback {
 	int (*callback)(struct target *target, enum target_event event, void *priv);

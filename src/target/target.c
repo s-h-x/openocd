@@ -273,7 +273,7 @@ static const Jim_Nvp nvp_reset_modes[] = {
 	{ .name = NULL     , .value = -1 },
 };
 
-const char *debug_reason_name(struct target *t)
+const char *debug_reason_name(struct target const *t)
 {
 	const char *cp;
 
@@ -4532,7 +4532,7 @@ void target_handle_event(struct target *target, enum target_event e)
 /**
  * Returns true only if the target has a handler for the specified event.
  */
-bool target_has_event_action(struct target *target, enum target_event event)
+bool target_has_event_action(struct target const *target, enum target_event event)
 {
 	struct target_event_action *teap;
 
