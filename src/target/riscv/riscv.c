@@ -66,6 +66,9 @@
 /**@{*/
 #define DTMCONTROL					0x10
 #define DTMCONTROL_VERSION			(0xf)
+/**
+	@todo Move to common file
+*/
 #define DBUS						0x11
 /**@}*/
 
@@ -127,19 +130,19 @@ range_t *expose_custom = NULL;
 
 static uint32_t
 dtmcontrol_scan(struct target *const target,
-	uint32_t const out)
+	uint32_t const value)
 {
 	assert(target);
 	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
 
-	uint8_t out_value[4];
-	buf_set_u32(out_value, 0, 32, out);
-	uint8_t in_value[4];
+	uint8_t out_buffer[4];
+	buf_set_u32(out_buffer, 0, 32, value);
+	uint8_t in_buffer[4];
 	typedef struct scan_field scan_field_t;
 	scan_field_t const field = {
 		.num_bits = 32,
-		.out_value = out_value,
-		.in_value = in_value,
+		.out_value = out_buffer,
+		.in_value = in_buffer,
 	};
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
@@ -164,10 +167,10 @@ dtmcontrol_scan(struct target *const target,
 		}
 	}
 
-	uint32_t const in = buf_get_u32(field.in_value, 0, 32);
+	uint32_t const in_value = buf_get_u32(field.in_value, 0, 32);
 	LOG_DEBUG("%s: DTMCONTROL: 0x%" PRIx32 " -> 0x%" PRIx32,
-		target_name(target), out, in);
-	return in;
+		target_name(target), value, in_value);
+	return in_value;
 }
 
 /**
@@ -278,6 +281,7 @@ riscv_deinit_target(struct target *const target)
 	}
 
 	/* Free the shared structure use for most registers. */
+	assert(target->reg_cache->reg_list && 0 < target->reg_cache->num_regs);
 	free(target->reg_cache->reg_list[0].arch_info);
 
 	/* Free the ones we allocated separately. */
@@ -1536,10 +1540,10 @@ riscv_openocd_poll(struct target *const target)
 	if (riscv_rtos_enabled(target)) {
 		/* Check every hart for an event. */
 		for (int i = 0; i < riscv_count_harts(target); ++i) {
-			enum riscv_poll_hart_e const out =
+			enum riscv_poll_hart_e const poll_result =
 				riscv_poll_hart(target, i);
 
-			switch (out) {
+			switch (poll_result) {
 			case RPH_NO_CHANGE:
 			case RPH_DISCOVERED_RUNNING:
 				continue;
@@ -1571,12 +1575,12 @@ riscv_openocd_poll(struct target *const target)
 			riscv_halt_one_hart(target, i);
 
 	} else {
-		enum riscv_poll_hart_e const out =
+		enum riscv_poll_hart_e const poll_event =
 			riscv_poll_hart(target, riscv_current_hartid(target));
 
-		if (out == RPH_NO_CHANGE || out == RPH_DISCOVERED_RUNNING)
+		if (poll_event == RPH_NO_CHANGE || poll_event == RPH_DISCOVERED_RUNNING)
 			return ERROR_OK;
-		else if (out == RPH_ERROR) {
+		else if (poll_event == RPH_ERROR) {
 			LOG_ERROR("%s: poll HART error", target_name(target));
 			return ERROR_TARGET_FAILURE;
 		}
@@ -2607,7 +2611,7 @@ riscv_enumerate_triggers(struct target *const target)
 					return err;
 			}
 
-			/* Mask off the top bit, which is used as tdrmode in old implementations. */
+			/* Mask off the top bit, which is used as @c tdrmode in old implementations. */
 			tselect_rb &= ~(1ULL << (riscv_xlen(target)-1));
 
 			if (tselect_rb != t)
@@ -2894,11 +2898,14 @@ riscv_init_registers(struct target *const target)
 
 	char *reg_name = rvi->reg_names;
 
-	/* When gdb requests register N, gdb_get_register_packet() assumes that this
-	 * is register at index N in reg_list. So if there are certain registers
-	 * that don't exist, we need to leave holes in the list (or renumber, but
-	 * it would be nice not to have yet another set of numbers to translate
-	 * between). */
+	/*
+		When gdb requests register N, gdb_get_register_packet() assumes
+		that this is register at index N in reg_list.
+		So if there are certain registers that don't exist,
+		we need to leave holes in the list
+		(or renumber, but it would be nice not to have yet another
+		set of numbers to translate between).
+	*/
 	for (uint32_t number = 0; number < target->reg_cache->num_regs; ++number) {
 		assert(target && target->reg_cache && target->reg_cache->reg_list && number < target->reg_cache->num_regs);
 		struct reg *const p_reg = &target->reg_cache->reg_list[number];

@@ -18,16 +18,16 @@ dump_field(struct scan_field const *const field)
 		return;
 
 	assert(field->out_value != NULL);
-	uint64_t const out = buf_get_u64(field->out_value, 0, field->num_bits);
-	unsigned const out_op = get_field(out, DTM_DMI_OP);
-	unsigned const out_data = get_field(out, DTM_DMI_DATA);
-	unsigned const out_address = out >> DTM_DMI_ADDRESS_OFFSET;
+	uint64_t const out_value = buf_get_u64(field->out_value, 0, field->num_bits);
+	unsigned const out_op = get_field(out_value, DTM_DMI_OP);
+	unsigned const out_data = get_field(out_value, DTM_DMI_DATA);
+	unsigned const out_address = out_value >> DTM_DMI_ADDRESS_OFFSET;
 
 	if (field->in_value) {
-		uint64_t const in = buf_get_u64(field->in_value, 0, field->num_bits);
-		unsigned const in_op = get_field(in, DTM_DMI_OP);
-		unsigned const in_data = get_field(in, DTM_DMI_DATA);
-		unsigned const in_address = in >> DTM_DMI_ADDRESS_OFFSET;
+		uint64_t const in_value = buf_get_u64(field->in_value, 0, field->num_bits);
+		unsigned const in_op = get_field(in_value, DTM_DMI_OP);
+		unsigned const in_data = get_field(in_value, DTM_DMI_DATA);
+		unsigned const in_address = in_value >> DTM_DMI_ADDRESS_OFFSET;
 
 		LOG_DEBUG("%db %s %08x @%02x -> %s %08x @%02x",
 			field->num_bits,
@@ -53,24 +53,25 @@ struct riscv_batch *
 		.last_scan = RISCV_SCAN_TYPE_INVALID,
 		.read_keys_used = 0,
 	};
-	struct riscv_batch *out = malloc(sizeof *out);
-	assert(out);
-	*out = templ;
+	struct riscv_batch *p_out = malloc(sizeof *p_out);
+	assert(p_out);
+	*p_out = templ;
 
-	out->data_out = malloc(scans * sizeof(uint64_t));
-	assert(out->data_out);
+	p_out->data_out = malloc(scans * sizeof(uint64_t));
+	assert(p_out->data_out);
 
-	out->data_in  = malloc(scans * sizeof(uint64_t));
-	assert(out->data_in);
+	p_out->data_in  = malloc(scans * sizeof(uint64_t));
+	assert(p_out->data_in);
 
-	out->fields = malloc(scans * sizeof *out->fields);
-	assert(out->fields);
+	p_out->fields = malloc(scans * sizeof *p_out->fields);
+	assert(p_out->fields);
 
-	out->read_keys = malloc(scans * sizeof *out->read_keys);
-	assert(out->read_keys);
+	p_out->read_keys = malloc(scans * sizeof *p_out->read_keys);
+	assert(p_out->read_keys);
 
-	return out;
+	return p_out;
 }
+
 void
 riscv_batch_free(struct riscv_batch *const batch)
 {

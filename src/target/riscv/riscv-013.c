@@ -316,22 +316,22 @@ dump_field(struct scan_field const *const field)
 		return;
 
 	assert(field);
-	uint64_t const out = buf_get_u64(field->out_value, 0, field->num_bits);
-	unsigned const out_op = get_field(out, DTM_DMI_OP);
-	unsigned const out_data = get_field(out, DTM_DMI_DATA);
-	unsigned const out_address = out >> DTM_DMI_ADDRESS_OFFSET;
+	uint64_t const out_value = buf_get_u64(field->out_value, 0, field->num_bits);
+	unsigned const out_op = get_field(out_value, DTM_DMI_OP);
+	unsigned const out_data = get_field(out_value, DTM_DMI_DATA);
+	unsigned const out_address = out_value >> DTM_DMI_ADDRESS_OFFSET;
 
-	uint64_t const in = buf_get_u64(field->in_value, 0, field->num_bits);
-	unsigned const in_op = get_field(in, DTM_DMI_OP);
-	unsigned const in_data = get_field(in, DTM_DMI_DATA);
-	unsigned const in_address = in >> DTM_DMI_ADDRESS_OFFSET;
+	uint64_t const in_value = buf_get_u64(field->in_value, 0, field->num_bits);
+	unsigned const in_op = get_field(in_value, DTM_DMI_OP);
+	unsigned const in_data = get_field(in_value, DTM_DMI_DATA);
+	unsigned const in_address = in_value >> DTM_DMI_ADDRESS_OFFSET;
 
 	log_printf_lf(LOG_LVL_DEBUG,
-			__FILE__, __LINE__, "scan",
-			"%db %s %08x @%02x -> %s %08x @%02x",
-			field->num_bits,
-			op_string[out_op], out_data, out_address,
-			status_string[in_op], in_data, in_address);
+		__FILE__, __LINE__, "scan",
+		"%db %s %08x @%02x -> %s %08x @%02x",
+		field->num_bits,
+		op_string[out_op], out_data, out_address,
+		status_string[in_op], in_data, in_address);
 
 	char out_text[DUMP_FIELD_BUFFER_SIZE];
 	decode_dmi(out_text, out_address, out_data);
@@ -373,17 +373,17 @@ dmi_scan(struct target *const target,
 	assert(info);
 	assert(info->abits != 0);
 
-	uint8_t out[8];
-	buf_set_u32(out, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH, op);
-	buf_set_u32(out, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH, data_out);
-	buf_set_u32(out, DTM_DMI_ADDRESS_OFFSET, info->abits, address_out);
+	uint8_t out_buffer[8];
+	buf_set_u32(out_buffer, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH, op);
+	buf_set_u32(out_buffer, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH, data_out);
+	buf_set_u32(out_buffer, DTM_DMI_ADDRESS_OFFSET, info->abits, address_out);
 
-	uint8_t in[8] = {0};
+	uint8_t in_buffer[8] = {0};
 	typedef struct scan_field scan_field_t;
 	scan_field_t const field = {
 		.num_bits = info->abits + DTM_DMI_OP_LENGTH + DTM_DMI_DATA_LENGTH,
-		.out_value = out,
-		.in_value = in
+		.out_value = out_buffer,
+		.in_value = in_buffer
 	};
 
 	/** @pre Assumed dbus is already selected. */
@@ -402,14 +402,14 @@ dmi_scan(struct target *const target,
 	}
 
 	if (data_in)
-		*data_in = buf_get_u32(in, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH);
+		*data_in = buf_get_u32(in_buffer, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH);
 
 	if (address_in)
-		*address_in = buf_get_u32(in, DTM_DMI_ADDRESS_OFFSET, info->abits);
+		*address_in = buf_get_u32(in_buffer, DTM_DMI_ADDRESS_OFFSET, info->abits);
 
 	dump_field(&field);
 
-	return buf_get_u32(in, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH);
+	return buf_get_u32(in_buffer, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH);
 }
 
 static void
@@ -429,7 +429,7 @@ select_dmi(struct target const *const target)
 
 static uint32_t
 dtmcontrol_scan(struct target *const target,
-	uint32_t const out)
+	uint32_t const out_value)
 {
 	assert(target);
 
@@ -439,13 +439,13 @@ dtmcontrol_scan(struct target *const target,
 	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
 
 	uint8_t out_buffer[4];
-	buf_set_u32(out_buffer, 0, 32, out);
-	uint8_t in_value[4];
+	buf_set_u32(out_buffer, 0, 32, out_value);
+	uint8_t in_buffer[4];
 	typedef struct scan_field scan_field_t;
 	scan_field_t const field = {
 		.num_bits = 32,
 		.out_value = out_buffer,
-		.in_value = in_value,
+		.in_value = in_buffer,
 	};
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
@@ -464,10 +464,10 @@ dtmcontrol_scan(struct target *const target,
 		}
 	}
 
-	uint32_t in = buf_get_u32(field.in_value, 0, 32);
-	LOG_DEBUG("%s: DTMCS: 0x%x -> 0x%x", target_name(target), out, in);
+	uint32_t const in_value = buf_get_u32(field.in_value, 0, 32);
+	LOG_DEBUG("%s: DTMCS: 0x%x -> 0x%x", target_name(target), out_value, in_value);
 
-	return in;
+	return in_value;
 }
 
 static void

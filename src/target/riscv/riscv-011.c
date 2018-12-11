@@ -74,6 +74,9 @@
 #define DTMCONTROL_ADDRBITS			(0xf<<4)
 #define DTMCONTROL_VERSION			(0xf)
 
+/**
+	@todo Move to common file
+*/
 #define DBUS						0x11
 #define DBUS_OP_START				0
 #define DBUS_OP_SIZE				2
@@ -363,17 +366,17 @@ dram_address(unsigned const index)
 
 static uint32_t
 dtmcontrol_scan(struct target *const target,
-	uint32_t const out)
+	uint32_t const out_value)
 {
 	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
 
-	uint8_t out_value[4];
-	buf_set_u32(out_value, 0, 32, out);
-	uint8_t in_value[4];
+	uint8_t out_buffer[4];
+	buf_set_u32(out_buffer, 0, 32, out_value);
+	uint8_t in_buffer[4];
 	struct scan_field const field = {
 		.num_bits = 32,
-		.out_value = out_value,
-		.in_value = in_value,
+		.out_value = out_buffer,
+		.in_value = in_buffer,
 	};
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
@@ -389,10 +392,10 @@ dtmcontrol_scan(struct target *const target,
 		return err;
 	}
 
-	uint32_t const in = buf_get_u32(field.in_value, 0, 32);
-	LOG_DEBUG("%s: DTMCONTROL: 0x%x -> 0x%x", target_name(target), out, in);
+	uint32_t const in_value = buf_get_u32(field.in_value, 0, 32);
+	LOG_DEBUG("%s: DTMCONTROL: 0x%x -> 0x%x", target_name(target), out_value, in_value);
 
-	return in;
+	return in_value;
 }
 
 static uint32_t
@@ -400,11 +403,11 @@ idcode_scan(struct target *const target)
 {
 	jtag_add_ir_scan(target->tap, &select_idcode, TAP_IDLE);
 
-	uint8_t in_value[4];
+	uint8_t in_buffer[4];
 	struct scan_field const field = {
 		.num_bits = 32,
 		.out_value = NULL,
-		.in_value = in_value,
+		.in_value = in_buffer,
 	};
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
@@ -419,10 +422,10 @@ idcode_scan(struct target *const target)
 	/* Always return to dbus. */
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
-	uint32_t const in = buf_get_u32(field.in_value, 0, 32);
-	LOG_DEBUG("%s: IDCODE: 0x0 -> 0x%x", target_name(target), in);
+	uint32_t const in_value = buf_get_u32(field.in_value, 0, 32);
+	LOG_DEBUG("%s: IDCODE: 0x0 -> 0x%x", target_name(target), in_value);
 
-	return in;
+	return in_value;
 }
 
 static void
@@ -489,18 +492,19 @@ dump_field(struct scan_field const *const field)
 	if (debug_level < LOG_LVL_DEBUG)
 		return;
 
-	uint64_t out = buf_get_u64(field->out_value, 0, field->num_bits);
-	unsigned out_op = (out >> DBUS_OP_START) & ((1 << DBUS_OP_SIZE) - 1);
-	char out_interrupt = ((out >> DBUS_DATA_START) & DMCONTROL_INTERRUPT) ? 'i' : '.';
-	char out_haltnot = ((out >> DBUS_DATA_START) & DMCONTROL_HALTNOT) ? 'h' : '.';
-	unsigned out_data = out >> 2;
-	unsigned out_address = out >> DBUS_ADDRESS_START;
-	uint64_t in = buf_get_u64(field->in_value, 0, field->num_bits);
-	unsigned in_op = (in >> DBUS_OP_START) & ((1 << DBUS_OP_SIZE) - 1);
-	char in_interrupt = ((in >> DBUS_DATA_START) & DMCONTROL_INTERRUPT) ? 'i' : '.';
-	char in_haltnot = ((in >> DBUS_DATA_START) & DMCONTROL_HALTNOT) ? 'h' : '.';
-	unsigned in_data = in >> 2;
-	unsigned in_address = in >> DBUS_ADDRESS_START;
+	assert(field);
+	uint64_t const out_value = buf_get_u64(field->out_value, 0, field->num_bits);
+	unsigned const out_op = (out_value >> DBUS_OP_START) & ((1 << DBUS_OP_SIZE) - 1);
+	char const out_interrupt = ((out_value >> DBUS_DATA_START) & DMCONTROL_INTERRUPT) ? 'i' : '.';
+	char const out_haltnot = ((out_value >> DBUS_DATA_START) & DMCONTROL_HALTNOT) ? 'h' : '.';
+	unsigned const out_data = out_value >> 2;
+	unsigned const out_address = out_value >> DBUS_ADDRESS_START;
+	uint64_t const in_value = buf_get_u64(field->in_value, 0, field->num_bits);
+	unsigned const in_op = (in_value >> DBUS_OP_START) & ((1 << DBUS_OP_SIZE) - 1);
+	char const in_interrupt = ((in_value >> DBUS_DATA_START) & DMCONTROL_INTERRUPT) ? 'i' : '.';
+	char const in_haltnot = ((in_value >> DBUS_DATA_START) & DMCONTROL_HALTNOT) ? 'h' : '.';
+	unsigned const in_data = in_value >> 2;
+	unsigned const in_address = in_value >> DBUS_ADDRESS_START;
 
 	log_printf_lf(LOG_LVL_DEBUG,
 			__FILE__, __LINE__, "scan",
@@ -524,17 +528,17 @@ dbus_scan(struct target *const target,
 	assert(info);
 	assert(info->addrbits != 0);
 
-	uint8_t out[8];
-	uint8_t in[8] = {0};
+	uint8_t out_buffer[8];
+	uint8_t in_buffer[8] = {0};
 	struct scan_field field = {
 		.num_bits = info->addrbits + DBUS_OP_SIZE + DBUS_DATA_SIZE,
-		.out_value = out,
-		.in_value = in
+		.out_value = out_buffer,
+		.in_value = in_buffer
 	};
 
-	buf_set_u64(out, DBUS_OP_START, DBUS_OP_SIZE, op);
-	buf_set_u64(out, DBUS_DATA_START, DBUS_DATA_SIZE, data_out);
-	buf_set_u64(out, DBUS_ADDRESS_START, info->addrbits, address_out);
+	buf_set_u64(out_buffer, DBUS_OP_START, DBUS_OP_SIZE, op);
+	buf_set_u64(out_buffer, DBUS_DATA_START, DBUS_DATA_SIZE, data_out);
+	buf_set_u64(out_buffer, DBUS_ADDRESS_START, info->addrbits, address_out);
 
 	/* Assume dbus is already selected. */
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
@@ -555,14 +559,14 @@ dbus_scan(struct target *const target,
 	}
 
 	if (data_in)
-		*data_in = buf_get_u64(in, DBUS_DATA_START, DBUS_DATA_SIZE);
+		*data_in = buf_get_u64(in_buffer, DBUS_DATA_START, DBUS_DATA_SIZE);
 
 	if (address_in)
-		*address_in = buf_get_u32(in, DBUS_ADDRESS_START, info->addrbits);
+		*address_in = buf_get_u32(in_buffer, DBUS_ADDRESS_START, info->addrbits);
 
 	dump_field(&field);
 
-	return buf_get_u32(in, DBUS_OP_START, DBUS_OP_SIZE);
+	return buf_get_u32(in_buffer, DBUS_OP_START, DBUS_OP_SIZE);
 }
 
 static uint64_t

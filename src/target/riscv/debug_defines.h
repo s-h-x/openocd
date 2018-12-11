@@ -854,6 +854,8 @@ When set, enable this trigger for exceptions that are taken from U mode.
 
 /** @name CSR_ETRIGGER_ACTION
 
+	@bug TeX markup
+
 The action to take when the trigger fires. The values are explained
 in Table~\ref{tab:action}.
 */
