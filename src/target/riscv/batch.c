@@ -5,11 +5,8 @@
 
 #include "jtag/jtag.h"
 
-#define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
-#define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
-
 static void
-dump_field(struct scan_field const *const field)
+riscv_batch_dump_field(struct scan_field const *const field)
 {
 	static const char *const op_string[] = {"-", "r", "w", "?"};
 	static const char *const status_string[] = {"+", "?", "F", "b"};
@@ -17,6 +14,7 @@ dump_field(struct scan_field const *const field)
 	if (debug_level < LOG_LVL_DEBUG)
 		return;
 
+	assert(field);
 	assert(field->out_value != NULL);
 	uint64_t const out_value = buf_get_u64(field->out_value, 0, field->num_bits);
 	unsigned const out_op = get_field(out_value, DTM_DMI_OP);
@@ -223,7 +221,7 @@ riscv_batch_run(struct riscv_batch *batch)
 	}
 
 	for (size_t i = 0; i < batch->used_scans; ++i)
-		dump_field(batch->fields + i);
+		riscv_batch_dump_field(batch->fields + i);
 
 	return ERROR_OK;
 }

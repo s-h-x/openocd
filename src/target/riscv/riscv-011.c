@@ -54,9 +54,6 @@
  * to the target. Afterwards use cache_get... to read results.
  */
 
-#define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
-#define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
-
 #define CACHE_NO_READ	128
 
 #define DEBUG_ROM_START		0x800
@@ -484,7 +481,7 @@ add_dbus_scan(struct target const *const target,
 }
 
 static void
-dump_field(struct scan_field const *const field)
+riscv_011_dump_field(struct scan_field const *const field)
 {
 	static const char *const op_string[] = {"nop", "r", "w", "?"};
 	static const char *const status_string[] = {"+", "?", "F", "b"};
@@ -493,12 +490,15 @@ dump_field(struct scan_field const *const field)
 		return;
 
 	assert(field);
+	assert(field->out_value);
 	uint64_t const out_value = buf_get_u64(field->out_value, 0, field->num_bits);
 	unsigned const out_op = (out_value >> DBUS_OP_START) & ((1 << DBUS_OP_SIZE) - 1);
 	char const out_interrupt = ((out_value >> DBUS_DATA_START) & DMCONTROL_INTERRUPT) ? 'i' : '.';
 	char const out_haltnot = ((out_value >> DBUS_DATA_START) & DMCONTROL_HALTNOT) ? 'h' : '.';
 	unsigned const out_data = out_value >> 2;
 	unsigned const out_address = out_value >> DBUS_ADDRESS_START;
+
+	assert(field->in_value);
 	uint64_t const in_value = buf_get_u64(field->in_value, 0, field->num_bits);
 	unsigned const in_op = (in_value >> DBUS_OP_START) & ((1 << DBUS_OP_SIZE) - 1);
 	char const in_interrupt = ((in_value >> DBUS_DATA_START) & DMCONTROL_INTERRUPT) ? 'i' : '.';
@@ -506,9 +506,7 @@ dump_field(struct scan_field const *const field)
 	unsigned const in_data = in_value >> 2;
 	unsigned const in_address = in_value >> DBUS_ADDRESS_START;
 
-	log_printf_lf(LOG_LVL_DEBUG,
-			__FILE__, __LINE__, "scan",
-			"%db %s %c%c:%08x @%02x -> %s %c%c:%08x @%02x",
+	LOG_DEBUG("%db %s %c%c:%08x @%02x -> %s %c%c:%08x @%02x",
 			field->num_bits,
 			op_string[out_op], out_interrupt, out_haltnot, out_data,
 			out_address,
@@ -564,7 +562,7 @@ dbus_scan(struct target *const target,
 	if (address_in)
 		*address_in = buf_get_u32(in_buffer, DBUS_ADDRESS_START, info->addrbits);
 
-	dump_field(&field);
+	riscv_011_dump_field(&field);
 
 	return buf_get_u32(in_buffer, DBUS_OP_START, DBUS_OP_SIZE);
 }
@@ -655,7 +653,7 @@ static void scans_reset(scans_t *scans)
 static void scans_dump(scans_t *scans)
 {
 	for (unsigned i = 0; i < scans->next_scan; ++i)
-		dump_field(&scans->field[i]);
+		riscv_011_dump_field(&scans->field[i]);
 }
 
 static int scans_execute(scans_t *scans)

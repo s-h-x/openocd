@@ -6,9 +6,14 @@
 #include "target/target.h"
 #include "helper/log.h"
 
-/**
-@todo Move to common separate header file
+/** @name Bit fields access macros
 */
+/**@{*/
+#define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
+#define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
+/**@}*/
+
+/** Static array dimensions macro */
 #define DIM(x) (sizeof (x) / sizeof (x)[0])
 
 /* The register cache is statically allocated. */

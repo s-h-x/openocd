@@ -54,14 +54,6 @@
 	to the target. Afterwards use cache_get... to read results.
  */
 
-/**
-@todo Move to common separate file
-*/
-/**@{*/
-#define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
-#define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
-/**@}*/
-
 /** JTAG registers. */
 /**@{*/
 #define DTMCONTROL					0x10

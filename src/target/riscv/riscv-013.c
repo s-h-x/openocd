@@ -27,14 +27,6 @@
 #define DMI_DATA1 (DMI_DATA0 + 1)
 #define DMI_PROGBUF1 (DMI_PROGBUF0 + 1)
 
-/**
-@todo Move to separate common header file
-*/
-/**@{*/
-#define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
-#define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
-/**@}*/
-
 #define CSR_DCSR_CAUSE_SWBP		1
 #define CSR_DCSR_CAUSE_TRIGGER	2
 #define CSR_DCSR_CAUSE_DEBUGINT	3
@@ -268,8 +260,8 @@ static struct descr const description[] = {
 
 static void
 decode_dmi(char buffer[DUMP_FIELD_BUFFER_SIZE]/**<[out]*/,
-	unsigned const address,
-	unsigned const data)
+	unsigned const address/**<[in]*/,
+	unsigned const data/**<[in]*/)
 {
 	char *p_text = buffer;
 	*p_text = '\0';
@@ -307,7 +299,7 @@ decode_dmi(char buffer[DUMP_FIELD_BUFFER_SIZE]/**<[out]*/,
 }
 
 static void
-dump_field(struct scan_field const *const field)
+riscv_013_dump_field(struct scan_field const *const field)
 {
 	static char const *const op_string[] = {"-", "r", "w", "?"};
 	static char const *const status_string[] = {"+", "?", "F", "b"};
@@ -407,7 +399,7 @@ dmi_scan(struct target *const target,
 	if (address_in)
 		*address_in = buf_get_u32(in_buffer, DTM_DMI_ADDRESS_OFFSET, info->abits);
 
-	dump_field(&field);
+	riscv_013_dump_field(&field);
 
 	return buf_get_u32(in_buffer, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH);
 }
@@ -667,11 +659,11 @@ set_hartsel(uint32_t initial,
 
 /** @return error code */
 static int
-dmi_op(struct target *const target,
+dmi_op(struct target *const target/**<[in]*/,
 	uint32_t *const data_in/**<[out]*/,
-	int const dmi_oper,
-	uint32_t const address,
-	uint32_t const data_out)
+	int const dmi_oper/**<[in]*/,
+	uint32_t const address/**<[in]*/,
+	uint32_t const data_out/**<[in]*/)
 {
 	int const result =
 		dmi_op_timeout(target, data_in, dmi_oper, address, data_out, riscv_command_timeout_sec);
@@ -905,10 +897,10 @@ write_abstract_arg(struct target *const target,
 }
 
 static uint32_t
-access_register_command(struct target *const target,
-	uint32_t const number,
+access_register_command(struct target *const target/**<[inout]*/,
+	uint32_t const number/**<[in]*/,
 	unsigned const size/**<[in] in bits*/,
-	uint32_t const flags)
+	uint32_t const flags/**<[in]*/)
 {
 	uint32_t command = set_field(0, DMI_COMMAND_CMDTYPE, 0);
 
