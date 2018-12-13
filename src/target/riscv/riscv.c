@@ -121,7 +121,7 @@ uint32_instruction_scan(struct jtag_tap *const tap,
 	uint8_t const instruction,
 	char const *const instruction_name,
 	uint32_t const out_value,
-	uint32_t in_value[1])
+	uint32_t *const p_in_value)
 {
 	typedef struct scan_field scan_field_t;
 	uint8_t out_buffer[sizeof(uint32_t)] = {};
@@ -129,7 +129,7 @@ uint32_instruction_scan(struct jtag_tap *const tap,
 	scan_field_t const field = {
 		.num_bits = CHAR_BIT * sizeof(uint32_t),
 		.out_value = out_buffer,
-		.in_value = in_buffer,
+		.in_value = p_in_value ? in_buffer : NULL,
 	};
 
 	select_instruction(tap, &instruction);
@@ -145,24 +145,26 @@ uint32_instruction_scan(struct jtag_tap *const tap,
 	int const error_code = jtag_execute_queue();
 
 	if (ERROR_OK != error_code) {
-		LOG_ERROR("%s: failed jtag scan: %d",
+		LOG_ERROR("%s: jtag IR/DR scan failed: %d",
 			jtag_tap_name(tap), error_code);
-	} else {
-		in_value[0] = buf_get_u32(field.in_value, 0, CHAR_BIT * sizeof(uint32_t));
+	} else if (p_in_value) {
+		*p_in_value = buf_get_u32(field.in_value, 0, CHAR_BIT * sizeof(uint32_t));
 		LOG_DEBUG("%s: %s: 0x%" PRIx32 " -> 0x%" PRIx32,
-			jtag_tap_name(tap), instruction_name, out_value, in_value[0]);
+			jtag_tap_name(tap), instruction_name, out_value, *p_in_value);
+	} else {
+		LOG_DEBUG("%s: %s: 0x%" PRIx32,
+			jtag_tap_name(tap), instruction_name, out_value);
 	}
 
 	return error_code;
 }
 
-uint32_t
+int
 dtmcontrol_scan(struct jtag_tap *const tap,
-	uint32_t const out_value)
+	uint32_t const out_value,
+	uint32_t *const p_in_value)
 {
-	uint32_t in_value = 0xBADC0DE;
-	uint32_instruction_scan(tap, DTM_DTMCS, "DTMCONTROL", out_value, &in_value);
-	return in_value;
+	return uint32_instruction_scan(tap, DTM_DTMCS, "DTMCONTROL", out_value, p_in_value);
 }
 
 uint32_t
@@ -971,7 +973,17 @@ riscv_examine(struct target *const target)
 	}
 
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
-	uint32_t const dtmcontrol = dtmcontrol_scan(target->tap, 0);
+	uint32_t dtmcontrol;
+	{
+		int const error_code = dtmcontrol_scan(target->tap, 0, &dtmcontrol);
+
+		if (ERROR_OK != error_code) {
+			LOG_ERROR("%s: fatal: examine failure, JTAG/TAP error",
+				target_name(target));
+			return error_code;
+		}
+	}
+
 	LOG_DEBUG("%s: dtmcontrol=0x%x", target_name(target), dtmcontrol);
 	struct riscv_info_t *const info = target->arch_info;
 	info->dtm_version = get_field(dtmcontrol, DTMCONTROL_VERSION);
@@ -989,6 +1001,7 @@ riscv_examine(struct target *const target)
 			return error_code;
 	}
 
+	assert(tt->examine);
 	return tt->examine(target);
 }
 
@@ -997,6 +1010,7 @@ static int
 oldriscv_poll(struct target *const target)
 {
 	struct target_type const *const tt = get_target_type(target);
+	assert(tt && tt->poll);
 	return tt->poll(target);
 }
 

@@ -217,7 +217,8 @@ riscv_batch_run(struct riscv_batch *batch)
 		int const error_code = jtag_execute_queue();
 
 		if (ERROR_OK != error_code) {
-			LOG_ERROR("%s: Unable to execute JTAG queue", target_name(batch->target));
+			LOG_ERROR("%s: execute JTAG queue error: %d",
+				jtag_tap_name(batch->target->tap), error_code);
 			return error_code;
 		}
 	}

@@ -404,22 +404,19 @@ dmi_scan(struct target *const target,
 	return buf_get_u32(in_buffer, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH);
 }
 
-static void
+static int
 increase_dmi_busy_delay(struct target *const target)
 {
 	riscv_013_info_t *const info = get_info(target);
 	assert(info);
 	info->dmi_busy_delay += info->dmi_busy_delay / 10 + 1;
-	LOG_DEBUG("%s: dtmcontrol_idle=%d, dmi_busy_delay=%d, ac_busy_delay=%d",
+	LOG_DEBUG("%s: dtmcontrol_idle=%u, dmi_busy_delay=%u, ac_busy_delay=%u",
 		target_name(target),
 		info->dtmcontrol_idle,
 		info->dmi_busy_delay,
 		info->ac_busy_delay);
 
-	/**
-	@todo process errors
-	*/
-	(void)(dtmcontrol_scan(target->tap, DTM_DTMCS_DMIRESET));
+	return dtmcontrol_scan(target->tap, DTM_DTMCS_DMIRESET, NULL);
 }
 
 /** @return error code */
@@ -4725,22 +4722,39 @@ riscv_013_examine(struct target *const target)
 {
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 
-	uint32_t const dtmcontrol = dtmcontrol_scan(target->tap, 0);
+	uint32_t dtmcontrol;
+	{
+		int const error_code = dtmcontrol_scan(target->tap, 0, &dtmcontrol);
+
+		if (ERROR_OK != error_code) {
+			LOG_ERROR("%s: fatal: examine failure, JTAG/TAP error",
+				target_name(target));
+			return error_code;
+		}
+	}
 
 	assert(target);
-	LOG_DEBUG("%s: dtmcontrol=0x%x", target_name(target), dtmcontrol);
-	LOG_DEBUG("%s:  dmireset=%d", target_name(target), get_field(dtmcontrol, DTM_DTMCS_DMIRESET));
-	LOG_DEBUG("%s:  idle=%d", target_name(target), get_field(dtmcontrol, DTM_DTMCS_IDLE));
-	LOG_DEBUG("%s:  dmistat=%d", target_name(target), get_field(dtmcontrol, DTM_DTMCS_DMISTAT));
-	LOG_DEBUG("%s:  abits=%d", target_name(target), get_field(dtmcontrol, DTM_DTMCS_ABITS));
-	LOG_DEBUG("%s:  version=%d", target_name(target), get_field(dtmcontrol, DTM_DTMCS_VERSION));
+	LOG_DEBUG("%s: dtmcontrol=0x%" PRIx32 " ("
+		"dmireset=%" PRId32
+		" idle=%" PRId32 
+		" dmistat=%" PRId32
+		" abits = %" PRId32
+		" version=%" PRId32
+		")",
+		target_name(target),
+		dtmcontrol,
+		get_field(dtmcontrol, DTM_DTMCS_DMIRESET),
+		get_field(dtmcontrol, DTM_DTMCS_IDLE),
+		get_field(dtmcontrol, DTM_DTMCS_DMISTAT),
+		get_field(dtmcontrol, DTM_DTMCS_ABITS),
+		get_field(dtmcontrol, DTM_DTMCS_VERSION));
 
 	if (dtmcontrol == 0) {
 		LOG_ERROR("%s: dtmcontrol is 0. Check JTAG connectivity/board power.", target_name(target));
 		return ERROR_TARGET_FAILURE;
 	}
 
-	if (get_field(dtmcontrol, DTM_DTMCS_VERSION) != 1) {
+	if (1 != get_field(dtmcontrol, DTM_DTMCS_VERSION)) {
 		LOG_ERROR("%s: Unsupported DTM version %" PRId32 " (dtmcontrol=0x%" PRIx32 ")",
 			target_name(target), get_field(dtmcontrol, DTM_DTMCS_VERSION), dtmcontrol);
 		return ERROR_TARGET_INVALID;

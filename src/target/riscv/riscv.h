@@ -315,9 +315,10 @@ select_dmi(struct jtag_tap *const tap);
 uint32_t
 idcode_scan(struct jtag_tap *const tap);
 
-uint32_t
+int
 dtmcontrol_scan(struct jtag_tap *const tap,
-	uint32_t const out_value);
+	uint32_t const out_value,
+	uint32_t *const p_in_value);
 /**@}*/
 
 /** Everything needs the RISC-V specific info structure, so here's a nice macro that provides that. */
@@ -454,7 +455,8 @@ static inline void
 riscv_set_rtos_hartid(struct target *const target,
 	int const hartid)
 {
-	LOG_DEBUG("%s: setting RTOS hartid %d", target_name(target), hartid);
+	LOG_DEBUG("%s: setting RTOS hartid %d",
+		target_name(target), hartid);
 	struct riscv_info_t *const rvi = riscv_info(target);
 	assert(rvi);
 	rvi->rtos_hartid = hartid;
