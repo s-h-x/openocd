@@ -72,8 +72,10 @@ riscv_batch_add_dmi_write(struct riscv_batch *batch,
 	the second one actually obtains the value of that read.
 */
 /**@{*/
-size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address);
-uint64_t riscv_batch_get_dmi_read(struct riscv_batch const *batch, size_t key);
+size_t
+riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address);
+uint64_t
+riscv_batch_get_dmi_read(struct riscv_batch const *batch, size_t key);
 /**@}*/
 
 #endif  /* TARGET_RISCV_SCANS_H_ */
