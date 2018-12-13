@@ -312,9 +312,11 @@ extern bool riscv_prefer_sba;
 */
 /**@{*/
 extern struct scan_field select_dtmcontrol;
-extern struct scan_field select_dbus;
 extern struct scan_field select_idcode;
 /**@}*/
+
+void
+select_dmi(struct jtag_tap *const tap);
 
 /** Everything needs the RISC-V specific info structure, so here's a nice macro that provides that. */
 static inline struct riscv_info_t *

@@ -365,12 +365,18 @@ static uint32_t
 dtmcontrol_scan(struct target *const target,
 	uint32_t const out_value)
 {
+	assert(target);
+
+	/**
+		@bug @c select_dtmcontrol is global non-const variable
+	*/
 	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
 
 	uint8_t out_buffer[4];
 	buf_set_u32(out_buffer, 0, 32, out_value);
 	uint8_t in_buffer[4];
-	struct scan_field const field = {
+	typedef struct scan_field scan_field_t;
+	scan_field_t const field = {
 		.num_bits = 32,
 		.out_value = out_buffer,
 		.in_value = in_buffer,
@@ -378,19 +384,24 @@ dtmcontrol_scan(struct target *const target,
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
 	/* Always return to dbus. */
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	select_dmi(target->tap);
 
-	int const err = jtag_execute_queue();
+	{
+		int const err = jtag_execute_queue();
 
-	if (ERROR_OK != err) {
-		LOG_ERROR("%s: failed jtag scan: %d",
-			target_name(target),
-			err);
-		return err;
+		if (ERROR_OK != err) {
+			LOG_ERROR("%s: failed jtag scan: %d",
+				target_name(target), err);
+			/**
+				@todo process errors
+			*/
+			return 0xBADC0DE;
+		}
 	}
 
-	uint32_t const in_value = buf_get_u32(field.in_value, 0, 32);
-	LOG_DEBUG("%s: DTMCONTROL: 0x%x -> 0x%x", target_name(target), out_value, in_value);
+	uint32_t const in_value = buf_get_u32(field.in_value, 0, CHAR_BIT * sizeof(uint32_t));
+	LOG_DEBUG("%s: DTMCONTROL: 0x%x -> 0x%x",
+		target_name(target), out_value, in_value);
 
 	return in_value;
 }
@@ -417,7 +428,7 @@ idcode_scan(struct target *const target)
 	}
 
 	/* Always return to dbus. */
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	select_dmi(target->tap);
 
 	uint32_t const in_value = buf_get_u32(field.in_value, 0, 32);
 	LOG_DEBUG("%s: IDCODE: 0x0 -> 0x%x", target_name(target), in_value);
@@ -1558,7 +1569,7 @@ riscv_011_set_register(struct target *const target, int hartid, int regid, uint6
 static int riscv_011_halt(struct target *const target)
 {
 	LOG_DEBUG("%s: riscv_halt()", target_name(target));
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	select_dmi(target->tap);
 
 	cache_set32(target, 0, csrsi(CSR_DCSR, DCSR_HALT));
 	cache_set32(target, 1, csrr(S0, CSR_MHARTID));
@@ -2130,7 +2141,7 @@ static int handle_halt(struct target *const target, bool const announce)
 
 static int poll_target(struct target *const target, bool announce)
 {
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	select_dmi(target->tap);
 
 	/* Inhibit debug logging during poll(), which isn't usually interesting and
 	 * just fills up the screen/logs with clutter. */
@@ -2219,7 +2230,7 @@ riscv_011_step(struct target *const target,
 	target_addr_t const address,
 	int const handle_breakpoints)
 {
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	select_dmi(target->tap);
 
 	if (!current) {
 		if (riscv_xlen(target) > 32) {
@@ -2256,7 +2267,7 @@ static int riscv_011_resume(struct target *const target, int current,
 {
 	riscv_011_info_t *info = get_info(target);
 
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	select_dmi(target->tap);
 
 	if (!current) {
 		if (riscv_xlen(target) > 32) {
@@ -2284,7 +2295,7 @@ static int riscv_011_assert_reset(struct target *const target)
 	/**
 	@todo Maybe what I implemented here is more like soft_reset_halt()?
 	*/
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	select_dmi(target->tap);
 
 	{
 		/* The only assumption we can make is that the TAP was reset. */
@@ -2317,19 +2328,21 @@ static int riscv_011_assert_reset(struct target *const target)
 	return ERROR_OK;
 }
 
-static int riscv_011_deassert_reset(struct target *const target)
+static int
+riscv_011_deassert_reset(struct target *const target)
 {
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
-	if (target->reset_halt)
-		return wait_for_state(target, TARGET_HALTED);
-	else
-		return wait_for_state(target, TARGET_RUNNING);
+	select_dmi(target->tap);
+	return wait_for_state(target, target->reset_halt ? TARGET_HALTED : TARGET_RUNNING);
 }
 
-static int riscv_011_read_memory(struct target *const target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
+static int
+riscv_011_read_memory(struct target *const target,
+	target_addr_t const address,
+	uint32_t const size,
+	uint32_t const count,
+	uint8_t *const buffer)
 {
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	select_dmi(target->tap);
 
 	cache_set32(target, 0, lw(S0, ZERO, DEBUG_RAM_START + 16));
 
@@ -2529,7 +2542,7 @@ riscv_011_write_memory(struct target *const target,
 	uint8_t const *const buffer)
 {
 	riscv_011_info_t *info = get_info(target);
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	select_dmi(target->tap);
 
 	/* Set up the address. */
 	cache_set_store(target, 0, T0, SLOT1);

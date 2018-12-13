@@ -167,7 +167,7 @@ struct riscv_013_info_s {
 	(Compare with errno.) */
 	uint8_t cmderr;
 
-	/** Some fields from hartinfo. */
+	/** @name Some fields from hartinfo. */
 	/**@{*/
 	uint8_t datasize;
 	uint8_t dataaccess;
@@ -404,21 +404,6 @@ dmi_scan(struct target *const target,
 	return buf_get_u32(in_buffer, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH);
 }
 
-static void
-select_dmi(struct target const *const target)
-{
-	static uint8_t const ir_dmi[1] = {DTM_DMI};
-	assert(target && target->tap);
-	typedef struct scan_field scan_field_t;
-	/** @warning field should not be const! */
-	scan_field_t field = {
-		.num_bits = target->tap->ir_length,
-		.out_value = ir_dmi,
-	};
-
-	jtag_add_ir_scan(target->tap, &field, TAP_IDLE);
-}
-
 static uint32_t
 dtmcontrol_scan(struct target *const target,
 	uint32_t const out_value)
@@ -426,38 +411,40 @@ dtmcontrol_scan(struct target *const target,
 	assert(target);
 
 	/**
-	@bug @c select_dtmcontrol is global non-const variable
+		@bug @c select_dtmcontrol is global non-const variable
 	*/
 	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
 
 	uint8_t out_buffer[4];
-	buf_set_u32(out_buffer, 0, 32, out_value);
-	uint8_t in_buffer[4];
+	buf_set_u32(out_buffer, 0, CHAR_BIT * sizeof(uint32_t), out_value);
+	uint8_t in_buffer[sizeof(uint32_t)] = {};
 	typedef struct scan_field scan_field_t;
 	scan_field_t const field = {
-		.num_bits = 32,
+		.num_bits = CHAR_BIT * sizeof(uint32_t),
 		.out_value = out_buffer,
 		.in_value = in_buffer,
 	};
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
 	/* Always return to dmi. */
-	select_dmi(target);
+	select_dmi(target->tap);
 
 	{
 		int const err = jtag_execute_queue();
 
 		if (ERROR_OK != err) {
-			LOG_ERROR("%s: failed jtag scan: %d", target_name(target), err);
+			LOG_ERROR("%s: failed jtag scan: %d",
+				target_name(target), err);
 			/**
-			@todo process errors
+				@todo process errors
 			*/
 			return 0xBADC0DE;
 		}
 	}
 
-	uint32_t const in_value = buf_get_u32(field.in_value, 0, 32);
-	LOG_DEBUG("%s: DTMCS: 0x%x -> 0x%x", target_name(target), out_value, in_value);
+	uint32_t const in_value = buf_get_u32(field.in_value, 0, CHAR_BIT * sizeof(uint32_t));
+	LOG_DEBUG("%s: DTMCS: 0x%x -> 0x%x",
+		target_name(target), out_value, in_value);
 
 	return in_value;
 }
@@ -490,7 +477,7 @@ dmi_op_timeout(struct target *const target,
 	uint32_t const data_out,
 	int const timeout_sec)
 {
-	select_dmi(target);
+	select_dmi(target->tap);
 
 	uint32_t address_in;
 
@@ -1771,7 +1758,7 @@ riscv_013_authdata_read(struct target *const target,
 static int
 riscv_013_assert_reset(struct target *const target)
 {
-	select_dmi(target);
+	select_dmi(target->tap);
 
 	uint32_t const control_base = set_field(0, DMI_DMCONTROL_DMACTIVE, 1);
 	assert(target);
@@ -1836,7 +1823,7 @@ static int
 riscv_013_deassert_reset(struct target *const target)
 {
 	riscv_013_info_t *const info = get_info(target);
-	select_dmi(target);
+	select_dmi(target->tap);
 
 	/* Clear the reset, but make sure haltreq is still set */
 	uint32_t control = 
@@ -2464,7 +2451,7 @@ read_memory_progbuf(struct target *const target,
 	LOG_DEBUG("%s: reading %d words of %d bytes from 0x%" TARGET_PRIxADDR,
 		target_name(target), count, size, address);
 
-	select_dmi(target);
+	select_dmi(target->tap);
 
 	/*	s0 holds the next address to write to
 		s1 holds the next data value to write
@@ -3022,7 +3009,7 @@ write_memory_progbuf(struct target *const target,
 	LOG_DEBUG("%s: writing %d words of %d bytes to 0x%08" TARGET_PRIxADDR,
 		target_name(target), count, size, address);
 
-	select_dmi(target);
+	select_dmi(target->tap);
 
 	/* s0 holds the next address to write to */
 	uint64_t s0;

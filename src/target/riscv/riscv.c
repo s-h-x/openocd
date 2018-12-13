@@ -1,5 +1,6 @@
 ﻿#include "riscv.h"
 #include "opcodes.h"
+#include "debug_defines.h"
 
 #include "target/algorithm.h"
 #include "target/target_type.h"
@@ -52,19 +53,15 @@
 	cache_set... update a local structure, which is then synced to the target
 	with cache_write(). Only Debug RAM words that are actually changed are sent
 	to the target. Afterwards use cache_get... to read results.
- */
-
-/** JTAG registers. */
-/**@{*/
-#define DTMCONTROL					0x10
-#define DTMCONTROL_VERSION			(0xf)
-/**
-	@todo Move to common file
 */
-#define DBUS						0x11
+
+/** @name JTAG registers. */
+/**@{*/
+#define DTMCONTROL					(0x10)
+#define DTMCONTROL_VERSION			(0xF)
 /**@}*/
 
-/** External handlers
+/** @name External handlers
 
 	@todo place in header
 */
@@ -82,19 +79,14 @@ struct range_s {
 typedef struct range_s range_t;
 
 static uint8_t const ir_dtmcontrol[1] = {DTMCONTROL};
-static uint8_t const ir_dbus[1] = {DBUS};
 static uint8_t const ir_idcode[1] = {0x1};
 
-/**
-@bug Global non-const variable
+/** @name IR scan fields
+	@bug Global non-const variable
 */
 /**@{*/
 struct scan_field select_dtmcontrol = {
 	.out_value = ir_dtmcontrol
-};
-
-struct scan_field select_dbus = {
-	.out_value = ir_dbus
 };
 
 struct scan_field select_idcode = {
@@ -120,6 +112,20 @@ range_t *expose_csr = NULL;
 /** In addition to the ones in the standard spec, we'll also expose additional custom registers. */
 range_t *expose_custom = NULL;
 
+void
+select_dmi(struct jtag_tap *const tap)
+{
+	static uint8_t const ir_dmi[1] = {DTM_DMI};
+	assert(tap);
+	typedef struct scan_field scan_field_t;
+	scan_field_t const field = {
+		.num_bits = tap->ir_length,
+		.out_value = ir_dmi,
+	};
+
+	jtag_add_ir_scan(tap, &field, TAP_IDLE);
+}
+
 static uint32_t
 dtmcontrol_scan(struct target *const target,
 	uint32_t const value)
@@ -128,11 +134,11 @@ dtmcontrol_scan(struct target *const target,
 	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
 
 	uint8_t out_buffer[4];
-	buf_set_u32(out_buffer, 0, 32, value);
-	uint8_t in_buffer[4];
+	buf_set_u32(out_buffer, 0, CHAR_BIT * sizeof(uint32_t), value);
+	uint8_t in_buffer[sizeof(uint32_t)] = {};
 	typedef struct scan_field scan_field_t;
 	scan_field_t const field = {
-		.num_bits = 32,
+		.num_bits = CHAR_BIT * sizeof(uint32_t),
 		.out_value = out_buffer,
 		.in_value = in_buffer,
 	};
@@ -142,7 +148,7 @@ dtmcontrol_scan(struct target *const target,
 	/**
 		@bug Non robust strategy
 	*/
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	select_dmi(target->tap);
 
 	{
 		int const err = jtag_execute_queue();
@@ -249,7 +255,6 @@ riscv_init_target(struct command_context *const cmd_ctx,
 	@bug Here is bug if there are some TAPs with different ir_length
 	*/
 	select_dtmcontrol.num_bits = target->tap->ir_length;
-	select_dbus.num_bits = target->tap->ir_length;
 	select_idcode.num_bits = target->tap->ir_length;
 
 	riscv_semihosting_init(target);
