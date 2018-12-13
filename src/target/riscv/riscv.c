@@ -116,25 +116,13 @@ select_dmi(struct jtag_tap *const tap)
 	select_instruction(tap, instruction_buffer);
 }
 
-void
-select_dtmcontrol(struct jtag_tap *const tap)
-{
-	static uint8_t const instruction_buffer[1] = {DTM_DTMCS};
-	select_instruction(tap, instruction_buffer);
-}
-
-void
-select_idcode(struct jtag_tap *const tap)
-{
-	static uint8_t const instruction_buffer[1] = {DTM_IDCODE};
-	select_instruction(tap, instruction_buffer);
-}
-
-uint32_t
-dtmcontrol_scan(struct jtag_tap *const tap,
+static uint32_t
+uint32_instruction_scan(struct jtag_tap *const tap,
+	uint8_t const instruction,
+	char const *const instruction_name,
 	uint32_t const out_value)
 {
-	select_dtmcontrol(tap);
+	select_instruction(tap, &instruction);
 
 	uint8_t out_buffer[sizeof(uint32_t)];
 	buf_set_u32(out_buffer, 0, CHAR_BIT * sizeof(uint32_t), out_value);
@@ -149,7 +137,7 @@ dtmcontrol_scan(struct jtag_tap *const tap,
 
 	/** Always return to @c dmi.
 
-		@bug Non robust strategy
+	@bug Non robust strategy
 	*/
 	select_dmi(tap);
 
@@ -160,18 +148,31 @@ dtmcontrol_scan(struct jtag_tap *const tap,
 			LOG_ERROR("%s: failed jtag scan: %d",
 				jtag_tap_name(tap), err);
 			/**
-				@todo Propagate error code
-				@bug Result is invalid on jtag_execute_queue error
+			@todo Propagate error code
+			@bug Result is invalid on jtag_execute_queue error
 			*/
 			return 0xBADC0DE;
 		}
 	}
 
 	uint32_t const in_value = buf_get_u32(field.in_value, 0, CHAR_BIT * sizeof(uint32_t));
-	LOG_DEBUG("%s: DTMCONTROL: 0x%" PRIx32 " -> 0x%" PRIx32,
-		jtag_tap_name(tap), out_value, in_value);
+	LOG_DEBUG("%s: %s: 0x%" PRIx32 " -> 0x%" PRIx32,
+		jtag_tap_name(tap), instruction_name, out_value, in_value);
 
 	return in_value;
+}
+
+uint32_t
+dtmcontrol_scan(struct jtag_tap *const tap,
+	uint32_t const out_value)
+{
+	return uint32_instruction_scan(tap, DTM_DTMCS, "DTMCONTROL", out_value);
+}
+
+uint32_t
+idcode_scan(struct jtag_tap *const tap)
+{
+	return uint32_instruction_scan(tap, DTM_IDCODE, "IDCODE", 0);
 }
 
 /**

@@ -360,46 +360,6 @@ dram_address(unsigned const index)
 	return index < 0x10 ? index : 0x40 + index - 0x10;
 }
 
-static uint32_t
-idcode_scan(struct target *const target)
-{
-	assert(target);
-	select_idcode(target->tap);
-
-	uint8_t in_buffer[sizeof(uint32_t)];
-	struct scan_field const field = {
-		.num_bits = CHAR_BIT * sizeof(uint32_t),
-		.in_value = in_buffer
-	};
-	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
-
-	/** Always return to dmi.
-
-		@bug Non robust strategy
-	*/
-	select_dmi(target->tap);
-
-	{
-		int const err = jtag_execute_queue();
-
-		if (ERROR_OK != err) {
-			LOG_ERROR("%s: failed jtag scan: %d",
-				target_name(target), err);
-			/**
-				@todo Propagate error code
-				@bug Result is invalid on jtag_execute_queue error
-			*/
-			return 0xBADC0DE;
-		}
-	}
-
-	uint32_t const in_value = buf_get_u32(field.in_value, 0, 32);
-	LOG_DEBUG("%s: IDCODE: 0x0 -> 0x%x",
-		target_name(target), in_value);
-
-	return in_value;
-}
-
 static void
 increase_dbus_busy_delay(struct target *const target)
 {
@@ -1614,12 +1574,12 @@ riscv_011_examine(struct target *const target)
 
 	if (info->dtmcontrol_idle == 0) {
 		/* Some old SiFive cores don't set idle but need it to be 1. */
-		uint32_t idcode = idcode_scan(target);
-		if (idcode == 0x10e31913)
+		uint32_t const idcode = idcode_scan(target->tap);
+		if (UINT32_C(0x10E31913) == idcode)
 			info->dtmcontrol_idle = 1;
 	}
 
-	uint32_t dminfo = dbus_read(target, DMINFO);
+	uint32_t const dminfo = dbus_read(target, DMINFO);
 	LOG_DEBUG("%s: dminfo: 0x%08x", target_name(target), dminfo);
 	LOG_DEBUG("%s:   abussize=0x%x", target_name(target), get_field(dminfo, DMINFO_ABUSSIZE));
 	LOG_DEBUG("%s:   serialcount=0x%x", target_name(target), get_field(dminfo, DMINFO_SERIALCOUNT));

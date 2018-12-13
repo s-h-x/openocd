@@ -312,11 +312,8 @@ extern bool riscv_prefer_sba;
 void
 select_dmi(struct jtag_tap *const tap);
 
-void
-select_dtmcontrol(struct jtag_tap *const tap);
-
-void
-select_idcode(struct jtag_tap *const tap);
+uint32_t
+idcode_scan(struct jtag_tap *const tap);
 
 uint32_t
 dtmcontrol_scan(struct jtag_tap *const tap,
