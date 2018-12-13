@@ -7,14 +7,18 @@
 /** @name Identifies the release version of this part.*/
 /**@{*/
 #define DTM_IDCODE_VERSION_OFFSET           (28)
+#if 0
 #define DTM_IDCODE_VERSION_LENGTH           (4)
+#endif
 #define DTM_IDCODE_VERSION                  (UINT32_C(0xF) << DTM_IDCODE_VERSION_OFFSET)
 /**@}*/
 
 /** @name Identifies the designer's part number of this part. */
 /**@{*/
 #define DTM_IDCODE_PARTNUMBER_OFFSET        (12)
+#if 0
 #define DTM_IDCODE_PARTNUMBER_LENGTH        (16)
+#endif
 #define DTM_IDCODE_PARTNUMBER               (UINT32_C(0xFFFF) << DTM_IDCODE_PARTNUMBER_OFFSET)
 /**@}*/
 
@@ -51,7 +55,9 @@ be canceled).
 */
 /**@{*/
 #define DTM_DTMCS_DMIHARDRESET_OFFSET       (17)
+#if 0
 #define DTM_DTMCS_DMIHARDRESET_LENGTH       (1)
+#endif
 #define DTM_DTMCS_DMIHARDRESET              (UINT32_C(0x1) << DTM_DTMCS_DMIHARDRESET_OFFSET)
 /**@}*/
 
@@ -218,12 +224,6 @@ reduces the DMI data width to 32 bits.
 #define DTM_DMI_OP_LENGTH                   (2)
 #define DTM_DMI_OP                          (UINT64_C(0x3) << DTM_DMI_OP_OFFSET)
 /**@}*/
-#if 0
-/**
-@bug Redefinition
-*/
-#define CSR_DCSR                            (0x7B0)
-#endif
 
 #if 0
 /** @name CSR_DCSR_XDEBUGVER
@@ -237,7 +237,9 @@ reduces the DMI data width to 32 bits.
 */
 /**@{*/
 #define CSR_DCSR_XDEBUGVER_OFFSET           (28)
+#if 0
 #define CSR_DCSR_XDEBUGVER_LENGTH           (4)
+#endif
 #define CSR_DCSR_XDEBUGVER                  (UINT32_C(0xF) << CSR_DCSR_XDEBUGVER_OFFSET)
 /**@}*/
 #endif
@@ -277,7 +279,7 @@ reduces the DMI data width to 32 bits.
 /**@}*/
 
 #if 0
-/**
+/** @name CSR_DCSR_STEPIE
 	0: Interrupts are disabled during single stepping.
 
 	1: Interrupts are enabled during single stepping.
@@ -289,11 +291,13 @@ reduces the DMI data width to 32 bits.
 */
 /**@{*/
 #define CSR_DCSR_STEPIE_OFFSET              (11)
+#if 0
 #define CSR_DCSR_STEPIE_LENGTH              (1)
+#endif
 #define CSR_DCSR_STEPIE                     (0x1u << CSR_DCSR_STEPIE_OFFSET)
 /**@}*/
 
-/**
+/** @name CSR_DCSR_STOPCOUNT
 
 	0: Increment counters as usual.
 
@@ -308,11 +312,13 @@ reduces the DMI data width to 32 bits.
 */
 /**@{*/
 #define CSR_DCSR_STOPCOUNT_OFFSET           (10)
+#if 0
 #define CSR_DCSR_STOPCOUNT_LENGTH           (1)
+#endif
 #define CSR_DCSR_STOPCOUNT                  (0x1u << CSR_DCSR_STOPCOUNT_OFFSET)
 /**@}*/
 
-/**
+/** @name CSR_DCSR_STOPTIME
 
 	0: Increment timers as usual.
 
@@ -324,7 +330,9 @@ reduces the DMI data width to 32 bits.
 */
 /**@{*/
 #define CSR_DCSR_STOPTIME_OFFSET            (9)
+#if 0
 #define CSR_DCSR_STOPTIME_LENGTH            (1)
+#endif
 #define CSR_DCSR_STOPTIME                   (UINT32_C(0x1) << CSR_DCSR_STOPTIME_OFFSET)
 /**@}*/
 #endif
@@ -355,7 +363,7 @@ reduces the DMI data width to 32 bits.
 /**@}*/
 
 #if 0
-/**
+/** @name CSR_DCSR_MPRVEN
 	When 1, @c mprv in @c mstatus takes effect during debug mode.
 	When 0, it is ignored during debug mode.
 	Implementing this bit is optional.
@@ -363,11 +371,13 @@ reduces the DMI data width to 32 bits.
 */
 /**@{*/
 #define CSR_DCSR_MPRVEN_OFFSET              (4)
+#if 0
 #define CSR_DCSR_MPRVEN_LENGTH              (1)
+#endif
 #define CSR_DCSR_MPRVEN                     (UINT32_C(0x1) << CSR_DCSR_MPRVEN_OFFSET)
 /**@}*/
 
-/**
+/** @name CSR_DCSR_NMIP
 
 When set, there is a Non-Maskable-Interrupt (NMI) pending for the hart.
 
@@ -377,7 +387,9 @@ This is implementation-dependent.
 */
 /**@{*/
 #define CSR_DCSR_NMIP_OFFSET                (3)
+#if 0
 #define CSR_DCSR_NMIP_LENGTH                (1)
+#endif
 #define CSR_DCSR_NMIP                       (0x1u << CSR_DCSR_NMIP_OFFSET)
 /**@}*/
 #endif
@@ -408,39 +420,36 @@ This is implementation-dependent.
 	encoding written is not supported or the debugger is not allowed to
 	change to it, the hart may change to any supported privilege level.
 */
-/**@{ */
+/**@{*/
 #define CSR_DCSR_PRV_OFFSET                 (0)
 #if 0
 #define CSR_DCSR_PRV_LENGTH                 (2)
 #endif
 #define CSR_DCSR_PRV                        (UINT32_C(0x3) << CSR_DCSR_PRV_OFFSET)
-#if 0
-#if 0
-/**
-	@bug Redefinition
-*/
-#define CSR_DPC                             (0x7B1)
-#endif
+/**@}*/
 
+#if 0
+/** @name CSR_DPC_DPC */
+/**@{*/
 #define CSR_DPC_DPC_OFFSET                  (0)
 #define CSR_DPC_DPC_LENGTH                  (MXLEN)
 #define CSR_DPC_DPC                         (((1L << (MXLEN)) - 1) << CSR_DPC_DPC_OFFSET)
+/**@}*/
+
 #define CSR_DSCRATCH0                       (0x7B2)
 #define CSR_DSCRATCH1                       (0x7B3)
-#if 0
-/**
-@bug Redefinition
-*/
-#define CSR_TSELECT                         (0x7A0)
-#endif
+
+/** @name CSR_TSELECT_INDEX */
+/**@{*/
 #define CSR_TSELECT_INDEX_OFFSET            (0)
 #define CSR_TSELECT_INDEX_LENGTH            (MXLEN)
 #define CSR_TSELECT_INDEX                   (((1L << (MXLEN)) - 1) << CSR_TSELECT_INDEX_OFFSET)
+/**@}*/
 #endif
 /**@}*/
 
 #if 0
-/**
+/** @name CSR_TDATA1_TYPE
 	0: There is no trigger at this @c tselect.
 
 	1: The trigger is a legacy SiFive address match trigger. These
@@ -473,7 +482,10 @@ This is implementation-dependent.
 #define CSR_TDATA1_TYPE                     (UINT64_C(0xF) << CSR_TDATA1_TYPE_OFFSET)
 /**@}*/
 
-/**
+/** @name Trigger-specific data.*/
+/**@{*/
+
+/** @name CSR_TDATA1_DMODE
 	0: Both Debug and M Mode can write the @c tdata registers at the
 	selected @c tselect.
 
@@ -488,35 +500,27 @@ This is implementation-dependent.
 #define CSR_TDATA1_DMODE                    (UINT64_C(0x1) << CSR_TDATA1_DMODE_OFFSET)
 /**@}*/
 
-/** Trigger-specific data.*/
+/** @name CSR_TDATA1 */
 /**@{*/
-#if 0
-/**
-	@bug Redefinition
-*/
-#define CSR_TDATA1                          (0x7A1)
-#endif
 #define CSR_TDATA1_DATA_OFFSET              (0)
 #define CSR_TDATA1_DATA_LENGTH              ((MXLEN) - 5)
 #define CSR_TDATA1_DATA                     (((1L << (MXLEN) - 5) - 1) << CSR_TDATA1_DATA_OFFSET)
-#if 0
-/**
-@bug Redefinition
-*/
-#define CSR_TDATA2                          (0x7A2)
-#endif
+/**@}*/
+
+/** @name CSR_TDATA2_DATA */
+/**@{*/
 #define CSR_TDATA2_DATA_OFFSET              (0)
 #define CSR_TDATA2_DATA_LENGTH              (MXLEN)
 #define CSR_TDATA2_DATA                     (((1L << (MXLEN)) - 1) << CSR_TDATA2_DATA_OFFSET)
-#if 0
-/**
-@bug Redefinition
-*/
-#define CSR_TDATA3                          (0x7a3)
-#endif
+/**@}*/
+
+/** @name CSR_TDATA3_DATA */
+/**@{*/
 #define CSR_TDATA3_DATA_OFFSET              (0)
 #define CSR_TDATA3_DATA_LENGTH              (MXLEN)
 #define CSR_TDATA3_DATA                     (((1L << (MXLEN)) - 1) << CSR_TDATA3_DATA_OFFSET)
+/**@}*/
+
 #define CSR_TINFO                           (0x7A4)
 /**@}*/
 
@@ -545,7 +549,7 @@ This is implementation-dependent.
 #define CSR_MCONTROL_DMODE                  (UINT64_C(0x1) << CSR_MCONTROL_DMODE_OFFSET)
 /**@}*/
 
-/**
+/** @name CSR_MCONTROL_MASKMAX
 	Specifies the largest naturally aligned powers-of-two (NAPOT) range
 	supported by the hardware when @c match is 1. The value is the
 	logarithm base 2 of the number of bytes in that range.
@@ -559,7 +563,7 @@ This is implementation-dependent.
 #define CSR_MCONTROL_MASKMAX                (UINT64_C(0x3F) << CSR_MCONTROL_MASKMAX_OFFSET)
 /**@}*/
 
-/**
+/** @name CSR_MCONTROL_HIT
 	If this optional bit is implemented, the hardware sets it when this
 	trigger matches. The trigger's user can set or clear it at any
 	time. The trigger's user can use this bit to determine which
@@ -568,11 +572,13 @@ This is implementation-dependent.
 */
 /**@{*/
 #define CSR_MCONTROL_HIT_OFFSET             (20)
+#if 0
 #define CSR_MCONTROL_HIT_LENGTH             (1)
+#endif
 #define CSR_MCONTROL_HIT                    (UINT64_C(0x1) << CSR_MCONTROL_HIT_OFFSET)
 /**@}*/
 
-/**
+/** @name CSR_MCONTROL_SELECT
 	0: Perform a match on the virtual address.
 
 	1: Perform a match on the data value loaded/stored, or the
@@ -580,11 +586,13 @@ This is implementation-dependent.
 */
 /**@{*/
 #define CSR_MCONTROL_SELECT_OFFSET          (19)
+#if 0
 #define CSR_MCONTROL_SELECT_LENGTH          (1)
+#endif
 #define CSR_MCONTROL_SELECT                 (UINT64_C(0x1) << CSR_MCONTROL_SELECT_OFFSET)
 /**@}*/
 
-/**
+/** @name CSR_MCONTROL_TIMING
 	0: The action for this trigger will be taken just before the
 	instruction that triggered it is executed, but after all preceding
 	instructions are are committed.
@@ -611,17 +619,21 @@ This is implementation-dependent.
 */
 /**@{*/
 #define CSR_MCONTROL_TIMING_OFFSET          (18)
+#if 0
 #define CSR_MCONTROL_TIMING_LENGTH          (1)
+#endif
 #define CSR_MCONTROL_TIMING                 (UINT64_C(0x1) << CSR_MCONTROL_TIMING_OFFSET)
 /**@}*/
 
-/**
+/** @name CSR_MCONTROL_ACTION
 The action to take when the trigger fires. The values are explained
 in Table \ref{tab:action}.
 */
 /**@{*/
 #define CSR_MCONTROL_ACTION_OFFSET          (12)
+#if 0
 #define CSR_MCONTROL_ACTION_LENGTH          (6)
+#endif
 #define CSR_MCONTROL_ACTION                 (UINT64_C(0x3F) << CSR_MCONTROL_ACTION_OFFSET)
 /**@}*/
 
@@ -647,7 +659,9 @@ chain (e.g. to meet timing requirements) may do so by zeroing
 */
 /**@{*/
 #define CSR_MCONTROL_CHAIN_OFFSET           (11)
+#if 0
 #define CSR_MCONTROL_CHAIN_LENGTH           (1)
+#endif
 #define CSR_MCONTROL_CHAIN                  (UINT64_C(0x1) << CSR_MCONTROL_CHAIN_OFFSET)
 /**@}*/
 
@@ -765,7 +779,9 @@ and writing it has no effect.
 */
 /**@{*/
 #define CSR_ICOUNT_HIT_OFFSET               (24)
+#if 0
 #define CSR_ICOUNT_HIT_LENGTH               (1)
+#endif
 #define CSR_ICOUNT_HIT                      (UINT64_C(0x1) << CSR_ICOUNT_HIT_OFFSET)
 /**@}*/
 
@@ -936,15 +952,13 @@ When set, enable this trigger for exceptions that are taken from U mode.
 #define CSR_ETRIGGER_U_LENGTH               (1)
 #define CSR_ETRIGGER_U                      (UINT64_C(0x1) << CSR_ETRIGGER_U_OFFSET)
 /**@}*/
-#endif
 
-#if 0
 /** @name CSR_ETRIGGER_ACTION
 
 	@bug TeX markup
 
 The action to take when the trigger fires. The values are explained
-in Table~\ref{tab:action}.
+in Table tab:action.
 */
 /**@{*/
 #define CSR_ETRIGGER_ACTION_OFFSET          (0)
@@ -1124,7 +1138,7 @@ This must be 1 when @c progbufsize is 1.
 /**@}*/
 #endif
 
-/**
+/** @name DMI_DMSTATUS_DEVTREEVALID
 	0: @c devtreeaddrzero--@c devtreeaddrthree hold information which
 	is not relevant to the Device Tree.
 	
@@ -1139,7 +1153,8 @@ This must be 1 when @c progbufsize is 1.
 #define DMI_DMSTATUS_DEVTREEVALID           (UINT32_C(0x1) << DMI_DMSTATUS_DEVTREEVALID_OFFSET)
 /**@}*/
 
-/**
+
+/** @name DMI_DMSTATUS_VERSION
 	0: There is no Debug Module present.
 	
 	1: There is a Debug Module and it conforms to version 0.11 of this
@@ -1157,8 +1172,8 @@ This must be 1 when @c progbufsize is 1.
 #define DMI_DMSTATUS_VERSION_LENGTH         (4)
 #endif
 #define DMI_DMSTATUS_VERSION                (UINT32_C(0xF) << DMI_DMSTATUS_VERSION_OFFSET)
-#define DMI_DMCONTROL                       (0x10)
 /**@}*/
+#define DMI_DMCONTROL                       (0x10)
 
 /**	Writes the halt request bit for all currently selected harts.
 
@@ -1964,7 +1979,7 @@ specified register.
 #define AC_ACCESS_REGISTER_WRITE            (UINT32_C(0x1) << AC_ACCESS_REGISTER_WRITE_OFFSET)
 /**@}*/
 
-/** @AC_ACCESS_REGISTER_REGNO
+/** @name AC_ACCESS_REGISTER_REGNO
 	@brief Number of the register to access, as described in Table tab:regno.
 
 	@c dpc may be used as an alias for PC if this command is
