@@ -57,7 +57,6 @@
 
 /** @name JTAG registers. */
 /**@{*/
-#define DTMCONTROL					(0x10)
 #define DTMCONTROL_VERSION			(0xF)
 /**@}*/
 
@@ -78,23 +77,6 @@ struct range_s {
 };
 typedef struct range_s range_t;
 
-static uint8_t const ir_dtmcontrol[1] = {DTMCONTROL};
-static uint8_t const ir_idcode[1] = {0x1};
-
-/** @name IR scan fields
-	@bug Global non-const variable
-*/
-/**@{*/
-struct scan_field select_dtmcontrol = {
-	.out_value = ir_dtmcontrol
-};
-
-struct scan_field select_idcode = {
-	.in_value = NULL,
-	.out_value = ir_idcode
-};
-/**@}*/
-
 int riscv_command_timeout_sec = DEFAULT_COMMAND_TIMEOUT_SEC;
 int riscv_reset_timeout_sec = DEFAULT_RESET_TIMEOUT_SEC;
 
@@ -112,29 +94,50 @@ range_t *expose_csr = NULL;
 /** In addition to the ones in the standard spec, we'll also expose additional custom registers. */
 range_t *expose_custom = NULL;
 
-void
-select_dmi(struct jtag_tap *const tap)
+static void
+select_instruction(struct jtag_tap *const tap,
+	uint8_t const instruction_buffer[1])
 {
-	static uint8_t const ir_dmi[1] = {DTM_DMI};
 	assert(tap);
+	assert(0 < tap->ir_length && tap->ir_length <= UINT8_MAX);
 	typedef struct scan_field scan_field_t;
 	scan_field_t const field = {
 		.num_bits = tap->ir_length,
-		.out_value = ir_dmi,
+		.out_value = instruction_buffer,
 	};
 
 	jtag_add_ir_scan(tap, &field, TAP_IDLE);
 }
 
-static uint32_t
-dtmcontrol_scan(struct target *const target,
-	uint32_t const value)
+void
+select_dmi(struct jtag_tap *const tap)
 {
-	assert(target);
-	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
+	static uint8_t const instruction_buffer[1] = {DTM_DMI};
+	select_instruction(tap, instruction_buffer);
+}
 
-	uint8_t out_buffer[4];
-	buf_set_u32(out_buffer, 0, CHAR_BIT * sizeof(uint32_t), value);
+void
+select_dtmcontrol(struct jtag_tap *const tap)
+{
+	static uint8_t const instruction_buffer[1] = {DTM_DTMCS};
+	select_instruction(tap, instruction_buffer);
+}
+
+void
+select_idcode(struct jtag_tap *const tap)
+{
+	static uint8_t const instruction_buffer[1] = {DTM_IDCODE};
+	select_instruction(tap, instruction_buffer);
+}
+
+uint32_t
+dtmcontrol_scan(struct jtag_tap *const tap,
+	uint32_t const out_value)
+{
+	select_dtmcontrol(tap);
+
+	uint8_t out_buffer[sizeof(uint32_t)];
+	buf_set_u32(out_buffer, 0, CHAR_BIT * sizeof(uint32_t), out_value);
 	uint8_t in_buffer[sizeof(uint32_t)] = {};
 	typedef struct scan_field scan_field_t;
 	scan_field_t const field = {
@@ -142,32 +145,32 @@ dtmcontrol_scan(struct target *const target,
 		.out_value = out_buffer,
 		.in_value = in_buffer,
 	};
-	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
+	jtag_add_dr_scan(tap, 1, &field, TAP_IDLE);
 
-	/* Always return to dbus. */
-	/**
+	/** Always return to @c dmi.
+
 		@bug Non robust strategy
 	*/
-	select_dmi(target->tap);
+	select_dmi(tap);
 
 	{
 		int const err = jtag_execute_queue();
 
 		if (ERROR_OK != err) {
-			LOG_ERROR("%s: failed jtag scan: %d", target_name(target), err);
+			LOG_ERROR("%s: failed jtag scan: %d",
+				jtag_tap_name(tap), err);
 			/**
 				@todo Propagate error code
-			*/
-			/**
 				@bug Result is invalid on jtag_execute_queue error
 			*/
 			return 0xBADC0DE;
 		}
 	}
 
-	uint32_t const in_value = buf_get_u32(field.in_value, 0, 32);
+	uint32_t const in_value = buf_get_u32(field.in_value, 0, CHAR_BIT * sizeof(uint32_t));
 	LOG_DEBUG("%s: DTMCONTROL: 0x%" PRIx32 " -> 0x%" PRIx32,
-		target_name(target), value, in_value);
+		jtag_tap_name(tap), out_value, in_value);
+
 	return in_value;
 }
 
@@ -251,12 +254,6 @@ riscv_init_target(struct command_context *const cmd_ctx,
 	info->cmd_ctx = cmd_ctx;
 
 	assert(target->tap);
-	/**
-	@bug Here is bug if there are some TAPs with different ir_length
-	*/
-	select_dtmcontrol.num_bits = target->tap->ir_length;
-	select_idcode.num_bits = target->tap->ir_length;
-
 	riscv_semihosting_init(target);
 
 	target->debug_reason = DBG_REASON_DBGRQ;
@@ -973,7 +970,7 @@ riscv_examine(struct target *const target)
 	}
 
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
-	uint32_t const dtmcontrol = dtmcontrol_scan(target, 0);
+	uint32_t const dtmcontrol = dtmcontrol_scan(target->tap, 0);
 	LOG_DEBUG("%s: dtmcontrol=0x%x", target_name(target), dtmcontrol);
 	struct riscv_info_t *const info = target->arch_info;
 	info->dtm_version = get_field(dtmcontrol, DTMCONTROL_VERSION);

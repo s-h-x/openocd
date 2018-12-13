@@ -65,7 +65,6 @@
 
 /* JTAG registers. */
 
-#define DTMCONTROL					0x10
 #define DTMCONTROL_DBUS_RESET		(1<<16)
 #define DTMCONTROL_IDLE				(7<<10)
 #define DTMCONTROL_ADDRBITS			(0xf<<4)
@@ -362,28 +361,22 @@ dram_address(unsigned const index)
 }
 
 static uint32_t
-dtmcontrol_scan(struct target *const target,
-	uint32_t const out_value)
+idcode_scan(struct target *const target)
 {
 	assert(target);
+	select_idcode(target->tap);
 
-	/**
-		@bug @c select_dtmcontrol is global non-const variable
-	*/
-	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
-
-	uint8_t out_buffer[4];
-	buf_set_u32(out_buffer, 0, 32, out_value);
-	uint8_t in_buffer[4];
-	typedef struct scan_field scan_field_t;
-	scan_field_t const field = {
-		.num_bits = 32,
-		.out_value = out_buffer,
-		.in_value = in_buffer,
+	uint8_t in_buffer[sizeof(uint32_t)];
+	struct scan_field const field = {
+		.num_bits = CHAR_BIT * sizeof(uint32_t),
+		.in_value = in_buffer
 	};
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
-	/* Always return to dbus. */
+	/** Always return to dmi.
+
+		@bug Non robust strategy
+	*/
 	select_dmi(target->tap);
 
 	{
@@ -393,45 +386,16 @@ dtmcontrol_scan(struct target *const target,
 			LOG_ERROR("%s: failed jtag scan: %d",
 				target_name(target), err);
 			/**
-				@todo process errors
+				@todo Propagate error code
+				@bug Result is invalid on jtag_execute_queue error
 			*/
 			return 0xBADC0DE;
 		}
 	}
 
-	uint32_t const in_value = buf_get_u32(field.in_value, 0, CHAR_BIT * sizeof(uint32_t));
-	LOG_DEBUG("%s: DTMCONTROL: 0x%x -> 0x%x",
-		target_name(target), out_value, in_value);
-
-	return in_value;
-}
-
-static uint32_t
-idcode_scan(struct target *const target)
-{
-	jtag_add_ir_scan(target->tap, &select_idcode, TAP_IDLE);
-
-	uint8_t in_buffer[4];
-	struct scan_field const field = {
-		.num_bits = 32,
-		.out_value = NULL,
-		.in_value = in_buffer,
-	};
-	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
-
-	int const err = jtag_execute_queue();
-
-	if (ERROR_OK != err) {
-		LOG_ERROR("%s: failed jtag scan: %d",
-			target_name(target), err);
-		return err;
-	}
-
-	/* Always return to dbus. */
-	select_dmi(target->tap);
-
 	uint32_t const in_value = buf_get_u32(field.in_value, 0, 32);
-	LOG_DEBUG("%s: IDCODE: 0x0 -> 0x%x", target_name(target), in_value);
+	LOG_DEBUG("%s: IDCODE: 0x0 -> 0x%x",
+		target_name(target), in_value);
 
 	return in_value;
 }
@@ -445,7 +409,7 @@ increase_dbus_busy_delay(struct target *const target)
 	LOG_DEBUG("%s: dtmcontrol_idle=%d, dbus_busy_delay=%d, interrupt_high_delay=%d",
 		target_name(target), info->dtmcontrol_idle, info->dbus_busy_delay, info->interrupt_high_delay);
 
-	dtmcontrol_scan(target, DTMCONTROL_DBUS_RESET);
+	dtmcontrol_scan(target->tap, DTMCONTROL_DBUS_RESET);
 }
 
 static void
@@ -1617,11 +1581,12 @@ static void riscv_011_deinit_target(struct target *const target)
 	info->version_specific = NULL;
 }
 
-static int riscv_011_examine(struct target *const target)
+static int
+riscv_011_examine(struct target *const target)
 {
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 
-	uint32_t dtmcontrol = dtmcontrol_scan(target, 0);
+	uint32_t dtmcontrol = dtmcontrol_scan(target->tap, 0);
 	LOG_DEBUG("%s: dtmcontrol=0x%x", target_name(target), dtmcontrol);
 	LOG_DEBUG("%s:  addrbits=%d", target_name(target), get_field(dtmcontrol, DTMCONTROL_ADDRBITS));
 	LOG_DEBUG("%s:  version=%d", target_name(target), get_field(dtmcontrol, DTMCONTROL_VERSION));

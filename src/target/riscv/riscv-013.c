@@ -404,51 +404,6 @@ dmi_scan(struct target *const target,
 	return buf_get_u32(in_buffer, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH);
 }
 
-static uint32_t
-dtmcontrol_scan(struct target *const target,
-	uint32_t const out_value)
-{
-	assert(target);
-
-	/**
-		@bug @c select_dtmcontrol is global non-const variable
-	*/
-	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
-
-	uint8_t out_buffer[4];
-	buf_set_u32(out_buffer, 0, CHAR_BIT * sizeof(uint32_t), out_value);
-	uint8_t in_buffer[sizeof(uint32_t)] = {};
-	typedef struct scan_field scan_field_t;
-	scan_field_t const field = {
-		.num_bits = CHAR_BIT * sizeof(uint32_t),
-		.out_value = out_buffer,
-		.in_value = in_buffer,
-	};
-	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
-
-	/* Always return to dmi. */
-	select_dmi(target->tap);
-
-	{
-		int const err = jtag_execute_queue();
-
-		if (ERROR_OK != err) {
-			LOG_ERROR("%s: failed jtag scan: %d",
-				target_name(target), err);
-			/**
-				@todo process errors
-			*/
-			return 0xBADC0DE;
-		}
-	}
-
-	uint32_t const in_value = buf_get_u32(field.in_value, 0, CHAR_BIT * sizeof(uint32_t));
-	LOG_DEBUG("%s: DTMCS: 0x%x -> 0x%x",
-		target_name(target), out_value, in_value);
-
-	return in_value;
-}
-
 static void
 increase_dmi_busy_delay(struct target *const target)
 {
@@ -464,7 +419,7 @@ increase_dmi_busy_delay(struct target *const target)
 	/**
 	@todo process errors
 	*/
-	(void)(dtmcontrol_scan(target, DTM_DTMCS_DMIRESET));
+	(void)(dtmcontrol_scan(target->tap, DTM_DTMCS_DMIRESET));
 }
 
 /** @return error code */
@@ -4622,7 +4577,7 @@ riscv_013_examine(struct target *const target)
 {
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 
-	uint32_t const dtmcontrol = dtmcontrol_scan(target, 0);
+	uint32_t const dtmcontrol = dtmcontrol_scan(target->tap, 0);
 
 	assert(target);
 	LOG_DEBUG("%s: dtmcontrol=0x%x", target_name(target), dtmcontrol);

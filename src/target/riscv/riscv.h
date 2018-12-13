@@ -307,16 +307,21 @@ extern int riscv_reset_timeout_sec;
 extern bool riscv_prefer_sba;
 /**@}*/
 
-/**
-	@bug Non const global variables
-*/
+/** @name RISC-V TAP operations */
 /**@{*/
-extern struct scan_field select_dtmcontrol;
-extern struct scan_field select_idcode;
-/**@}*/
-
 void
 select_dmi(struct jtag_tap *const tap);
+
+void
+select_dtmcontrol(struct jtag_tap *const tap);
+
+void
+select_idcode(struct jtag_tap *const tap);
+
+uint32_t
+dtmcontrol_scan(struct jtag_tap *const tap,
+	uint32_t const out_value);
+/**@}*/
 
 /** Everything needs the RISC-V specific info structure, so here's a nice macro that provides that. */
 static inline struct riscv_info_t *

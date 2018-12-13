@@ -1,9 +1,9 @@
 #ifndef TARGET_RISCV_DEBUG_DEFINES_H_
 #define TARGET_RISCV_DEBUG_DEFINES_H_
 
-#if 0
 #define DTM_IDCODE                          (0x01)
 
+#if 0
 /** @name Identifies the release version of this part.*/
 /**@{*/
 #define DTM_IDCODE_VERSION_OFFSET           (28)
@@ -34,9 +34,12 @@ in that same Identification Code.
 #define DTM_IDCODE_1_OFFSET                 (0)
 #define DTM_IDCODE_1_LENGTH                 (1)
 #define DTM_IDCODE_1                        (UINT32_C(0x1) << DTM_IDCODE_1_OFFSET)
-#define DTM_DTMCS                           (0x10)
 /**@}*/
+#endif
 
+#define DTM_DTMCS                           (0x10)
+
+#if 0
 /** @name DTM_DTMCS_DMIHARDRESET
 
 Writing 1 to this bit does a hard reset of the DTM,
