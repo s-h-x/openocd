@@ -470,7 +470,7 @@ riscv_count_harts(struct target const *target);
 
 /** @returns TRUE if the target has the given register on the given hart.
 
-    @bug Always return true
+    @warning Always return true
 */
 static inline bool
 __attribute__((const))
@@ -517,7 +517,7 @@ int riscv_enumerate_triggers(struct target *target);
 int riscv_init_registers(struct target *target);
 
 void riscv_semihosting_init(struct target *target);
-int riscv_semihosting(struct target *target, int *retval);
+int riscv_semihosting(struct target *target, int *p_error_code);
 /**@}*/
 
 #endif  /* TARGET_RISCV_RISCV_H_ */

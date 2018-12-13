@@ -218,9 +218,6 @@ struct scans_s {
 	struct target const *target;
 };
 
-/**
-@bug doc/manual/style.txt: "This should be reserved for types that should be passed by value"
-*/
 typedef struct scans_s scans_t;
 
 /* Necessary prototypes. */
@@ -483,9 +480,9 @@ dbus_scan(struct target *const target,
 		jtag_add_runtest(idle_count, TAP_IDLE);
 
 	{
-		int const err = jtag_execute_queue();
+		int const error_code = jtag_execute_queue();
 
-		if (err != ERROR_OK) {
+		if (ERROR_OK != error_code) {
 			LOG_ERROR("%s: dbus_scan failed jtag scan", target_name(target));
 			return DBUS_STATUS_FAILED;
 		}
@@ -594,11 +591,11 @@ static void scans_dump(scans_t *scans)
 static int scans_execute(scans_t *scans)
 {
 	{
-		int const err = jtag_execute_queue();
+		int const error_code = jtag_execute_queue();
 
-		if (ERROR_OK != err) {
-			LOG_ERROR("failed jtag scan: %d", err);
-			return err;
+		if (ERROR_OK != error_code) {
+			LOG_ERROR("failed jtag scan: %d", error_code);
+			return error_code;
 		}
 	}
 
@@ -904,12 +901,13 @@ cache_check(struct target *const target)
 	riscv_011_info_t *info = get_info(target);
 	int error = 0;
 
-	for (unsigned i = 0; i < info->dramsize; ++i) {
-		if (info->dram_cache[i].valid && !info->dram_cache[i].dirty) {
-			if (dram_check32(target, i, info->dram_cache[i].data) != ERROR_OK)
-				++error;
-		}
-	}
+	for (unsigned i = 0; i < info->dramsize; ++i)
+		if (
+			info->dram_cache[i].valid &&
+			!info->dram_cache[i].dirty &&
+			ERROR_OK != dram_check32(target, i, info->dram_cache[i].data)
+			)
+			++error;
 
 	if (error) {
 		return dump_debug_ram(target);
@@ -956,18 +954,22 @@ static int cache_write(struct target *const target, unsigned address, bool run)
 		scans_add_read32(scans, address, false);
 	}
 
-	int retval = scans_execute(scans);
-	if (retval != ERROR_OK) {
-		scans_delete(scans);
-		LOG_ERROR("%s: JTAG execute failed.", target_name(target));
-		return retval;
+	{
+		int const error_code = scans_execute(scans);
+
+		if (ERROR_OK != error_code) {
+			scans_delete(scans);
+			LOG_ERROR("%s: JTAG execute failed.", target_name(target));
+			return error_code;
+		}
 	}
 
 	int errors = 0;
 
 	for (unsigned i = 0; i < scans->next_scan; ++i) {
-		dbus_status_t status = scans_get_u32(scans, i, DBUS_OP_START,
-				DBUS_OP_SIZE);
+		dbus_status_t const status =
+			scans_get_u32(scans, i, DBUS_OP_START, DBUS_OP_SIZE);
+
 		switch (status) {
 			case DBUS_STATUS_SUCCESS:
 				break;
@@ -982,7 +984,8 @@ static int cache_write(struct target *const target, unsigned address, bool run)
 				break;
 
 			default:
-				LOG_ERROR("%s: Got invalid bus access status: %d", target_name(target), status);
+				LOG_ERROR("%s: Got invalid bus access status: %d",
+					target_name(target), status);
 				scans_delete(scans);
 				return ERROR_TARGET_FAILURE;
 		}
@@ -1096,20 +1099,24 @@ dram_write_jump(struct target *const target, unsigned index,
 			set_interrupt);
 }
 
-static int wait_for_state(struct target *const target, enum target_state state)
+static int
+wait_for_state(struct target *const target,
+	enum target_state const state)
 {
 	time_t const start = time(NULL);
 
 	for (;;) {
-		int const result = riscv_011_poll(target);
+		{
+			int const error_code = riscv_011_poll(target);
 
-		if (result != ERROR_OK)
-			return result;
+			if (ERROR_OK != error_code)
+				return error_code;
+		}
 
-		if (target->state == state)
+		if (state == target->state)
 			return ERROR_OK;
 
-		if (time(NULL) > start + riscv_command_timeout_sec) {
+		if (start + riscv_command_timeout_sec < time(NULL)) {
 			LOG_ERROR("%s: Timed out waiting for state %d. "
 					"Increase timeout with riscv set_command_timeout_sec.",
 					target_name(target), state);
@@ -1124,14 +1131,15 @@ static int read_csr(struct target *const target, uint64_t *value, uint32_t csr)
 	cache_set_store(target, 1, S0, SLOT0);
 	cache_set_jump(target, 2);
 	{
-		int const err = cache_write(target, 4, true);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = cache_write(target, 4, true);
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	assert(value);
 	*value = cache_get(target, SLOT0);
-	LOG_DEBUG("%s: csr 0x%x = 0x%" PRIx64, target_name(target), csr, *value);
+	LOG_DEBUG("%s: csr 0x%x = 0x%" PRIx64,
+		target_name(target), csr, *value);
 
 	riscv_011_info_t *const info = get_info(target);
 	assert(info);
@@ -1148,84 +1156,84 @@ static int read_csr(struct target *const target, uint64_t *value, uint32_t csr)
 	return ERROR_OK;
 }
 
-static int write_csr(struct target *const target, uint32_t csr, uint64_t value)
+static int
+write_csr(struct target *const target, uint32_t csr, uint64_t value)
 {
-	LOG_DEBUG("%s: csr 0x%x <- 0x%" PRIx64, target_name(target), csr, value);
+	LOG_DEBUG("%s: csr 0x%x <- 0x%" PRIx64,
+		target_name(target), csr, value);
 	cache_set_load(target, 0, S0, SLOT0);
 	cache_set32(target, 1, csrw(S0, csr));
 	cache_set_jump(target, 2);
 	cache_set(target, SLOT0, value);
-	{
-		int const err = cache_write(target, 4, true);
-		if (ERROR_OK != err)
-			return err;
-	}
-
-	return ERROR_OK;
+	return cache_write(target, 4, true);
 }
 
-static int write_gpr(struct target *const target, unsigned gpr, uint64_t value)
+static int
+write_gpr(struct target *const target, unsigned gpr, uint64_t value)
 {
 	cache_set_load(target, 0, gpr, SLOT0);
 	cache_set_jump(target, 1);
 	cache_set(target, SLOT0, value);
-
-	{
-		int const err = cache_write(target, 4, true);
-		if (ERROR_OK != err)
-			return err;
-	}
-
-	return ERROR_OK;
+	return cache_write(target, 4, true);
 }
 
-static int maybe_read_tselect(struct target *const target)
+static int
+maybe_read_tselect(struct target *const target)
 {
-	riscv_011_info_t *info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 
 	if (info->tselect_dirty) {
-		int result = read_csr(target, &info->tselect, CSR_TSELECT);
-		if (result != ERROR_OK)
-			return result;
+		int const error_code = read_csr(target, &info->tselect, CSR_TSELECT);
+
+		if (ERROR_OK != error_code)
+			return error_code;
+
 		info->tselect_dirty = false;
 	}
 
 	return ERROR_OK;
 }
 
-static int maybe_write_tselect(struct target *const target)
+static int
+maybe_write_tselect(struct target *const target)
 {
-	riscv_011_info_t *info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 
 	if (!info->tselect_dirty) {
-		int result = write_csr(target, CSR_TSELECT, info->tselect);
-		if (result != ERROR_OK)
-			return result;
+		int const error_code = write_csr(target, CSR_TSELECT, info->tselect);
+
+		if (ERROR_OK != error_code)
+			return error_code;
+
 		info->tselect_dirty = true;
 	}
 
 	return ERROR_OK;
 }
 
-static int execute_resume(struct target *const target, bool step)
+static int
+execute_resume(struct target *const target,
+	bool const step)
 {
-	riscv_011_info_t *info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 
-	LOG_DEBUG("%s: step=%d", target_name(target), step);
+	LOG_DEBUG("%s: step=%d",
+		target_name(target), step);
 
 	maybe_write_tselect(target);
 
 	/**
-	@todo check if dpc is dirty (which also is true if an exception was hit at any time)
+		@todo check if dpc is dirty (which also is true if an exception was hit at any time)
 	*/
 	cache_set_load(target, 0, S0, SLOT0);
 	cache_set32(target, 1, csrw(S0, CSR_DPC));
 	cache_set_jump(target, 2);
 	cache_set(target, SLOT0, info->dpc);
 	{
-		int const err = cache_write(target, 4, true);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = cache_write(target, 4, true);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	struct reg *mstatus_reg = &target->reg_cache->reg_list[GDB_REGNO_MSTATUS];
@@ -1237,9 +1245,10 @@ static int execute_resume(struct target *const target, bool step)
 			cache_set_jump(target, 2);
 			cache_set(target, SLOT0, mstatus_user);
 			{
-				int const err = cache_write(target, 4, true);
-				if (ERROR_OK != err)
-					return err;
+				int const error_code = cache_write(target, 4, true);
+
+				if (ERROR_OK != error_code)
+					return error_code;
 			}
 		}
 	}
@@ -1264,10 +1273,11 @@ static int execute_resume(struct target *const target, bool step)
 	cache_invalidate(target);
 
 	{
-		int const err = wait_for_debugint_clear(target, true);
-		if (ERROR_OK != err) {
+		int const error_code = wait_for_debugint_clear(target, true);
+
+		if (ERROR_OK != error_code) {
 			LOG_ERROR("%s: Debug interrupt didn't clear.", target_name(target));
-			return err;
+			return error_code;
 		}
 	}
 
@@ -1336,9 +1346,10 @@ static int register_read(struct target *const target, riscv_reg_t *value, int re
 	}
 
 	{
-		int const err = cache_write(target, 4, true);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = cache_write(target, 4, true);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	riscv_011_info_t *const info = get_info(target);
@@ -1385,9 +1396,13 @@ static int register_write(struct target *const target, unsigned number,
 		info->dpc = value;
 		return ERROR_OK;
 	} else if (GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31) {
-		int result = update_mstatus_actual(target);
-		if (result != ERROR_OK)
-			return result;
+		{
+			int const error_code = update_mstatus_actual(target);
+
+			if (ERROR_OK != error_code)
+				return error_code;
+		}
+
 		unsigned i = 0;
 		if ((info->mstatus_actual & MSTATUS_FS) == 0) {
 			info->mstatus_actual = set_field(info->mstatus_actual, MSTATUS_FS, 1);
@@ -1418,9 +1433,10 @@ static int register_write(struct target *const target, unsigned number,
 
 	cache_set(target, SLOT0, value);
 	{
-		int const err = cache_write(target, info->dramsize - 1, true);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = cache_write(target, info->dramsize - 1, true);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	uint32_t const exception = cache_get32(target, info->dramsize-1);
@@ -1433,8 +1449,11 @@ static int register_write(struct target *const target, unsigned number,
 	return ERROR_OK;
 }
 
-static int riscv_011_get_register(struct target *const target, riscv_reg_t *value, int hartid,
-		int regid)
+static int
+riscv_011_get_register(struct target *const target,
+	riscv_reg_t *value,
+	int hartid,
+	int regid)
 {
 	assert(hartid == 0);
 	riscv_011_info_t *info = get_info(target);
@@ -1447,10 +1466,15 @@ static int riscv_011_get_register(struct target *const target, riscv_reg_t *valu
 	} else if (regid == GDB_REGNO_PC) {
 		*value = info->dpc;
 	} else if (GDB_REGNO_FPR0 <= regid && regid <= GDB_REGNO_FPR31) {
-		int result = update_mstatus_actual(target);
-		if (result != ERROR_OK)
-			return result;
+		{
+			int const error_code = update_mstatus_actual(target);
+
+			if (ERROR_OK != error_code)
+				return error_code;
+		}
+
 		unsigned i = 0;
+
 		if ((info->mstatus_actual & MSTATUS_FS) == 0) {
 			info->mstatus_actual = set_field(info->mstatus_actual, MSTATUS_FS, 1);
 			cache_set_load(target, i++, S0, SLOT1);
@@ -1465,16 +1489,18 @@ static int riscv_011_get_register(struct target *const target, riscv_reg_t *valu
 		cache_set_jump(target, i++);
 
 		{
-			int const err = cache_write(target, 4, true);
-			if (ERROR_OK != err)
-				return err;
+			int const error_code = cache_write(target, 4, true);
+
+			if (ERROR_OK != error_code)
+				return error_code;
 		}
 	} else if (regid == GDB_REGNO_PRIV) {
 		*value = get_field(info->dcsr, DCSR_PRV);
 	} else {
-		int result = register_read(target, value, regid);
-		if (result != ERROR_OK)
-			return result;
+		int const error_code = register_read(target, value, regid);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	if (regid == GDB_REGNO_MSTATUS)
@@ -1501,10 +1527,11 @@ static int riscv_011_halt(struct target *const target)
 	cache_set_jump(target, 3);
 
 	{
-		int const err = cache_write(target, 4, true);
-		if (ERROR_OK != err) {
+		int const error_code = cache_write(target, 4, true);
+
+		if (ERROR_OK != error_code) {
 			LOG_ERROR("%s: cache_write() failed.", target_name(target));
-			return err;
+			return error_code;
 		}
 	}
 
@@ -1630,9 +1657,10 @@ riscv_011_examine(struct target *const target)
 
 	/* Check that we can actually read/write dram. */
 	{
-		int const err = cache_check(target);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = cache_check(target);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	cache_write(target, 0, true);
@@ -1663,8 +1691,9 @@ riscv_011_examine(struct target *const target)
 		LOG_WARNING("%s: Failed to read misa at 0x%x; trying 0x%x.", target_name(target), CSR_MISA,
 				old_csr_misa);
 		{
-			int const err = read_csr(target, &r->harts[0].misa, old_csr_misa);
-			if (ERROR_OK != err) {
+			int const error_code = read_csr(target, &r->harts[0].misa, old_csr_misa);
+
+			if (ERROR_OK != error_code) {
 				/* Maybe this is an old core that still has $misa at the old
 				 * address. */
 				LOG_ERROR("%s: Failed to read misa at 0x%x.", target_name(target), old_csr_misa);
@@ -1675,25 +1704,28 @@ riscv_011_examine(struct target *const target)
 
 	{
 		/* Update register list to match discovered XLEN/supported extensions. */
-		int const err = riscv_init_registers(target);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = riscv_init_registers(target);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	info->never_halted = true;
 
 	{
-		int const err = riscv_011_poll(target);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = riscv_011_poll(target);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	target_set_examined(target);
 
 	{
-		int const err = riscv_set_current_hartid(target, 0);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = riscv_set_current_hartid(target, 0);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	for (size_t i = 0; i < 32; ++i)
@@ -1749,11 +1781,13 @@ handle_halt_routine(struct target *const target)
 	/* Final read to get the last value out. */
 	scans_add_read32(scans, 4, false);
 
-	int retval = scans_execute(scans);
+	{
+		int error_code = scans_execute(scans);
 
-	if (retval != ERROR_OK) {
-		LOG_ERROR("%s: JTAG execute failed: %d", target_name(target), retval);
-		goto error;
+		if (ERROR_OK != error_code) {
+			LOG_ERROR("%s: JTAG execute failed: %d", target_name(target), error_code);
+			goto error;
+		}
 	}
 
 	unsigned dbus_busy = 0;
@@ -1988,7 +2022,7 @@ static int handle_halt(struct target *const target, bool const announce)
 		@bug Is possible infinite loop?
 		*/
 		re = handle_halt_routine(target);
-	} while (re == RE_AGAIN);
+	} while (RE_AGAIN == re);
 
 	if (re != RE_OK) {
 		LOG_ERROR("%s: handle_halt_routine failed", target_name(target));
@@ -2028,9 +2062,13 @@ static int handle_halt(struct target *const target, bool const announce)
 	if (info->never_halted) {
 		info->never_halted = false;
 
-		int result = maybe_read_tselect(target);
-		if (result != ERROR_OK)
-			return result;
+		{
+			int error_code = maybe_read_tselect(target);
+
+			if (ERROR_OK != error_code)
+				return error_code;
+		}
+
 		riscv_enumerate_triggers(target);
 	}
 
@@ -2096,23 +2134,26 @@ static int poll_target(struct target *const target, bool announce)
 static int full_step(struct target *const target, bool announce)
 {
 	{
-		int const result = execute_resume(target, true);
-		if (result != ERROR_OK)
-			return result;
+		int const error_code = execute_resume(target, true);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	time_t const start = time(NULL);
 
 	for (;;) {
-		int const result = poll_target(target, announce);
+		{
+			int const error_code = poll_target(target, announce);
 
-		if (result != ERROR_OK)
-			return result;
+			if (ERROR_OK != error_code)
+				return error_code;
+		}
 
-		if (target->state != TARGET_DEBUG_RUNNING)
+		if (TARGET_DEBUG_RUNNING != target->state)
 			break;
 
-		if (time(NULL) - start > riscv_command_timeout_sec) {
+		if (riscv_command_timeout_sec + start < time(NULL)) {
 			LOG_ERROR("%s: Timed out waiting for step to complete."
 					"Increase timeout with riscv set_command_timeout_sec",
 					target_name(target));
@@ -2135,9 +2176,10 @@ strict_step(struct target *const target, bool announce)
 	}
 
 	{
-		int const err = full_step(target, announce);
-		if (err != ERROR_OK)
-			return err;
+		int const error_code = full_step(target, announce);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	for (struct watchpoint *watchpoint = target->watchpoints; watchpoint; watchpoint = watchpoint->next) {
@@ -2163,32 +2205,34 @@ riscv_011_step(struct target *const target,
 						target_name(target),
 						riscv_xlen(target));
 		}
-		int result = register_write(target, GDB_REGNO_PC, address);
-		if (result != ERROR_OK)
-			return result;
+		{
+			int const error_code = register_write(target, GDB_REGNO_PC, address);
+
+			if (ERROR_OK != error_code)
+				return error_code;
+		}
 	}
 
 	riscv_011_info_t *const info = get_info(target);
 	assert(info);
 
-	if (info->need_strict_step || handle_breakpoints) {
-		int const err = strict_step(target, true);
-		if (ERROR_OK != err)
-			return err;
-	} else {
-		return full_step(target, false);
-	}
-
-	return ERROR_OK;
+	return
+		info->need_strict_step || handle_breakpoints ? strict_step(target, true) :
+		full_step(target, false);
 }
 
-static int riscv_011_poll(struct target *const target)
+static int
+riscv_011_poll(struct target *const target)
 {
 	return poll_target(target, true);
 }
 
-static int riscv_011_resume(struct target *const target, int current,
-		target_addr_t address, int handle_breakpoints, int debug_execution)
+static int
+riscv_011_resume(struct target *const target,
+	int current,
+	target_addr_t address,
+	int handle_breakpoints,
+	int debug_execution)
 {
 	riscv_011_info_t *info = get_info(target);
 
@@ -2199,15 +2243,20 @@ static int riscv_011_resume(struct target *const target, int current,
 			LOG_WARNING("%s: Asked to resume at 32-bit PC on %d-bit target.", target_name(target),
 					riscv_xlen(target));
 		}
-		int result = register_write(target, GDB_REGNO_PC, address);
-		if (result != ERROR_OK)
-			return result;
+
+		{
+			int const error_code = register_write(target, GDB_REGNO_PC, address);
+
+			if (ERROR_OK != error_code)
+				return error_code;
+		}
 	}
 
 	if (info->need_strict_step || handle_breakpoints) {
-		int result = strict_step(target, false);
-		if (result != ERROR_OK)
-			return result;
+		int const error_code = strict_step(target, false);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	return resume(target, debug_execution, false);
@@ -2224,10 +2273,11 @@ static int riscv_011_assert_reset(struct target *const target)
 
 	{
 		/* The only assumption we can make is that the TAP was reset. */
-		int const err = wait_for_debugint_clear(target, true);
-		if (ERROR_OK != err) {
+		int const error_code = wait_for_debugint_clear(target, true);
+
+		if (ERROR_OK != error_code) {
 			LOG_ERROR("%s: Debug interrupt didn't clear.", target_name(target));
-			return err;
+			return error_code;
 		}
 	}
 
@@ -2322,12 +2372,13 @@ riscv_011_read_memory(struct target *const target,
 		}
 
 		{
-			int const err = scans_execute(scans);
-			if (ERROR_OK != err) {
-				LOG_ERROR("%s: JTAG execute failed: %d", target_name(target), err);
+			int const error_code_1 = scans_execute(scans);
+
+			if (ERROR_OK != error_code_1) {
+				LOG_ERROR("%s: JTAG execute failed: %d", target_name(target), error_code_1);
 				scans_delete(scans);
 				cache_clean(target);
-				return err;
+				return error_code_1;
 			}
 		}
 
@@ -2475,18 +2526,20 @@ riscv_011_write_memory(struct target *const target,
 	cache_set_jump(target, 2);
 	cache_set(target, SLOT0, address);
 	{
-		int const err = cache_write(target, 5, true);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = cache_write(target, 5, true);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	uint64_t const t0 = cache_get(target, SLOT1);
 	LOG_DEBUG("%s: t0 is 0x%" PRIx64, target_name(target), t0);
 
 	{
-		int const err = setup_write_memory(target, size);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = setup_write_memory(target, size);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	static unsigned const max_batch_size = 256;
@@ -2535,12 +2588,13 @@ riscv_011_write_memory(struct target *const target,
 		}
 
 		{
-			int const err = scans_execute(scans);
-			if (ERROR_OK != err) {
-				LOG_ERROR("%s: JTAG execute failed: %d", target_name(target), err);
+			int const error_code = scans_execute(scans);
+
+			if (ERROR_OK != error_code) {
+				LOG_ERROR("%s: JTAG execute failed: %d", target_name(target), error_code);
 				scans_delete(scans);
 				cache_clean(target);
-				return err;
+				return error_code;
 			}
 		}
 
@@ -2595,20 +2649,22 @@ riscv_011_write_memory(struct target *const target,
 			cache_clean(target);
 
 			{
-				int const err = write_gpr(target, T0, address + size * i);
-				if (ERROR_OK != err) {
+				int const error_code = write_gpr(target, T0, address + size * i);
+
+				if (ERROR_OK != error_code) {
 					scans_delete(scans);
 					cache_clean(target);
-					return err;
+					return error_code;
 				}
 			}
 
 			{
-				int const err = setup_write_memory(target, size);
-				if (ERROR_OK != err) {
+				int const error_code = setup_write_memory(target, size);
+
+				if (ERROR_OK != error_code) {
 					scans_delete(scans);
 					cache_clean(target);
-					return err;
+					return error_code;
 				}
 			}
 		} else {
@@ -2639,7 +2695,8 @@ error:
 	return ERROR_TARGET_FAILURE;
 }
 
-static int riscv_011_arch_state(struct target *const target)
+static int
+riscv_011_arch_state(struct target *const target)
 {
 	return ERROR_OK;
 }

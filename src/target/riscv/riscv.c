@@ -116,63 +116,61 @@ select_dmi(struct jtag_tap *const tap)
 	select_instruction(tap, instruction_buffer);
 }
 
-static uint32_t
+static int
 uint32_instruction_scan(struct jtag_tap *const tap,
 	uint8_t const instruction,
 	char const *const instruction_name,
-	uint32_t const out_value)
+	uint32_t const out_value,
+	uint32_t in_value[1])
 {
-	select_instruction(tap, &instruction);
-
-	uint8_t out_buffer[sizeof(uint32_t)];
-	buf_set_u32(out_buffer, 0, CHAR_BIT * sizeof(uint32_t), out_value);
-	uint8_t in_buffer[sizeof(uint32_t)] = {};
 	typedef struct scan_field scan_field_t;
+	uint8_t out_buffer[sizeof(uint32_t)] = {};
+	uint8_t in_buffer[sizeof(uint32_t)] = {};
 	scan_field_t const field = {
 		.num_bits = CHAR_BIT * sizeof(uint32_t),
 		.out_value = out_buffer,
 		.in_value = in_buffer,
 	};
+
+	select_instruction(tap, &instruction);
+	buf_set_u32(out_buffer, 0, CHAR_BIT * sizeof(uint32_t), out_value);
 	jtag_add_dr_scan(tap, 1, &field, TAP_IDLE);
 
 	/** Always return to @c dmi.
 
-	@bug Non robust strategy
+		@bug Non robust strategy
 	*/
 	select_dmi(tap);
 
-	{
-		int const err = jtag_execute_queue();
+	int const error_code = jtag_execute_queue();
 
-		if (ERROR_OK != err) {
-			LOG_ERROR("%s: failed jtag scan: %d",
-				jtag_tap_name(tap), err);
-			/**
-			@todo Propagate error code
-			@bug Result is invalid on jtag_execute_queue error
-			*/
-			return 0xBADC0DE;
-		}
+	if (ERROR_OK != error_code) {
+		LOG_ERROR("%s: failed jtag scan: %d",
+			jtag_tap_name(tap), error_code);
+	} else {
+		in_value[0] = buf_get_u32(field.in_value, 0, CHAR_BIT * sizeof(uint32_t));
+		LOG_DEBUG("%s: %s: 0x%" PRIx32 " -> 0x%" PRIx32,
+			jtag_tap_name(tap), instruction_name, out_value, in_value[0]);
 	}
 
-	uint32_t const in_value = buf_get_u32(field.in_value, 0, CHAR_BIT * sizeof(uint32_t));
-	LOG_DEBUG("%s: %s: 0x%" PRIx32 " -> 0x%" PRIx32,
-		jtag_tap_name(tap), instruction_name, out_value, in_value);
-
-	return in_value;
+	return error_code;
 }
 
 uint32_t
 dtmcontrol_scan(struct jtag_tap *const tap,
 	uint32_t const out_value)
 {
-	return uint32_instruction_scan(tap, DTM_DTMCS, "DTMCONTROL", out_value);
+	uint32_t in_value = 0xBADC0DE;
+	uint32_instruction_scan(tap, DTM_DTMCS, "DTMCONTROL", out_value, &in_value);
+	return in_value;
 }
 
 uint32_t
 idcode_scan(struct jtag_tap *const tap)
 {
-	return uint32_instruction_scan(tap, DTM_IDCODE, "IDCODE", 0);
+	uint32_t in_value = 0xBADC0DE;
+	uint32_instruction_scan(tap, DTM_IDCODE, "IDCODE", 0, &in_value);
+	return in_value;
 }
 
 /**
@@ -352,10 +350,10 @@ maybe_add_trigger_t1(struct target *const target,
 
 	riscv_reg_t tdata1_rb;
 	{
-		int const ret = riscv_get_register_on_hart(target, &tdata1_rb, hartid, GDB_REGNO_TDATA1);
+		int const error_code = riscv_get_register_on_hart(target, &tdata1_rb, hartid, GDB_REGNO_TDATA1);
 
-		if (ERROR_OK != ret)
-			return ret;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 	LOG_DEBUG("%s: tdata1=0x%" PRIx64, target_name(target), tdata1_rb);
 
@@ -414,17 +412,17 @@ maybe_add_trigger_t2(struct target *const target,
 		tdata1 |= MCONTROL_STORE;
 
 	{
-		int const err = riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, tdata1);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, tdata1);
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	uint64_t tdata1_rb;
 	{
-		int const err =
+		int const error_code =
 			riscv_get_register_on_hart(target, &tdata1_rb, hartid, GDB_REGNO_TDATA1);
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	LOG_DEBUG("%s: tdata1=0x%" PRIx64, target_name(target), tdata1_rb);
@@ -447,9 +445,9 @@ add_trigger(struct target *const target,
 	struct trigger *const trigger)
 {
 	{
-		int const err = riscv_enumerate_triggers(target);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = riscv_enumerate_triggers(target);
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	/** @details In RTOS mode, we need to set the same trigger in the same slot on every hart,
@@ -471,11 +469,11 @@ add_trigger(struct target *const target,
 			first_hart = hartid;
 
 		{
-			int const err =
+			int const error_code =
 				riscv_get_register_on_hart(target, &tselect[hartid], hartid, GDB_REGNO_TSELECT);
 
-			if (ERROR_OK != err)
-				return err;
+			if (ERROR_OK != error_code)
+				return error_code;
 		}
 	}
 
@@ -494,18 +492,18 @@ add_trigger(struct target *const target,
 
 		uint64_t tdata1;
 		{
-			int const err =
+			int const error_code =
 				riscv_get_register_on_hart(target, &tdata1, first_hart, GDB_REGNO_TDATA1);
 
-			if (ERROR_OK != err)
-				return err;
+			if (ERROR_OK != error_code)
+				return error_code;
 		}
 
 		int const type =
 			get_field(tdata1, MCONTROL_TYPE(riscv_xlen(target)));
 
 		{
-			int err = ERROR_OK;
+			int error_code = ERROR_OK;
 
 			for (int hartid = first_hart; hartid < riscv_count_harts(target); ++hartid) {
 				if (!riscv_hart_enabled(target, hartid))
@@ -516,11 +514,11 @@ add_trigger(struct target *const target,
 
 				switch (type) {
 				case 1:
-					err = maybe_add_trigger_t1(target, hartid, trigger, tdata1);
+					error_code = maybe_add_trigger_t1(target, hartid, trigger, tdata1);
 					break;
 
 				case 2:
-					err = maybe_add_trigger_t2(target, hartid, trigger, tdata1);
+					error_code = maybe_add_trigger_t2(target, hartid, trigger, tdata1);
 					break;
 
 				default:
@@ -528,11 +526,11 @@ add_trigger(struct target *const target,
 					continue;
 				}
 
-				if (err != ERROR_OK)
+				if (ERROR_OK != error_code)
 					continue;
 			}
 
-			if (ERROR_OK != err)
+			if (ERROR_OK != error_code)
 				continue;
 		}
 
@@ -550,13 +548,14 @@ add_trigger(struct target *const target,
 		if (!riscv_hart_enabled(target, hartid))
 			continue;
 
-		int const err =
+		int const error_code =
 			riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, tselect[hartid]);
-		if (ERROR_OK != err)
-			return err;
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
-	if (i >= rvi->harts[first_hart].trigger_count) {
+	if (rvi->harts[first_hart].trigger_count <= i) {
 		LOG_ERROR("%s: Couldn't find an available hardware trigger.", target_name(target));
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
@@ -590,14 +589,14 @@ riscv_add_breakpoint(struct target *const target,
 			}
 
 			{
-				int const err =
+				int const error_code =
 					target_read_memory(target, breakpoint->address, 2, breakpoint->length / 2, breakpoint->orig_instr);
 
-				if (ERROR_OK != err) {
+				if (ERROR_OK != error_code) {
 					LOG_ERROR("%s: Failed to read original instruction at 0x%" TARGET_PRIxADDR,
 						target_name(target),
 						breakpoint->address);
-					return err;
+					return error_code;
 				}
 			}
 
@@ -605,13 +604,13 @@ riscv_add_breakpoint(struct target *const target,
 			buf_set_u32(buff, 0, breakpoint->length * CHAR_BIT, breakpoint->length == 4 ? ebreak() : ebreak_c());
 
 			{
-				int const err =
+				int const error_code =
 					target_write_memory(target, breakpoint->address, 2, breakpoint->length / 2, buff);
 
-				if (ERROR_OK != err) {
+				if (ERROR_OK != error_code) {
 					LOG_ERROR("%s: Failed to write %d-byte breakpoint instruction at 0x%" TARGET_PRIxADDR,
 						target_name(target), breakpoint->length, breakpoint->address);
-					return err;
+					return error_code;
 				}
 			}
 		}
@@ -622,11 +621,11 @@ riscv_add_breakpoint(struct target *const target,
 			struct trigger trigger;
 			trigger_from_breakpoint(&trigger, breakpoint);
 			{
-				int const err =
+				int const error_code =
 					add_trigger(target, &trigger);
 
-				if (ERROR_OK != err)
-					return err;
+				if (ERROR_OK != error_code)
+					return error_code;
 			}
 		}
 		break;
@@ -647,10 +646,10 @@ remove_trigger(struct target *const target,
 	struct trigger *const trigger)
 {
 	{
-		int const err = riscv_enumerate_triggers(target);
+		int const error_code = riscv_enumerate_triggers(target);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	int first_hart = -1;
@@ -691,10 +690,11 @@ remove_trigger(struct target *const target,
 
 		riscv_reg_t tselect;
 		{
-			int const err =
+			int const error_code =
 				riscv_get_register_on_hart(target, &tselect, hartid, GDB_REGNO_TSELECT);
-			if (ERROR_OK != err)
-				return err;
+
+			if (ERROR_OK != error_code)
+				return error_code;
 		}
 
 		riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, i);
@@ -717,16 +717,16 @@ riscv_remove_breakpoint(struct target *const target,
 	switch (breakpoint->type) {
 	case BKPT_SOFT:
 		{
-			int const err =
+			int const error_code =
 				target_write_memory(target, breakpoint->address, 2, breakpoint->length / 2, breakpoint->orig_instr);
 
-			if (ERROR_OK != err) {
+			if (ERROR_OK != error_code) {
 				LOG_ERROR("%s: Failed to restore instruction for %d-byte breakpoint at "
 					"0x%" TARGET_PRIxADDR,
 					target_name(target),
 					breakpoint->length,
 					breakpoint->address);
-				return err;
+				return error_code;
 			}
 		}
 		break;
@@ -735,10 +735,10 @@ riscv_remove_breakpoint(struct target *const target,
 		{
 			struct trigger trigger;
 			trigger_from_breakpoint(&trigger, breakpoint);
-			int const err = remove_trigger(target, &trigger);
+			int const error_code = remove_trigger(target, &trigger);
 
-			if (ERROR_OK != err)
-				return err;
+			if (ERROR_OK != error_code)
+				return error_code;
 
 		}
 		break;
@@ -782,10 +782,10 @@ riscv_add_watchpoint(struct target *const target,
 	trigger_from_watchpoint(&trigger, watchpoint);
 
 	{
-		int const err = add_trigger(target, &trigger);
+		int const error_code = add_trigger(target, &trigger);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	assert(watchpoint);
@@ -803,9 +803,10 @@ riscv_remove_watchpoint(struct target *const target,
 	trigger_from_watchpoint(&trigger, watchpoint);
 
 	{
-		int const err = remove_trigger(target, &trigger);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = remove_trigger(target, &trigger);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	assert(watchpoint);
@@ -849,13 +850,13 @@ riscv_hit_watchpoint(struct target *const target,
 	uint8_t buffer[length];
 
 	{
-		int const err =target_read_buffer(target, dpc, length, buffer);
+		int const error_code =target_read_buffer(target, dpc, length, buffer);
 
-		if (ERROR_OK != err) {
+		if (ERROR_OK != error_code) {
 			LOG_ERROR("%s: Failed to read instruction at dpc 0x%" PRIx64,
 					target_name(target),
 					dpc);
-			return err;
+			return error_code;
 		}
 	}
 
@@ -915,8 +916,7 @@ riscv_hit_watchpoint(struct target *const target,
 			assert(hit_watchpoint);
 			*hit_watchpoint = wp;
 			LOG_DEBUG("%s: Hit address=%" TARGET_PRIxADDR,
-					target_name(target),
-					wp->address);
+					target_name(target), wp->address);
 			return ERROR_OK;
 		}
 	}
@@ -983,10 +983,10 @@ riscv_examine(struct target *const target)
 		return ERROR_TARGET_INVALID;
 
 	{
-		int const err = tt->init_target(info->cmd_ctx, target);
+		int const error_code = tt->init_target(info->cmd_ctx, target);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	return tt->examine(target);
@@ -1119,10 +1119,10 @@ riscv_read_memory(struct target *const target,
 	assert(buffer);
 
 	{
-		int const err = riscv_select_current_hart(target);
+		int const error_code = riscv_select_current_hart(target);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	struct target_type const *const tt = get_target_type(target);
@@ -1149,10 +1149,10 @@ riscv_write_memory(struct target *const target,
 		return ERROR_OK;
 
 	{
-		int const err = riscv_select_current_hart(target);
+		int const error_code = riscv_select_current_hart(target);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	struct target_type const *const tt = get_target_type(target);
@@ -1184,10 +1184,10 @@ riscv_get_gdb_reg_list(struct target *const target,
 	}
 
 	{
-		int const err = riscv_select_current_hart(target);
+		int const error_code = riscv_select_current_hart(target);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	switch (reg_class) {
@@ -1265,10 +1265,10 @@ riscv_run_algorithm(struct target *const target,
 		return ERROR_TARGET_INVALID;
 
 	{
-		int const err = reg_pc->type->get(reg_pc);
+		int const error_code = reg_pc->type->get(reg_pc);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	uint64_t const saved_pc = buf_get_u64(reg_pc->value, 0, reg_pc->size);
@@ -1302,19 +1302,19 @@ riscv_run_algorithm(struct target *const target,
 		}
 
 		{
-			int const err = r->type->get(r);
+			int const error_code = r->type->get(r);
 
-			if (ERROR_OK != err)
-				return err;
+			if (ERROR_OK != error_code)
+				return error_code;
 		}
 
 		saved_regs[r->number] = buf_get_u64(r->value, 0, r->size);
 
 		{
-			int const err = r->type->set(r, reg_params[i].value);
+			int const error_code = r->type->set(r, reg_params[i].value);
 
-			if (ERROR_OK != err)
-				return err;
+			if (ERROR_OK != error_code)
+				return error_code;
 		}
 	}
 
@@ -1352,10 +1352,10 @@ riscv_run_algorithm(struct target *const target,
 			entry_point);
 
 	{
-		int const err = oldriscv_resume(target, 0, entry_point, 0, 0);
+		int const error_code = oldriscv_resume(target, 0, entry_point, 0, 0);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	{
@@ -1383,20 +1383,21 @@ riscv_run_algorithm(struct target *const target,
 			}
 
 			{
-				int const err = old_or_new_riscv_poll(target);
+				int const error_code = old_or_new_riscv_poll(target);
 
-				if (ERROR_OK != err)
-					return err;
+				if (ERROR_OK != error_code)
+					return error_code;
 			}
 		}
 	}
 
 	{
-		int const err = reg_pc->type->get(reg_pc);
+		int const error_code = reg_pc->type->get(reg_pc);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
+
 	uint64_t const final_pc = buf_get_u64(reg_pc->value, 0, reg_pc->size);
 
 	if (final_pc != exit_point) {
@@ -1426,10 +1427,10 @@ riscv_run_algorithm(struct target *const target,
 	buf_set_u64(buf, 0, info->harts[0].xlen, saved_pc);
 
 	{
-		int const err = reg_pc->type->set(reg_pc, buf);
+		int const error_code = reg_pc->type->set(reg_pc, buf);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	for (int i = 0; i < num_reg_params; ++i) {
@@ -1440,10 +1441,10 @@ riscv_run_algorithm(struct target *const target,
 
 		{
 			assert(r->type && r->type->set);
-			int const err = r->type->set(r, buf);
+			int const error_code = r->type->set(r, buf);
 
-			if (ERROR_OK != err)
-				return err;
+			if (ERROR_OK != error_code)
+				return error_code;
 		}
 	}
 
@@ -1507,16 +1508,15 @@ riscv_halt_one_hart(struct target *const target, int const hartid)
 	LOG_DEBUG("%s: halting hart %d", target_name(target), hartid);
 
 	{
-		int const err = riscv_set_current_hartid(target, hartid);
+		int const error_code = riscv_set_current_hartid(target, hartid);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	if (riscv_is_halted(target)) {
 		LOG_DEBUG("%s:  hart %d requested halt, but was already halted",
-			target_name(target),
-			hartid);
+			target_name(target), hartid);
 		return ERROR_OK;
 	}
 
@@ -1554,7 +1554,8 @@ riscv_openocd_poll(struct target *const target)
 		}
 
 		if (halted_hart == -1) {
-			LOG_DEBUG("%s:  no harts just halted, target->state=%d", target_name(target), target->state);
+			LOG_DEBUG("%s:  no harts just halted, target->state=%d",
+				target_name(target), target->state);
 			return ERROR_OK;
 		}
 
@@ -1573,9 +1574,9 @@ riscv_openocd_poll(struct target *const target)
 		enum riscv_poll_hart_e const poll_event =
 			riscv_poll_hart(target, riscv_current_hartid(target));
 
-		if (poll_event == RPH_NO_CHANGE || poll_event == RPH_DISCOVERED_RUNNING)
+		if (RPH_NO_CHANGE == poll_event || RPH_DISCOVERED_RUNNING == poll_event)
 			return ERROR_OK;
-		else if (poll_event == RPH_ERROR) {
+		else if (RPH_ERROR == poll_event) {
 			LOG_ERROR("%s: poll HART error", target_name(target));
 			return ERROR_TARGET_FAILURE;
 		}
@@ -1641,11 +1642,11 @@ riscv_openocd_halt(struct target *const target)
 	LOG_DEBUG("%s: halting all harts", target_name(target));
 
 	{
-		int const err = riscv_halt_all_harts(target);
+		int const error_code = riscv_halt_all_harts(target);
 
-		if (ERROR_OK != err) {
+		if (ERROR_OK != error_code) {
 			LOG_ERROR("%s: Unable to halt all harts", target_name(target));
-			return err;
+			return error_code;
 		}
 	}
 
@@ -1688,9 +1689,10 @@ riscv_step_rtos_hart(struct target *const target)
 	}
 
 	{
-		int const err = riscv_set_current_hartid(target, hartid);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = riscv_set_current_hartid(target, hartid);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	LOG_DEBUG("%s: stepping hart %d", target_name(target), hartid);
@@ -1707,19 +1709,20 @@ riscv_step_rtos_hart(struct target *const target)
 
 	{
 		assert(rvi->step_current_hart);
-		int const err = rvi->step_current_hart(target);
-		if (ERROR_OK != err)
-			return err;
+		int const error_code = rvi->step_current_hart(target);
+
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	riscv_invalidate_register_cache(target);
 	{
 		assert(rvi->on_halt);
-		int const err = rvi->on_halt(target);
+		int const error_code = rvi->on_halt(target);
 
 		if (!riscv_is_halted(target)) {
 			LOG_ERROR("%s: Hart was not halted after single step!", target_name(target));
-			return ERROR_OK != err ? err : ERROR_TARGET_NOT_HALTED;
+			return ERROR_OK != error_code ? error_code : ERROR_TARGET_NOT_HALTED;
 		}
 	}
 
@@ -1748,19 +1751,20 @@ riscv_openocd_resume(struct target *const target,
 		struct watchpoint *watchpoint = target->watchpoints;
 		bool trigger_temporarily_cleared[RISCV_MAX_HWBPS] = {0};
 
-		int result = ERROR_OK;
-		for (int i = 0; watchpoint && ERROR_OK == result; ++i) {
+		int error_code = ERROR_OK;
+
+		for (int i = 0; watchpoint && ERROR_OK == error_code; ++i) {
 			LOG_DEBUG("%s: watchpoint %d: set=%d", target_name(target), i, watchpoint->set);
 			trigger_temporarily_cleared[i] = watchpoint->set;
 
 			if (watchpoint->set)
-				result = target_remove_watchpoint(target, watchpoint);
+				error_code = target_remove_watchpoint(target, watchpoint);
 
 			watchpoint = watchpoint->next;
 		}
 
-		if (ERROR_OK == result)
-			result = riscv_step_rtos_hart(target);
+		if (ERROR_OK == error_code)
+			error_code = riscv_step_rtos_hart(target);
 
 		{
 			int i = 0;
@@ -1772,21 +1776,21 @@ riscv_openocd_resume(struct target *const target,
 
 				if (trigger_temporarily_cleared[i]) {
 					int const err = target_add_watchpoint(target, watchpoint);
-					result = ERROR_OK == result ? err : result;
+					error_code = ERROR_OK == error_code ? err : error_code;
 				}
 			}
 		}
 
-		if (ERROR_OK != result)
-			return result;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	{
-		int const err = riscv_resume_all_harts(target);
+		int const error_code = riscv_resume_all_harts(target);
 
-		if (ERROR_OK != err) {
+		if (ERROR_OK != error_code) {
 			LOG_ERROR("%s: unable to resume all harts", target_name(target));
-			return err;
+			return error_code;
 		}
 	}
 
@@ -1805,18 +1809,18 @@ riscv_openocd_step(struct target *const target,
 	LOG_DEBUG("%s: stepping rtos hart", target_name(target));
 
 	if (!current) {
-		int const err = riscv_set_register(target, GDB_REGNO_PC, address);
+		int const error_code = riscv_set_register(target, GDB_REGNO_PC, address);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	{
-		int const err = riscv_step_rtos_hart(target);
+		int const error_code = riscv_step_rtos_hart(target);
 
-		if (ERROR_OK != err) {
+		if (ERROR_OK != error_code) {
 			LOG_ERROR("%s: unable to step rtos hart", target_name(target));
-			return err;
+			return error_code;
 		}
 	}
 
@@ -1905,7 +1909,7 @@ parse_error(char const *const string,
 	unsigned const position)
 {
 	/**
-	@bug non portable dynamic array
+	@bug Non-portable language extension: array with dynamic size
 	*/
 	char buf[position + 2];
 	memset(buf, ' ', position);
@@ -2036,10 +2040,10 @@ COMMAND_HANDLER(riscv_authdata_read)
 		uint32_t value;
 
 		{
-			int const err = rvi->authdata_read(target, &value);
+			int const error_code = rvi->authdata_read(target, &value);
 
-			if (ERROR_OK != err)
-				return err;
+			if (ERROR_OK != error_code)
+				return error_code;
 		}
 
 		command_print(CMD_CTX, "0x%" PRIx32, value);
@@ -2100,10 +2104,10 @@ COMMAND_HANDLER(riscv_dmi_read)
 		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], address);
 
 		{
-			int const err = rvi->dmi_read(target, &value, address);
+			int const error_code = rvi->dmi_read(target, &value, address);
 
-			if (ERROR_OK != err)
-				return err;
+			if (ERROR_OK != error_code)
+				return error_code;
 		}
 
 		command_print(CMD_CTX, "0x%" PRIx32, value);
@@ -2350,10 +2354,10 @@ riscv_resume_one_hart(struct target *const target, int const hartid)
 	LOG_DEBUG("%s: resuming hart %d", target_name(target), hartid);
 
 	{
-		int const err = riscv_set_current_hartid(target, hartid);
+		int const error_code = riscv_set_current_hartid(target, hartid);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	if (!riscv_is_halted(target)) {
@@ -2364,10 +2368,10 @@ riscv_resume_one_hart(struct target *const target, int const hartid)
 	struct riscv_info_t const *const rvi = riscv_info(target);
 	assert(rvi && rvi->on_resume);
 	{
-		int const err = rvi->on_resume(target);
+		int const error_code = rvi->on_resume(target);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 	assert(rvi->resume_current_hart);
 	return rvi->resume_current_hart(target);
@@ -2378,17 +2382,18 @@ int
 riscv_resume_all_harts(struct target *const target)
 {
 	int const number_of_harts = riscv_count_harts(target);
-	int result = ERROR_OK;
+	int error_code = ERROR_OK;
+
 	for (int i = 0; i < number_of_harts; ++i)
 		if (riscv_hart_enabled(target, i)) {
-			int const err = riscv_resume_one_hart(target, i);
+			int const error_code_1 = riscv_resume_one_hart(target, i);
 
-			if (ERROR_OK == result && ERROR_OK != err)
-				result = err;
+			if (ERROR_OK == error_code && ERROR_OK != error_code_1)
+				error_code = error_code_1;
 		}
 
 	riscv_invalidate_register_cache(target);
-	return result;
+	return error_code;
 }
 
 /** @return error code */
@@ -2408,10 +2413,10 @@ riscv_set_current_hartid(struct target *const target,
 	LOG_DEBUG("%s: setting hartid to %d, was %d", target_name(target), hartid, previous_hartid);
 
 	{
-		int const err = rvi->select_current_hart(target);
+		int const error_code = rvi->select_current_hart(target);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	/* This might get called during init, in which case we shouldn't be
@@ -2539,7 +2544,7 @@ enum riscv_halt_reason
 {
 	struct riscv_info_t const *const rvi = riscv_info(target);
 
-	if (riscv_set_current_hartid(target, hartid) != ERROR_OK)
+	if (ERROR_OK != riscv_set_current_hartid(target, hartid))
 		return RISCV_HALT_ERROR;
 
 	if (!riscv_is_halted(target)) {
@@ -2587,11 +2592,11 @@ riscv_enumerate_triggers(struct target *const target)
 
 		riscv_reg_t tselect;
 		{
-			int const err =
+			int const error_code =
 				riscv_get_register_on_hart(target, &tselect, hartid, GDB_REGNO_TSELECT);
 
-			if (ERROR_OK != err)
-				return err;
+			if (ERROR_OK != error_code)
+				return error_code;
 		}
 
 		for (unsigned t = 0; t < RISCV_MAX_TRIGGERS; ++t) {
@@ -2600,10 +2605,11 @@ riscv_enumerate_triggers(struct target *const target)
 			riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, t);
 			uint64_t tselect_rb;
 			{
-				int const err =
+				int const error_code =
 					riscv_get_register_on_hart(target, &tselect_rb, hartid, GDB_REGNO_TSELECT);
-				if (ERROR_OK != err)
-					return err;
+
+				if (ERROR_OK != error_code)
+					return error_code;
 			}
 
 			/* Mask off the top bit, which is used as @c tdrmode in old implementations. */
@@ -2614,11 +2620,11 @@ riscv_enumerate_triggers(struct target *const target)
 
 			uint64_t tdata1;
 			{
-				int const err =
+				int const error_code =
 					riscv_get_register_on_hart(target, &tdata1, hartid, GDB_REGNO_TDATA1);
 
-				if (ERROR_OK != err)
-					return err;
+				if (ERROR_OK != error_code)
+					return error_code;
 			}
 
 			int const type = get_field(tdata1, MCONTROL_TYPE(riscv_xlen(target)));
@@ -2627,34 +2633,34 @@ riscv_enumerate_triggers(struct target *const target)
 				case 1:
 					{
 						/* On these older cores we don't support software using triggers. */
-						int const err = riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, 0);
+						int const error_code = riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, 0);
 
-						if (ERROR_OK != err)
-							return err;
+						if (ERROR_OK != error_code)
+							return error_code;
 					}
 					break;
 
 				case 2:
 					if (tdata1 & MCONTROL_DMODE(riscv_xlen(target))) {
-						int const err = riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, 0);
+						int const error_code = riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, 0);
 
-						if (ERROR_OK != err)
-							return err;
+						if (ERROR_OK != error_code)
+							return error_code;
 					}
 					break;
 
 					/**
-					@bug no default
+					@bug no default case
 					*/
 			}
 		}
 
 		{
-			int const err =
+			int const error_code =
 				riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, tselect);
 
-			if (ERROR_OK != err)
-				return err;
+			if (ERROR_OK != error_code)
+				return error_code;
 		}
 
 		LOG_INFO("%s: [%d] Found %d triggers",
@@ -2745,10 +2751,10 @@ register_get(struct reg *const reg)
 	struct target *const target = reg_info->target;
 	uint64_t value;
 	{
-		int const err = riscv_get_register(target, &value, reg->number);
+		int const error_code = riscv_get_register(target, &value, reg->number);
 
-		if (ERROR_OK != err)
-			return err;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	buf_set_u64(reg->value, 0, reg->size, value);

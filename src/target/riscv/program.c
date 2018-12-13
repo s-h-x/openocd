@@ -38,11 +38,13 @@ riscv_program_write(struct riscv_program *const program)
 			i,
 			program->debug_buffer[i]);
 
-		int const result =
-			riscv_write_debug_buffer(program->target, i, program->debug_buffer[i]);
+		{
+			int const error_code =
+				riscv_write_debug_buffer(program->target, i, program->debug_buffer[i]);
 
-		if (ERROR_OK != result)
-			return result;
+			if (ERROR_OK != error_code)
+				return error_code;
+		}
 	}
 
 	return ERROR_OK;
@@ -88,17 +90,19 @@ riscv_program_exec(struct riscv_program *const p,
 		if (p->writes_xreg[i]) {
 			LOG_DEBUG("%s: Saving register %" PRIdPTR " as used by program",
 				t->cmd_name, i);
-			int const result = riscv_get_register(t, &saved_registers[i], i);
+			{
+				int const error_code = riscv_get_register(t, &saved_registers[i], i);
 
-			if (ERROR_OK != result)
-				return result;
+				if (ERROR_OK != error_code)
+					return error_code;
+			}
 		}
 	}
 
 	{
-		int const result = riscv_program_ebreak(p);
+		int const error_code = riscv_program_ebreak(p);
 
-		if (ERROR_OK != result) {
+		if (ERROR_OK != error_code) {
 			LOG_ERROR("%s: Unable to write ebreak", t->cmd_name);
 			for (size_t i = 0; i < riscv_debug_buffer_size(p->target); ++i)
 				LOG_ERROR("%s: ram[%02" PRIxPTR "]: DASM(0x%08" PRIx32 ") [0x%08" PRIx32 "]",
@@ -106,24 +110,24 @@ riscv_program_exec(struct riscv_program *const p,
 					i,
 					p->debug_buffer[i],
 					p->debug_buffer[i]);
-			return result;
+			return error_code;
 		}
 
 	}
 
 	{
-		int const result = riscv_program_write(p);
+		int const error_code = riscv_program_write(p);
 
-		if (ERROR_OK != result)
-			return result;
+		if (ERROR_OK != error_code)
+			return error_code;
 	}
 
 	{
-		int const result = riscv_execute_debug_buffer(t);
+		int const error_code = riscv_execute_debug_buffer(t);
 
-		if (ERROR_OK != result) {
+		if (ERROR_OK != error_code) {
 			LOG_ERROR("%s: Unable to execute program %p", t->cmd_name, p);
-			return result;
+			return error_code;
 		}
 	}
 

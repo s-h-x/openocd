@@ -96,7 +96,7 @@ riscv_semihosting_init(struct target *const target)
  * @return non-zero value if a request was processed or an error encountered
  */
 int
-riscv_semihosting(struct target *const target, int *const retval)
+riscv_semihosting(struct target *const target, int *const p_error_code)
 {
 	struct semihosting *const semihosting = target->semihosting;
 
@@ -113,10 +113,10 @@ riscv_semihosting(struct target *const target, int *const retval)
 	uint8_t tmp[12];
 
 	/* Read the current instruction, including the bracketing */
-	assert(retval);
-	*retval = target_read_memory(target, dpc - 4, 2, 6, tmp);
+	assert(p_error_code);
+	*p_error_code = target_read_memory(target, dpc - 4, 2, 6, tmp);
 
-	if (ERROR_OK != *retval)
+	if (ERROR_OK != *p_error_code)
 		return 0;
 
 	/*
@@ -158,8 +158,8 @@ riscv_semihosting(struct target *const target, int *const retval)
 
 		/* Check for ARM operation numbers. */
 		if (0 <= semihosting->op && semihosting->op <= 0x31) {
-			*retval = semihosting_common(target);
-			if (ERROR_OK != *retval) {
+			*p_error_code = semihosting_common(target);
+			if (ERROR_OK != *p_error_code) {
 				LOG_ERROR("%s: Failed semihosting operation", target_name(target));
 				return 0;
 			}
@@ -175,8 +175,8 @@ riscv_semihosting(struct target *const target, int *const retval)
 	 */
 	if (semihosting->is_resumable && !semihosting->hit_fileio) {
 		/* Resume right after the EBREAK 4 bytes instruction. */
-		*retval = target_resume(target, 0, dpc+4, 0, 0);
-		if (ERROR_OK != *retval) {
+		*p_error_code = target_resume(target, 0, dpc+4, 0, 0);
+		if (ERROR_OK != *p_error_code) {
 			LOG_ERROR("%s: Failed to resume target", target_name(target));
 			return 0;
 		}
