@@ -4,10 +4,13 @@
 #include "encoding.h"
 #include <stdint.h>
 
+/** @name Register numbers */
+/**@{*/
 #define ZERO	0
 #define T0      5
 #define S0      8
 #define S1      9
+/**@}*/
 
 static inline uint32_t
 bits(uint32_t const value,
@@ -24,6 +27,9 @@ bit(uint32_t const value,
 	return 1 & (value >> b);
 }
 
+/**
+	@bug imm is int32_t
+*/
 static inline uint32_t
 jal(unsigned const rd,
 	uint32_t const imm)
@@ -120,6 +126,9 @@ ld(unsigned const rd,
 		MATCH_LD;
 }
 
+/**
+@bug @c offset should be signed
+*/
 static inline uint32_t
 lw(unsigned const rd,
 	unsigned const base,
@@ -133,6 +142,9 @@ lw(unsigned const rd,
 		MATCH_LW;
 }
 
+/**
+@bug @c offset should be signed
+*/
 static inline uint32_t
 lh(unsigned const rd,
 	unsigned const base,
@@ -146,6 +158,9 @@ lh(unsigned const rd,
 		MATCH_LH;
 }
 
+/**
+@bug @c offset should be signed
+*/
 static inline uint32_t
 lb(unsigned const rd,
 	unsigned const base,
@@ -327,10 +342,7 @@ ebreak(void)
 	return MATCH_EBREAK;
 }
 
-/**
-@bug @c ebreak_c is 16 bit only
-*/
-static inline uint32_t
+static inline uint16_t
 ebreak_c(void)
 {
 	return MATCH_C_EBREAK;
@@ -348,6 +360,9 @@ fence_i(void)
 	return MATCH_FENCE_I;
 }
 
+/**
+@bug @c imm should be signed
+*/
 static inline uint32_t
 lui(unsigned const dest,
 	uint32_t const imm)
