@@ -1389,7 +1389,7 @@ register_read(struct target *const target,
 	LOG_DEBUG("%s: reg[%d]=0x%" PRIx64,
 			target_name(target), regnum, *value);
 
-	if (regnum == GDB_REGNO_MSTATUS)
+	if (GDB_REGNO_MSTATUS == regnum)
 		info->mstatus_actual = *value;
 
 	return ERROR_OK;
