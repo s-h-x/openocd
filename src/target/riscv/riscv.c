@@ -15,7 +15,7 @@
  called directly by OpenOCD, which can't assume anything about what's
  currently in IR. They should set IR to dbus explicitly.
 
- @bug not robust
+ @bug Not robust strategy
  */
 
 /** @file
@@ -1498,7 +1498,8 @@ enum riscv_poll_hart_e {
 };
 
 static enum riscv_poll_hart_e
-riscv_poll_hart(struct target *const target, int const hartid)
+riscv_poll_hart(struct target *const target,
+	int const hartid)
 {
 	if (ERROR_OK != riscv_set_current_hartid(target, hartid))
 		return RPH_ERROR;
@@ -1509,7 +1510,7 @@ riscv_poll_hart(struct target *const target, int const hartid)
 	 * to raise an event. */
 	bool const halted = riscv_is_halted(target);
 
-	if (target->state != TARGET_HALTED && halted) {
+	if (TARGET_HALTED != target->state && halted) {
 		LOG_DEBUG("%s:  triggered a halt",
 			target_name(target));
 		struct riscv_info_t const *const rvi = riscv_info(target);
