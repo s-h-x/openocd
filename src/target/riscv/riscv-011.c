@@ -709,7 +709,8 @@ static void dram_write32(struct target *const target, unsigned index, uint32_t v
 }
 
 /** Read the haltnot and interrupt bits. */
-static bits_t read_bits(struct target *const target)
+static bits_t
+read_bits(struct target *const target)
 {
 	uint64_t value;
 	dbus_status_t status;
@@ -809,18 +810,21 @@ cache_set32(struct target *const target,
 	riscv_011_info_t *const info = get_info(target);
 	assert(info);
 
-	if (info->dram_cache[index].valid && info->dram_cache[index].data == data) {
+	struct memory_cache_line *const p_cache_line =
+		info->dram_cache + index;
+
+	if (data == p_cache_line->valid && p_cache_line->data) {
 		/* This is already preset on the target. */
-		LOG_DEBUG("%s: cache[0x%x] = 0x%08x: DASM(0x%x) (hit)",
+		LOG_DEBUG("%s: cache[0x%x] = 0x%08" PRIx32 ": DASM(0x%" PRIx32 ") (hit)",
 				target_name(target), index, data, data);
 		return;
 	}
 
 	LOG_DEBUG("%s: cache[0x%x] = 0x%08x: DASM(0x%x)",
 			target_name(target), index, data, data);
-	info->dram_cache[index].data = data;
-	info->dram_cache[index].valid = true;
-	info->dram_cache[index].dirty = true;
+	p_cache_line->data = data;
+	p_cache_line->valid = true;
+	p_cache_line->dirty = true;
 }
 
 static void
@@ -849,7 +853,7 @@ cache_set_load(struct target *const target,
 	unsigned const reg,
 	slot_t const slot)
 {
-	uint16_t offset = DEBUG_RAM_START + 4 * slot_offset(target, slot);
+	uint16_t const offset = DEBUG_RAM_START + 4 * slot_offset(target, slot);
 	cache_set32(target, index, load(target, reg, ZERO, offset));
 }
 
@@ -888,6 +892,7 @@ static void
 cache_clean(struct target *const target)
 {
 	riscv_011_info_t *info = get_info(target);
+
 	for (unsigned i = 0; i < info->dramsize; ++i) {
 		if (i >= 4)
 			info->dram_cache[i].valid = false;
@@ -1125,7 +1130,10 @@ wait_for_state(struct target *const target,
 	}
 }
 
-static int read_csr(struct target *const target, uint64_t *value, uint32_t csr)
+static int
+read_csr(struct target *const target,
+	uint64_t *const value,
+	uint32_t const csr)
 {
 	cache_set32(target, 0, csrr(S0, csr));
 	cache_set_store(target, 1, S0, SLOT0);
@@ -1287,17 +1295,23 @@ execute_resume(struct target *const target,
 	return ERROR_OK;
 }
 
-static int resume(struct target *const target, int debug_execution, bool step)
+static int
+resume(struct target *const target,
+	int const debug_execution,
+	bool const step)
 {
 	if (debug_execution) {
-		LOG_ERROR("%s: TODO: debug_execution is true", target_name(target));
+		LOG_ERROR("%s: TODO: debug_execution is true",
+			target_name(target));
 		return ERROR_TARGET_INVALID;
 	}
 
 	return execute_resume(target, step);
 }
 
-static uint64_t reg_cache_get(struct target *const target, unsigned number)
+static uint64_t
+reg_cache_get(struct target *const target,
+	unsigned const number)
 {
 	struct reg *r = &target->reg_cache->reg_list[number];
 	if (!r->valid) {
@@ -1311,11 +1325,16 @@ static uint64_t reg_cache_get(struct target *const target, unsigned number)
 	return value;
 }
 
-static void reg_cache_set(struct target *const target, unsigned number,
-		uint64_t value)
+static void
+reg_cache_set(struct target *const target,
+	unsigned const number,
+	uint64_t const value)
 {
-	struct reg *r = &target->reg_cache->reg_list[number];
-	LOG_DEBUG("%s: %s <= 0x%" PRIx64, target_name(target), r->name, value);
+	assert(target->reg_cache->reg_list && number < target->reg_cache->num_regs);
+	struct reg *const r = target->reg_cache->reg_list + number;
+	assert(r);
+	LOG_DEBUG("%s: %s <= 0x%" PRIx64,
+		target_name(target), r->name, value);
 	r->valid = true;
 	buf_set_u64(r->value, 0, r->size, value);
 }
@@ -1334,7 +1353,10 @@ static int update_mstatus_actual(struct target *const target)
 	return riscv_011_get_register(target, &mstatus, 0, GDB_REGNO_MSTATUS);
 }
 
-static int register_read(struct target *const target, riscv_reg_t *value, int regnum)
+static int
+register_read(struct target *const target,
+	riscv_reg_t *const value,
+	int const regnum)
 {
 	if (GDB_REGNO_CSR0 <= regnum && regnum <= GDB_REGNO_CSR4095) {
 		cache_set32(target, 0, csrr(S0, regnum - GDB_REGNO_CSR0));
@@ -1374,25 +1396,27 @@ static int register_read(struct target *const target, riscv_reg_t *value, int re
 }
 
 /* Write the register. No caching or games. */
-static int register_write(struct target *const target, unsigned number,
-		uint64_t value)
+static int
+register_write(struct target *const target,
+	unsigned const number,
+	uint64_t const value)
 {
-	riscv_011_info_t *info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 
 	maybe_write_tselect(target);
 
-	if (number == S0) {
+	if (S0 == number) {
 		cache_set_load(target, 0, S0, SLOT0);
 		cache_set32(target, 1, csrw(S0, CSR_DSCRATCH));
 		cache_set_jump(target, 2);
-	} else if (number == S1) {
+	} else if (S1 == number) {
 		cache_set_load(target, 0, S0, SLOT0);
 		cache_set_store(target, 1, S0, SLOT_LAST);
 		cache_set_jump(target, 2);
 	} else if (number <= GDB_REGNO_XPR31) {
 		cache_set_load(target, 0, number - GDB_REGNO_ZERO, SLOT0);
 		cache_set_jump(target, 1);
-	} else if (number == GDB_REGNO_PC) {
+	} else if (GDB_REGNO_PC == number) {
 		info->dpc = value;
 		return ERROR_OK;
 	} else if (GDB_REGNO_FPR0 <= number && number <= GDB_REGNO_FPR31) {
@@ -1404,26 +1428,30 @@ static int register_write(struct target *const target, unsigned number,
 		}
 
 		unsigned i = 0;
-		if ((info->mstatus_actual & MSTATUS_FS) == 0) {
+
+		if (0 == (info->mstatus_actual & MSTATUS_FS)) {
 			info->mstatus_actual = set_field(info->mstatus_actual, MSTATUS_FS, 1);
 			cache_set_load(target, i++, S0, SLOT1);
 			cache_set32(target, i++, csrw(S0, CSR_MSTATUS));
 			cache_set(target, SLOT1, info->mstatus_actual);
 		}
 
-		if (riscv_xlen(target) == 32)
-			cache_set32(target, i++, flw(number - GDB_REGNO_FPR0, 0, DEBUG_RAM_START + 16));
-		else
-			cache_set32(target, i++, fld(number - GDB_REGNO_FPR0, 0, DEBUG_RAM_START + 16));
+		cache_set32(target,
+			i++,
+			(32 == riscv_xlen(target) ? flw : fld)(
+				number - GDB_REGNO_FPR0,
+				0,
+				DEBUG_RAM_START + 16)
+			);
 		cache_set_jump(target, i++);
-	} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
+	} else if (GDB_REGNO_CSR0 <= number && number <= GDB_REGNO_CSR4095) {
 		cache_set_load(target, 0, S0, SLOT0);
 		cache_set32(target, 1, csrw(S0, number - GDB_REGNO_CSR0));
 		cache_set_jump(target, 2);
 
-		if (number == GDB_REGNO_MSTATUS)
+		if (GDB_REGNO_MSTATUS == number)
 			info->mstatus_actual = value;
-	} else if (number == GDB_REGNO_PRIV) {
+	} else if (GDB_REGNO_PRIV == number) {
 		info->dcsr = set_field(info->dcsr, DCSR_PRV, value);
 		return ERROR_OK;
 	} else {
@@ -1439,11 +1467,13 @@ static int register_write(struct target *const target, unsigned number,
 			return error_code;
 	}
 
-	uint32_t const exception = cache_get32(target, info->dramsize-1);
-	if (exception) {
-		LOG_WARNING("%s: Got exception 0x%" PRIx32 " when writing %s",
-					target_name(target), exception, gdb_regno_name(number));
-		return ERROR_TARGET_FAILURE;
+	{
+		uint32_t const exception = cache_get32(target, info->dramsize - 1);
+		if (exception) {
+			LOG_WARNING("%s: Got exception 0x%" PRIx32 " when writing %s",
+						target_name(target), exception, gdb_regno_name(number));
+			return ERROR_TARGET_FAILURE;
+		}
 	}
 
 	return ERROR_OK;
@@ -1608,9 +1638,19 @@ riscv_011_examine(struct target *const target)
 	info->addrbits = get_field(dtmcontrol, DTMCONTROL_ADDRBITS);
 	info->dtmcontrol_idle = get_field(dtmcontrol, DTMCONTROL_IDLE);
 
-	if (info->dtmcontrol_idle == 0) {
+	if (0 == info->dtmcontrol_idle) {
 		/* Some old SiFive cores don't set idle but need it to be 1. */
-		uint32_t const idcode = idcode_scan(target->tap);
+		uint32_t idcode;
+		{
+			int const error_code = idcode_scan(target->tap, &idcode);
+
+			if (ERROR_OK != error_code) {
+				LOG_ERROR("%s: fatal: examine failure, JTAG/TAP error",
+					target_name(target));
+				return error_code;
+			}
+		}
+
 		if (UINT32_C(0x10E31913) == idcode)
 			info->dtmcontrol_idle = 1;
 	}
@@ -1749,7 +1789,7 @@ riscv_011_examine(struct target *const target)
 static riscv_error_t
 handle_halt_routine(struct target *const target)
 {
-	riscv_011_info_t *info = get_info(target);
+	riscv_011_info_t *const info = get_info(target);
 
 	scans_t *scans = scans_new(target, 256);
 
@@ -2020,7 +2060,9 @@ error:
 	return RE_FAIL;
 }
 
-static int handle_halt(struct target *const target, bool const announce)
+static int
+handle_halt(struct target *const target,
+	bool const announce)
 {
 	assert(target);
 	target->state = TARGET_HALTED;
@@ -2111,7 +2153,9 @@ static int handle_halt(struct target *const target, bool const announce)
 	return ERROR_OK;
 }
 
-static int poll_target(struct target *const target, bool announce)
+static int
+poll_target(struct target *const target,
+	bool const announce)
 {
 	select_dmi(target->tap);
 

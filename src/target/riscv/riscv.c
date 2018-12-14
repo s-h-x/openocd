@@ -117,6 +117,7 @@ select_dmi(struct jtag_tap *const tap)
 }
 
 static int
+__attribute__((warn_unused_result))
 uint32_instruction_scan(struct jtag_tap *const tap,
 	uint8_t const instruction,
 	char const *const instruction_name,
@@ -160,19 +161,19 @@ uint32_instruction_scan(struct jtag_tap *const tap,
 }
 
 int
+idcode_scan(struct jtag_tap *const tap,
+	uint32_t p_in_value[1])
+{
+	assert(p_in_value);
+	return uint32_instruction_scan(tap, DTM_IDCODE, "IDCODE", 0, p_in_value);
+}
+
+int
 dtmcontrol_scan(struct jtag_tap *const tap,
 	uint32_t const out_value,
 	uint32_t *const p_in_value)
 {
 	return uint32_instruction_scan(tap, DTM_DTMCS, "DTMCONTROL", out_value, p_in_value);
-}
-
-uint32_t
-idcode_scan(struct jtag_tap *const tap)
-{
-	uint32_t in_value = 0xBADC0DE;
-	uint32_instruction_scan(tap, DTM_IDCODE, "IDCODE", 0, &in_value);
-	return in_value;
 }
 
 /**
@@ -933,11 +934,13 @@ riscv_hit_watchpoint(struct target *const target,
 
 /** @return error code */
 static int
-oldriscv_step(struct target *const target, int const current, uint32_t const address,
-		int const handle_breakpoints)
+oldriscv_step(struct target *const target,
+	int const current,
+	uint32_t const address,
+	int const handle_breakpoints)
 {
 	struct target_type const *const tt = get_target_type(target);
-	assert(tt);
+	assert(tt && tt->step);
 	return tt->step(target, current, address, handle_breakpoints);
 }
 
@@ -1014,7 +1017,10 @@ oldriscv_poll(struct target *const target)
 	return tt->poll(target);
 }
 
-/** @return error code */
+/**
+@bug dynamic dispatch
+@return error code
+*/
 static int
 old_or_new_riscv_poll(struct target *const target)
 {
@@ -1023,7 +1029,10 @@ old_or_new_riscv_poll(struct target *const target)
 	return rvi->is_halted ? riscv_openocd_poll(target) : oldriscv_poll(target);
 }
 
-/** @return error code */
+/**
+@return error code
+@bug dynamic dispatch
+*/
 static int
 old_or_new_riscv_halt(struct target *const target)
 {
@@ -1059,7 +1068,7 @@ oldriscv_resume(struct target *const target,
 	int const debug_execution)
 {
 	struct target_type const *const tt = get_target_type(target);
-	assert(tt);
+	assert(tt && tt->resume);
 	return
 		tt->resume(target, current, address, handle_breakpoints, debug_execution);
 }
@@ -2760,7 +2769,7 @@ static int
 register_get(struct reg *const reg)
 {
 	assert(reg);
-	riscv_reg_info_t *reg_info = reg->arch_info;
+	riscv_reg_info_t *const reg_info = reg->arch_info;
 	assert(reg_info);
 	struct target *const target = reg_info->target;
 	uint64_t value;

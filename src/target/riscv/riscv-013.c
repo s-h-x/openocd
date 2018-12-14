@@ -1970,19 +1970,22 @@ execute_fence(struct target *const target)
 
 static void
 log_memory_access(target_addr_t const address,
-	uint64_t value,
+	uint64_t const value,
 	unsigned const size_bytes,
 	bool const read)
 {
 	if (debug_level < LOG_LVL_DEBUG)
 		return;
 
-	value &= (((uint64_t) 0x1) << (size_bytes * 8)) - 1;
+	/**
+	@todo Improve mask
+	*/
+	uint64_t const mask = (UINT64_C(0x1) << (size_bytes * CHAR_BIT)) - 1;
 	LOG_DEBUG("M[0x%" TARGET_PRIxADDR "] %ss 0x%0*" PRIx64,
-			address,
-			read ? "read" : "write",
-			size_bytes * 2,
-			value);
+		address,
+		read ? "read" : "write",
+		size_bytes * 2,
+		mask & value );
 }
 
 /**
@@ -3584,7 +3587,7 @@ get_max_sbaccess(struct target *const target)
 static uint32_t
 get_num_sbdata_regs(struct target *const target)
 {
-	riscv_013_info_t *const info = get_info(target);
+	riscv_013_info_t const *const info = get_info(target);
 
 	uint32_t const sbaccess128 = get_field(info->sbcs, DMI_SBCS_SBACCESS128);
 	uint32_t const sbaccess64 = get_field(info->sbcs, DMI_SBCS_SBACCESS64);
