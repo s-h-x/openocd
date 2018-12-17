@@ -230,9 +230,6 @@ riscv_info_init(struct target *const target)
 
 	for (size_t hart = 0; hart < RISCV_MAX_HARTS; ++hart) {
 		r->harts[hart].xlen = -1;
-
-		for (size_t e = 0; e < RISCV_MAX_REGISTERS; ++e)
-			r->harts[hart].registers[e].valid = false;
 	}
 
 	return r;
