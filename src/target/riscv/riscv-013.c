@@ -299,7 +299,7 @@ decode_dmi(char buffer[DUMP_FIELD_BUFFER_SIZE]/**<[out]*/,
 }
 
 static void
-riscv_013_dump_field(struct scan_field const *const field)
+riscv_013_dump_field(char const *const tap_name, struct scan_field const *const field)
 {
 	static char const *const op_string[] = {"-", "r", "w", "?"};
 	static char const *const status_string[] = {"+", "?", "F", "b"};
@@ -318,9 +318,8 @@ riscv_013_dump_field(struct scan_field const *const field)
 	unsigned const in_data = get_field(in_value, DTM_DMI_DATA);
 	unsigned const in_address = in_value >> DTM_DMI_ADDRESS_OFFSET;
 
-	log_printf_lf(LOG_LVL_DEBUG,
-		__FILE__, __LINE__, "scan",
-		"%db %s %08x @%02x -> %s %08x @%02x",
+	LOG_DEBUG("%s: %db %s %08x @%02x -> %s %08x @%02x",
+		tap_name,
 		field->num_bits,
 		op_string[out_op], out_data, out_address,
 		status_string[in_op], in_data, in_address);
@@ -332,8 +331,9 @@ riscv_013_dump_field(struct scan_field const *const field)
 	decode_dmi(in_text, in_address, in_data);
 
 	if (in_text[0] || out_text[0]) {
-		log_printf_lf(LOG_LVL_DEBUG, __FILE__, __LINE__, "scan", "%s -> %s",
-				out_text, in_text);
+		LOG_DEBUG("%s: %s -> %s",
+			tap_name,
+			out_text, in_text);
 	}
 }
 
@@ -399,7 +399,7 @@ dmi_scan(struct target *const target,
 	if (address_in)
 		*address_in = buf_get_u32(in_buffer, DTM_DMI_ADDRESS_OFFSET, info->abits);
 
-	riscv_013_dump_field(&field);
+	riscv_013_dump_field(jtag_tap_name(target->tap), &field);
 
 	return buf_get_u32(in_buffer, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH);
 }
