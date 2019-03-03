@@ -187,13 +187,6 @@ struct riscv_info_t {
 	*/
 	uint64_t reg_cache_values[RISCV_MAX_REGISTERS];
 
-	/* Single buffer that contains all register names, instead of calling
-	malloc for each register. Needs to be freed when reg_list is freed.
-
-	@bug Use target cache instead
-	*/
-	char *reg_names;
-
 	/**
 	@bug Bad design - non-local hart information! Problem with JRC!
 	*/

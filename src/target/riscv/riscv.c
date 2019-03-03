@@ -269,7 +269,6 @@ riscv_deinit_target(struct target *const target)
 	if (tt) {
 		tt->deinit_target(target);
 		struct riscv_info_t *const info = target->arch_info;
-		free(info->reg_names);
 		free(info);
 	}
 
@@ -2695,71 +2694,36 @@ riscv_enumerate_triggers(struct target *const target)
 char const *
 gdb_regno_name(enum gdb_regno const regno)
 {
-	switch (regno) {
-		case GDB_REGNO_ZERO:
-			return "zero";
+	assert(0 <= regno && regno < GDB_REGNO_COUNT);
 
-		case GDB_REGNO_S0:
-			return "s0";
+	static char const **name_table = NULL;
 
-		case GDB_REGNO_S1:
-			return "s1";
+	if (!name_table) {
+		name_table = calloc(GDB_REGNO_COUNT, sizeof(name_table[0]));
+		char const **p = name_table;
+		char buf[100];
 
-		case GDB_REGNO_PC:
-			return "pc";
+		for (int i = 0; i < 32; ++i) {
+			snprintf(buf, sizeof(buf) -1, "x%d", i);
+			*p++ = strdup(buf);
+		}
 
-		case GDB_REGNO_FPR0:
-			return "fpr0";
+		*p++ = strdup("pc");
 
-		case GDB_REGNO_FPR31:
-			return "fpr31";
+		for (int i = 0; i < 32; ++i) {
+			snprintf(buf, sizeof(buf) - 1, "f%d", i);
+			*p++ = strdup(buf);
+		}
 
-		case GDB_REGNO_CSR0:
-			return "csr0";
+		for (int i = 0; i < 4096; ++i) {
+			snprintf(buf, sizeof(buf) - 1, "csr%d", i);
+			*p++ = strdup(buf);
+		}
 
-		case GDB_REGNO_TSELECT:
-			return "tselect";
-
-		case GDB_REGNO_TDATA1:
-			return "tdata1";
-
-		case GDB_REGNO_TDATA2:
-			return "tdata2";
-
-		case GDB_REGNO_MISA:
-			return "misa";
-
-		case GDB_REGNO_DPC:
-			return "dpc";
-
-		case GDB_REGNO_DCSR:
-			return "dcsr";
-
-		case GDB_REGNO_DSCRATCH:
-			return "dscratch";
-
-		case GDB_REGNO_MSTATUS:
-			return "mstatus";
-
-		case GDB_REGNO_PRIV:
-			return "priv";
-
-		default:
-			{
-				static char buf[32] = {[31]='\0'};
-
-				if (regno <= GDB_REGNO_XPR31)
-					snprintf(buf, sizeof buf - 1, "x%d", regno - GDB_REGNO_ZERO);
-				else if (GDB_REGNO_CSR0 <= regno && regno <= GDB_REGNO_CSR4095)
-					snprintf(buf, sizeof buf - 1, "csr%d", regno - GDB_REGNO_CSR0);
-				else if (GDB_REGNO_FPR0 <= regno && regno <= GDB_REGNO_FPR31)
-					snprintf(buf, sizeof buf - 1, "f%d", regno - GDB_REGNO_FPR0);
-				else
-					snprintf(buf, sizeof buf - 1, "gdb_regno_%d", regno);
-
-				return buf;
-			}
+		*p++ = strdup("priv");
 	}
+
+	return name_table[regno];
 }
 
 /** @return error code*/
@@ -2866,15 +2830,8 @@ riscv_init_registers(struct target *const target)
 		calloc(target->reg_cache->num_regs, sizeof(struct reg));
 	assert(target->reg_cache->reg_list);
 
-	static unsigned const max_reg_name_len = 12;
 	struct riscv_info_t *const rvi = riscv_info(target);
 	assert(rvi);
-
-	if (rvi->reg_names)
-		free(rvi->reg_names);
-
-	rvi->reg_names = calloc(target->reg_cache->num_regs, max_reg_name_len);
-	assert(rvi->reg_names);
 
 	typedef struct reg_feature reg_feature_t;
 	static reg_feature_t const feature_cpu = {
@@ -2918,8 +2875,6 @@ riscv_init_registers(struct target *const target)
 	assert(shared_reg_info);
 	shared_reg_info->target = target;
 
-	char *reg_name = rvi->reg_names;
-
 	/*
 		When gdb requests register N, gdb_get_register_packet() assumes
 		that this is register at index N in reg_list.
@@ -2944,137 +2899,7 @@ riscv_init_registers(struct target *const target)
 		 * of other things to break in that case as well. */
 		if (number <= GDB_REGNO_XPR31) {
 			p_reg->caller_save = true;
-
-			switch (number) {
-				case GDB_REGNO_ZERO:
-					p_reg->name = "zero";
-					break;
-
-				case GDB_REGNO_RA:
-					p_reg->name = "ra";
-					break;
-
-				case GDB_REGNO_SP:
-					p_reg->name = "sp";
-					break;
-
-				case GDB_REGNO_GP:
-					p_reg->name = "gp";
-					break;
-
-				case GDB_REGNO_TP:
-					p_reg->name = "tp";
-					break;
-
-				case GDB_REGNO_T0:
-					p_reg->name = "t0";
-					break;
-
-				case GDB_REGNO_T1:
-					p_reg->name = "t1";
-					break;
-
-				case GDB_REGNO_T2:
-					p_reg->name = "t2";
-					break;
-
-				case GDB_REGNO_FP:
-					p_reg->name = "fp";
-					break;
-
-				case GDB_REGNO_S1:
-					p_reg->name = "s1";
-					break;
-
-				case GDB_REGNO_A0:
-					p_reg->name = "a0";
-					break;
-
-				case GDB_REGNO_A1:
-					p_reg->name = "a1";
-					break;
-
-				case GDB_REGNO_A2:
-					p_reg->name = "a2";
-					break;
-
-				case GDB_REGNO_A3:
-					p_reg->name = "a3";
-					break;
-
-				case GDB_REGNO_A4:
-					p_reg->name = "a4";
-					break;
-
-				case GDB_REGNO_A5:
-					p_reg->name = "a5";
-					break;
-
-				case GDB_REGNO_A6:
-					p_reg->name = "a6";
-					break;
-
-				case GDB_REGNO_A7:
-					p_reg->name = "a7";
-					break;
-
-				case GDB_REGNO_S2:
-					p_reg->name = "s2";
-					break;
-
-				case GDB_REGNO_S3:
-					p_reg->name = "s3";
-					break;
-
-				case GDB_REGNO_S4:
-					p_reg->name = "s4";
-					break;
-
-				case GDB_REGNO_S5:
-					p_reg->name = "s5";
-					break;
-
-				case GDB_REGNO_S6:
-					p_reg->name = "s6";
-					break;
-
-				case GDB_REGNO_S7:
-					p_reg->name = "s7";
-					break;
-
-				case GDB_REGNO_S8:
-					p_reg->name = "s8";
-					break;
-
-				case GDB_REGNO_S9:
-					p_reg->name = "s9";
-					break;
-
-				case GDB_REGNO_S10:
-					p_reg->name = "s10";
-					break;
-
-				case GDB_REGNO_S11:
-					p_reg->name = "s11";
-					break;
-
-				case GDB_REGNO_T3:
-					p_reg->name = "t3";
-					break;
-
-				case GDB_REGNO_T4:
-					p_reg->name = "t4";
-					break;
-
-				case GDB_REGNO_T5:
-					p_reg->name = "t5";
-					break;
-
-				case GDB_REGNO_T6:
-					p_reg->name = "t6";
-					break;
-			}
-
+			p_reg->name = gdb_regno_name(number);
 			p_reg->group = "general";
 			/**
 			@todo This should probably be const.
@@ -3082,8 +2907,6 @@ riscv_init_registers(struct target *const target)
 			p_reg->feature = (reg_feature_t *)(&feature_cpu);
 		} else if (number == GDB_REGNO_PC) {
 			p_reg->caller_save = true;
-			reg_name[max_reg_name_len - 1] = '\0';
-			snprintf(reg_name, max_reg_name_len - 1, "pc");
 			p_reg->group = "general";
 			/**
 			@todo This should probably be const.
@@ -3108,139 +2931,7 @@ riscv_init_registers(struct target *const target)
 				p_reg->exist = false;
 			}
 
-			switch (number) {
-				case GDB_REGNO_FT0:
-					p_reg->name = "ft0";
-					break;
-
-				case GDB_REGNO_FT1:
-					p_reg->name = "ft1";
-					break;
-
-				case GDB_REGNO_FT2:
-					p_reg->name = "ft2";
-					break;
-
-				case GDB_REGNO_FT3:
-					p_reg->name = "ft3";
-					break;
-
-				case GDB_REGNO_FT4:
-					p_reg->name = "ft4";
-					break;
-
-				case GDB_REGNO_FT5:
-					p_reg->name = "ft5";
-					break;
-
-				case GDB_REGNO_FT6:
-					p_reg->name = "ft6";
-					break;
-
-				case GDB_REGNO_FT7:
-					p_reg->name = "ft7";
-					break;
-
-				case GDB_REGNO_FS0:
-					p_reg->name = "fs0";
-					break;
-
-				case GDB_REGNO_FS1:
-					p_reg->name = "fs1";
-					break;
-
-				case GDB_REGNO_FA0:
-					p_reg->name = "fa0";
-					break;
-
-				case GDB_REGNO_FA1:
-					p_reg->name = "fa1";
-					break;
-
-				case GDB_REGNO_FA2:
-					p_reg->name = "fa2";
-					break;
-
-				case GDB_REGNO_FA3:
-					p_reg->name = "fa3";
-					break;
-
-				case GDB_REGNO_FA4:
-					p_reg->name = "fa4";
-					break;
-
-				case GDB_REGNO_FA5:
-					p_reg->name = "fa5";
-					break;
-
-				case GDB_REGNO_FA6:
-					p_reg->name = "fa6";
-					break;
-
-				case GDB_REGNO_FA7:
-					p_reg->name = "fa7";
-					break;
-
-				case GDB_REGNO_FS2:
-					p_reg->name = "fs2";
-					break;
-
-				case GDB_REGNO_FS3:
-					p_reg->name = "fs3";
-					break;
-
-				case GDB_REGNO_FS4:
-					p_reg->name = "fs4";
-					break;
-
-				case GDB_REGNO_FS5:
-					p_reg->name = "fs5";
-					break;
-
-				case GDB_REGNO_FS6:
-					p_reg->name = "fs6";
-					break;
-
-				case GDB_REGNO_FS7:
-					p_reg->name = "fs7";
-					break;
-
-				case GDB_REGNO_FS8:
-					p_reg->name = "fs8";
-					break;
-
-				case GDB_REGNO_FS9:
-					p_reg->name = "fs9";
-					break;
-
-				case GDB_REGNO_FS10:
-					p_reg->name = "fs10";
-					break;
-
-				case GDB_REGNO_FS11:
-					p_reg->name = "fs11";
-					break;
-
-				case GDB_REGNO_FT8:
-					p_reg->name = "ft8";
-					break;
-
-				case GDB_REGNO_FT9:
-					p_reg->name = "ft9";
-					break;
-
-				case GDB_REGNO_FT10:
-					p_reg->name = "ft10";
-					break;
-
-				case GDB_REGNO_FT11:
-					p_reg->name = "ft11";
-					break;
-				/**
-				@bug no default case
-				*/
-			}
-
+			p_reg->name = gdb_regno_name(number);
 			p_reg->group = "float";
 			/**
 			@todo This should probably be const.
@@ -3258,11 +2949,8 @@ riscv_init_registers(struct target *const target)
 			while (csr_info[csr_info_index].number < csr_number && csr_info_index < DIM(csr_info) - 1)
 				++csr_info_index;
 
-			if (csr_info[csr_info_index].number == csr_number) {
-				p_reg->name = csr_info[csr_info_index].name;
-			} else {
-				reg_name[max_reg_name_len - 1] = '\0';
-				snprintf(reg_name, max_reg_name_len - 1, "csr%d", csr_number);
+			p_reg->name = gdb_regno_name(number);
+			if (csr_info[csr_info_index].number != csr_number) {
 				/* Assume unnamed registers don't exist, unless we have some
 				 * configuration that tells us otherwise. That's important
 				 * because eg. Eclipse crashes if a target has too many
@@ -3275,8 +2963,7 @@ riscv_init_registers(struct target *const target)
 				case CSR_FFLAGS:
 				case CSR_FRM:
 				case CSR_FCSR:
-					p_reg->exist =
-						riscv_supports_extension(target, riscv_current_hartid(target), 'F');
+					p_reg->exist = riscv_supports_extension(target, riscv_current_hartid(target), 'F');
 					p_reg->group = "float";
 					/**
 					@todo This should probably be const.
@@ -3294,8 +2981,7 @@ riscv_init_registers(struct target *const target)
 				case CSR_SCAUSE:
 				case CSR_STVAL:
 				case CSR_SATP:
-					p_reg->exist = riscv_supports_extension(target,
-							riscv_current_hartid(target), 'S');
+					p_reg->exist = riscv_supports_extension(target, riscv_current_hartid(target), 'S');
 					break;
 
 				case CSR_MEDELEG:
@@ -3303,7 +2989,8 @@ riscv_init_registers(struct target *const target)
 					/* "In systems with only M-mode, or with both M-mode and
 					 * U-mode but without U-mode trap support, the medeleg and
 					 * mideleg registers should not exist." */
-					p_reg->exist = riscv_supports_extension(target, riscv_current_hartid(target), 'S') ||
+					p_reg->exist =
+						riscv_supports_extension(target, riscv_current_hartid(target), 'S') ||
 						riscv_supports_extension(target, riscv_current_hartid(target), 'N');
 					break;
 
@@ -3385,8 +3072,7 @@ riscv_init_registers(struct target *const target)
 			}
 
 		} else if (number == GDB_REGNO_PRIV) {
-			reg_name[max_reg_name_len - 1] = '\0';
-			snprintf(reg_name, max_reg_name_len - 1, "priv");
+			p_reg->name = gdb_regno_name(number);
 			p_reg->group = "general";
 			/**
 			@todo This should probably be const.
@@ -3411,8 +3097,6 @@ riscv_init_registers(struct target *const target)
 			assert(p_reg->arch_info);
 			((riscv_reg_info_t *)(p_reg->arch_info))->target = target;
 			((riscv_reg_info_t *)(p_reg->arch_info))->custom_number = custom_number;
-			reg_name[max_reg_name_len - 1] = '\0';
-			snprintf(reg_name, max_reg_name_len - 1, "custom%d", custom_number);
 
 			++custom_within_range;
 
@@ -3422,11 +3106,7 @@ riscv_init_registers(struct target *const target)
 			}
 		}
 
-		if (*reg_name)
-			p_reg->name = reg_name;
-
-		reg_name += strlen(reg_name) + 1;
-		assert(reg_name < rvi->reg_names + target->reg_cache->num_regs * max_reg_name_len);
+		p_reg->name = gdb_regno_name(number);
 		p_reg->value = &rvi->reg_cache_values[number];
 	}
 
