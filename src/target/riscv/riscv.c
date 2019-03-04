@@ -2962,105 +2962,131 @@ riscv_init_registers(struct target *const target)
 			}
 
 			switch (csr_number) {
-				case CSR_FFLAGS:
-				case CSR_FRM:
-				case CSR_FCSR:
-					p_reg->exist = riscv_supports_extension(target, riscv_current_hartid(target), 'F');
-					p_reg->group = "float";
-					/**
-					@todo This should probably be const.
-					*/
-					p_reg->feature = (reg_feature_t *)&feature_fpu;
-					break;
+			case CSR_CYCLE:
+			case CSR_INSTRET:
+			case CSR_MARCHID:
+			case CSR_MCAUSE:
+			case CSR_MCOUNTEREN:
+			case CSR_MCYCLE:
+			case CSR_MEPC:
+			case CSR_MHARTID:
+			case CSR_MIE:
+			case CSR_MIMPID:
+			case CSR_MINSTRET:
+			case CSR_MIP:
+			case CSR_MISA:
+			case CSR_MSCRATCH:
+			case CSR_MSTATUS:
+			case CSR_MTVAL:
+			case CSR_MTVEC:
+			case CSR_MVENDORID:
+			case CSR_TIME:
+				p_reg->exist = true;
+				break;
 
-				case CSR_SSTATUS:
-				case CSR_STVEC:
-				case CSR_SIP:
-				case CSR_SIE:
-				case CSR_SCOUNTEREN:
-				case CSR_SSCRATCH:
-				case CSR_SEPC:
-				case CSR_SCAUSE:
-				case CSR_STVAL:
-				case CSR_SATP:
-					p_reg->exist = riscv_supports_extension(target, riscv_current_hartid(target), 'S');
-					break;
+			case CSR_FFLAGS:
+			case CSR_FRM:
+			case CSR_FCSR:
+				p_reg->exist = riscv_supports_extension(target, riscv_current_hartid(target), 'F');
+				p_reg->group = "float";
+				/**
+				@todo This should probably be const.
+				*/
+				p_reg->feature = (reg_feature_t *)&feature_fpu;
+				break;
 
-				case CSR_MEDELEG:
-				case CSR_MIDELEG:
-					/* "In systems with only M-mode, or with both M-mode and
-					 * U-mode but without U-mode trap support, the medeleg and
-					 * mideleg registers should not exist." */
-					p_reg->exist =
-						riscv_supports_extension(target, riscv_current_hartid(target), 'S') ||
-						riscv_supports_extension(target, riscv_current_hartid(target), 'N');
-					break;
+			case CSR_SSTATUS:
+			case CSR_STVEC:
+			case CSR_SIP:
+			case CSR_SIE:
+			case CSR_SCOUNTEREN:
+			case CSR_SSCRATCH:
+			case CSR_SEPC:
+			case CSR_SCAUSE:
+			case CSR_STVAL:
+			case CSR_SATP:
+				p_reg->exist = riscv_supports_extension(target, riscv_current_hartid(target), 'S');
+				break;
 
-				case CSR_CYCLEH:
-				case CSR_TIMEH:
-				case CSR_INSTRETH:
-				case CSR_HPMCOUNTER3H:
-				case CSR_HPMCOUNTER4H:
-				case CSR_HPMCOUNTER5H:
-				case CSR_HPMCOUNTER6H:
-				case CSR_HPMCOUNTER7H:
-				case CSR_HPMCOUNTER8H:
-				case CSR_HPMCOUNTER9H:
-				case CSR_HPMCOUNTER10H:
-				case CSR_HPMCOUNTER11H:
-				case CSR_HPMCOUNTER12H:
-				case CSR_HPMCOUNTER13H:
-				case CSR_HPMCOUNTER14H:
-				case CSR_HPMCOUNTER15H:
-				case CSR_HPMCOUNTER16H:
-				case CSR_HPMCOUNTER17H:
-				case CSR_HPMCOUNTER18H:
-				case CSR_HPMCOUNTER19H:
-				case CSR_HPMCOUNTER20H:
-				case CSR_HPMCOUNTER21H:
-				case CSR_HPMCOUNTER22H:
-				case CSR_HPMCOUNTER23H:
-				case CSR_HPMCOUNTER24H:
-				case CSR_HPMCOUNTER25H:
-				case CSR_HPMCOUNTER26H:
-				case CSR_HPMCOUNTER27H:
-				case CSR_HPMCOUNTER28H:
-				case CSR_HPMCOUNTER29H:
-				case CSR_HPMCOUNTER30H:
-				case CSR_HPMCOUNTER31H:
-				case CSR_MCYCLEH:
-				case CSR_MINSTRETH:
-				case CSR_MHPMCOUNTER3H:
-				case CSR_MHPMCOUNTER4H:
-				case CSR_MHPMCOUNTER5H:
-				case CSR_MHPMCOUNTER6H:
-				case CSR_MHPMCOUNTER7H:
-				case CSR_MHPMCOUNTER8H:
-				case CSR_MHPMCOUNTER9H:
-				case CSR_MHPMCOUNTER10H:
-				case CSR_MHPMCOUNTER11H:
-				case CSR_MHPMCOUNTER12H:
-				case CSR_MHPMCOUNTER13H:
-				case CSR_MHPMCOUNTER14H:
-				case CSR_MHPMCOUNTER15H:
-				case CSR_MHPMCOUNTER16H:
-				case CSR_MHPMCOUNTER17H:
-				case CSR_MHPMCOUNTER18H:
-				case CSR_MHPMCOUNTER19H:
-				case CSR_MHPMCOUNTER20H:
-				case CSR_MHPMCOUNTER21H:
-				case CSR_MHPMCOUNTER22H:
-				case CSR_MHPMCOUNTER23H:
-				case CSR_MHPMCOUNTER24H:
-				case CSR_MHPMCOUNTER25H:
-				case CSR_MHPMCOUNTER26H:
-				case CSR_MHPMCOUNTER27H:
-				case CSR_MHPMCOUNTER28H:
-				case CSR_MHPMCOUNTER29H:
-				case CSR_MHPMCOUNTER30H:
-				case CSR_MHPMCOUNTER31H:
-					p_reg->exist = riscv_xlen(target) == 32;
-					break;
+			case CSR_MEDELEG:
+			case CSR_MIDELEG:
+				/* "In systems with only M-mode, or with both M-mode and
+				 * U-mode but without U-mode trap support, the medeleg and
+				 * mideleg registers should not exist." */
+				p_reg->exist =
+					riscv_supports_extension(target, riscv_current_hartid(target), 'S') ||
+					riscv_supports_extension(target, riscv_current_hartid(target), 'N');
+				break;
+
+			case CSR_CYCLEH:
+			case CSR_TIMEH:
+			case CSR_INSTRETH:
+#if 0
+			case CSR_HPMCOUNTER3H:
+			case CSR_HPMCOUNTER4H:
+			case CSR_HPMCOUNTER5H:
+			case CSR_HPMCOUNTER6H:
+			case CSR_HPMCOUNTER7H:
+			case CSR_HPMCOUNTER8H:
+			case CSR_HPMCOUNTER9H:
+			case CSR_HPMCOUNTER10H:
+			case CSR_HPMCOUNTER11H:
+			case CSR_HPMCOUNTER12H:
+			case CSR_HPMCOUNTER13H:
+			case CSR_HPMCOUNTER14H:
+			case CSR_HPMCOUNTER15H:
+			case CSR_HPMCOUNTER16H:
+			case CSR_HPMCOUNTER17H:
+			case CSR_HPMCOUNTER18H:
+			case CSR_HPMCOUNTER19H:
+			case CSR_HPMCOUNTER20H:
+			case CSR_HPMCOUNTER21H:
+			case CSR_HPMCOUNTER22H:
+			case CSR_HPMCOUNTER23H:
+			case CSR_HPMCOUNTER24H:
+			case CSR_HPMCOUNTER25H:
+			case CSR_HPMCOUNTER26H:
+			case CSR_HPMCOUNTER27H:
+			case CSR_HPMCOUNTER28H:
+			case CSR_HPMCOUNTER29H:
+			case CSR_HPMCOUNTER30H:
+			case CSR_HPMCOUNTER31H:
+#endif
+			case CSR_MCYCLEH:
+			case CSR_MINSTRETH:
+#if 0
+			case CSR_MHPMCOUNTER3H:
+			case CSR_MHPMCOUNTER4H:
+			case CSR_MHPMCOUNTER5H:
+			case CSR_MHPMCOUNTER6H:
+			case CSR_MHPMCOUNTER7H:
+			case CSR_MHPMCOUNTER8H:
+			case CSR_MHPMCOUNTER9H:
+			case CSR_MHPMCOUNTER10H:
+			case CSR_MHPMCOUNTER11H:
+			case CSR_MHPMCOUNTER12H:
+			case CSR_MHPMCOUNTER13H:
+			case CSR_MHPMCOUNTER14H:
+			case CSR_MHPMCOUNTER15H:
+			case CSR_MHPMCOUNTER16H:
+			case CSR_MHPMCOUNTER17H:
+			case CSR_MHPMCOUNTER18H:
+			case CSR_MHPMCOUNTER19H:
+			case CSR_MHPMCOUNTER20H:
+			case CSR_MHPMCOUNTER21H:
+			case CSR_MHPMCOUNTER22H:
+			case CSR_MHPMCOUNTER23H:
+			case CSR_MHPMCOUNTER24H:
+			case CSR_MHPMCOUNTER25H:
+			case CSR_MHPMCOUNTER26H:
+			case CSR_MHPMCOUNTER27H:
+			case CSR_MHPMCOUNTER28H:
+			case CSR_MHPMCOUNTER29H:
+			case CSR_MHPMCOUNTER30H:
+			case CSR_MHPMCOUNTER31H:
+#endif
+				p_reg->exist = riscv_xlen(target) == 32;
+				break;
 			}
 
 			if (!p_reg->exist && expose_csr) {
