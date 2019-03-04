@@ -2950,6 +2950,8 @@ riscv_init_registers(struct target *const target)
 				++csr_info_index;
 
 			p_reg->name = gdb_regno_name(number);
+			p_reg->exist = false;
+
 			if (csr_info[csr_info_index].number != csr_number) {
 				/* Assume unnamed registers don't exist, unless we have some
 				 * configuration that tells us otherwise. That's important
