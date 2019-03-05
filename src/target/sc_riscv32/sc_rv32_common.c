@@ -1606,9 +1606,7 @@ update_debug_reason(target* const p_target)
 
 	if (debug_reason != p_target->debug_reason) {
 		p_target->debug_reason = debug_reason;
-		LOG_DEBUG("Target %s New debug reason:"
-			" 0x%d"
-			" (%s)",
+		LOG_DEBUG("Target %s: New debug reason: %d (%s)",
 			target_name(p_target),
 			(unsigned)(p_target->debug_reason),
 			debug_reason_name(p_target));
@@ -1652,7 +1650,7 @@ update_debug_status(target* const p_target)
 
 	case TARGET_RUNNING:
 		p_target->debug_reason = DBG_REASON_NOTHALTED;
-		LOG_DEBUG("Target %s: New debug reason: 0x%08X (%s)",
+		LOG_DEBUG("Target %s: New debug reason: %d (%s)",
 			target_name(p_target), p_target->debug_reason, debug_reason_name(p_target));
 		target_call_event_callbacks(p_target, TARGET_EVENT_RESUMED);
 		break;
@@ -3225,57 +3223,43 @@ resume_common(target* const p_target,
 		assert(!p_pc->dirty);
 	}
 
-	if (handle_breakpoints) {
-		if (current) {
-			// Find breakpoint for current instruction
-			sc_error_code__update(p_target, reg_pc__get(p_pc));
-			assert(p_pc->value);
-			uint32_t const pc = buf_get_u32(p_pc->value, 0, XLEN);
-			breakpoint* p_breakpoint_at_pc = find_breakpoint_by_address(p_target, pc);
+	if (0 != handle_breakpoints && 0 != current) {
+		// Find breakpoint for current instruction
+		sc_error_code__update(p_target, reg_pc__get(p_pc));
+		assert(p_pc->value);
+		uint32_t const pc = buf_get_u32(p_pc->value, 0, XLEN);
+		breakpoint* p_breakpoint_at_pc = find_breakpoint_by_address(p_target, pc);
 
-			if (p_breakpoint_at_pc) {
-				// exec single step without breakpoint
-				sc_riscv32__Arch const* const p_arch = p_target->arch_info;
-				assert(p_arch);
-				// remove breakpoint
-				sc_error_code__update(p_target, target_remove_breakpoint(p_target, p_breakpoint_at_pc));
-				// prepare for single step
-				reg_cache__chain_invalidate(p_target->reg_cache);
-				// force single step
-				set_DEMODE_ENBL(p_target, dmode_enabled | HART_DMODE_ENBL_bit_SStep);
-				sc_rv32_DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_unit_id_HART_0 : DBGC_unit_id_HART_1, DBGC_functional_group_HART_DBGCMD);
-				// resume for single step
-				sc_rv32_DAP_CMD_scan(p_target, DBG_CTRL_index, DBG_CTRL_bit_Resume | DBG_CTRL_bit_Sticky_Clr, NULL);
-				// restore breakpoint
-				sc_error_code__update(p_target, target_add_breakpoint(p_target, p_breakpoint_at_pc));
+		if (p_breakpoint_at_pc) {
+			// exec single step without breakpoint
+			sc_riscv32__Arch const* const p_arch = p_target->arch_info;
+			assert(p_arch);
+			// remove breakpoint
+			sc_error_code__update(p_target, target_remove_breakpoint(p_target, p_breakpoint_at_pc));
+			// prepare for single step
+			reg_cache__chain_invalidate(p_target->reg_cache);
+			// force single step
+			set_DEMODE_ENBL(p_target, dmode_enabled | HART_DMODE_ENBL_bit_SStep);
+			sc_rv32_DAP_CTRL_REG_set(p_target, p_target->coreid == 0 ? DBGC_unit_id_HART_0 : DBGC_unit_id_HART_1, DBGC_functional_group_HART_DBGCMD);
+			// resume for single step
+			sc_rv32_DAP_CMD_scan(p_target, DBG_CTRL_index, DBG_CTRL_bit_Resume | DBG_CTRL_bit_Sticky_Clr, NULL);
+			// restore breakpoint
+			sc_error_code__update(p_target, target_add_breakpoint(p_target, p_breakpoint_at_pc));
+			// setup debug mode
+			set_DEMODE_ENBL(p_target, dmode_enabled);
 
-				// If resume/halt already done (by single step)
-				if (0 != (dmode_enabled & HART_DMODE_ENBL_bit_SStep)) {
-					// TODO: extra call
-					reg_cache__chain_invalidate(p_target->reg_cache);
-					// set status
-					p_target->state = debug_execution ? TARGET_DEBUG_RUNNING : TARGET_RUNNING;
-					LOG_DEBUG("Target %s: Debug_status changed: %d (%s)",
-						target_name(p_target), p_target->state, target_state_name(p_target));
-					// raise resume event
-					target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
-					// setup debug mode
-					set_DEMODE_ENBL(p_target, dmode_enabled);
-					// set debug reason
-					sc_riscv32__update_status(p_target);
-
-					if (!target_was_examined(p_target)) {
-						return sc_error_code__get_and_clear(p_target);
-					}
-
-					p_target->debug_reason = DBG_REASON_SINGLESTEP;
-					LOG_DEBUG("Target %s: New debug reason: 0x%08X (%s)",
-						target_name(p_target), p_target->debug_reason, debug_reason_name(p_target));
-					// raise halt event
-					target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_HALTED : TARGET_EVENT_HALTED);
-					// and exit
-					return sc_error_code__get_and_clear(p_target);
-				}
+			// If resume/halt already done (by single step)
+			if (0 != (dmode_enabled & HART_DMODE_ENBL_bit_SStep)) {
+				LOG_DEBUG("Target %s: single step done",
+					target_name(p_target));
+				// set status
+				p_target->state = debug_execution ? TARGET_DEBUG_RUNNING : TARGET_RUNNING;
+				LOG_DEBUG("Target %s: Debug_status changed: %d (%s)",
+					target_name(p_target), p_target->state, target_state_name(p_target));
+				// raise resume event
+				target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
+				// and exit
+				return sc_error_code__get_and_clear(p_target);
 			}
 		}
 	}
@@ -3307,8 +3291,6 @@ resume_common(target* const p_target,
 	LOG_DEBUG("Target %s: Debug_status changed: %d (%s)",
 		target_name(p_target), p_target->state, target_state_name(p_target));
 	target_call_event_callbacks(p_target, debug_execution ? TARGET_EVENT_DEBUG_RESUMED : TARGET_EVENT_RESUMED);
-
-	sc_riscv32__update_status(p_target);
 	return sc_error_code__get_and_clear(p_target);
 }
 
@@ -3683,6 +3665,8 @@ error_code
 sc_riscv32__poll(target* const p_target)
 {
 	assert(p_target);
+	LOG_DEBUG("Target %s: poll",
+		target_name(p_target));
 	invalidate_DAP_CTR_cache(p_target);
 	sc_riscv32__update_status(p_target);
 	return sc_error_code__get_and_clear(p_target);
