@@ -2011,131 +2011,146 @@ static int lookup_add_arch_defined_types(char const **arch_defined_types_list[],
 }
 
 static int gdb_generate_reg_type_description(struct target *target,
-		char **tdesc, int *pos, int *size, struct reg_data_type *type,
-		char const **arch_defined_types_list[], int * num_arch_defined_types)
+		char **tdesc, int *pos, int *const size, struct reg_data_type *const type,
+		char const **arch_defined_types_list[], int *const num_arch_defined_types)
 {
 	int retval = ERROR_OK;
 
-	if (type->type_class == REG_TYPE_CLASS_VECTOR) {
-		struct reg_data_type *data_type = type->reg_type_vector->type;
-		if (data_type->type == REG_TYPE_ARCH_DEFINED) {
-			if (lookup_add_arch_defined_types(arch_defined_types_list, data_type->id,
-							num_arch_defined_types))
-				gdb_generate_reg_type_description(target, tdesc, pos, size, data_type,
-								arch_defined_types_list,
-								num_arch_defined_types);
-		}
-		/* <vector id="id" type="type" count="count"/> */
-		xml_printf(&retval, tdesc, pos, size,
+	switch (type->type_class) {
+	case REG_TYPE_CLASS_VECTOR:
+		{
+			struct reg_data_type *data_type = type->reg_type_vector->type;
+			if (data_type->type == REG_TYPE_ARCH_DEFINED) {
+				if (lookup_add_arch_defined_types(arch_defined_types_list, data_type->id,
+					num_arch_defined_types))
+					gdb_generate_reg_type_description(target, tdesc, pos, size, data_type,
+						arch_defined_types_list,
+						num_arch_defined_types);
+			}
+			/* <vector id="id" type="type" count="count"/> */
+			xml_printf(&retval, tdesc, pos, size,
 				"<vector id=\"%s\" type=\"%s\" count=\"%d\"/>\n",
 				type->id, type->reg_type_vector->type->id,
 				type->reg_type_vector->count);
 
-	} else if (type->type_class == REG_TYPE_CLASS_UNION) {
-		struct reg_data_type_union_field *field;
-		field = type->reg_type_union->fields;
-		while (field != NULL) {
-			struct reg_data_type *data_type = field->type;
-			if (data_type->type == REG_TYPE_ARCH_DEFINED) {
-				if (lookup_add_arch_defined_types(arch_defined_types_list, data_type->id,
-								num_arch_defined_types))
-					gdb_generate_reg_type_description(target, tdesc, pos, size, data_type,
-									arch_defined_types_list,
-									num_arch_defined_types);
-			}
-
-			field = field->next;
 		}
-		/* <union id="id">
-		 *  <field name="name" type="type"/> ...
-		 * </union> */
-		xml_printf(&retval, tdesc, pos, size,
-				"<union id=\"%s\">\n",
-				type->id);
+		break;
 
-		field = type->reg_type_union->fields;
-		while (field != NULL) {
-			xml_printf(&retval, tdesc, pos, size,
-					"<field name=\"%s\" type=\"%s\"/>\n",
-					field->name, field->type->id);
-
-			field = field->next;
-		}
-
-		xml_printf(&retval, tdesc, pos, size,
-				"</union>\n");
-
-	} else if (type->type_class == REG_TYPE_CLASS_STRUCT) {
-		struct reg_data_type_struct_field *field;
-		field = type->reg_type_struct->fields;
-
-		if (field->use_bitfields) {
-			/* <struct id="id" size="size">
-			 *  <field name="name" start="start" end="end"/> ...
-			 * </struct> */
-			xml_printf(&retval, tdesc, pos, size,
-					"<struct id=\"%s\" size=\"%d\">\n",
-					type->id, type->reg_type_struct->size);
-			while (field != NULL) {
-				xml_printf(&retval, tdesc, pos, size,
-						"<field name=\"%s\" start=\"%d\" end=\"%d\" type=\"%s\" />\n",
-						field->name, field->bitfield->start, field->bitfield->end,
-						gdb_get_reg_type_name(field->bitfield->type));
-
-				field = field->next;
-			}
-		} else {
+	case REG_TYPE_CLASS_UNION:
+		{
+			struct reg_data_type_union_field *field;
+			field = type->reg_type_union->fields;
 			while (field != NULL) {
 				struct reg_data_type *data_type = field->type;
 				if (data_type->type == REG_TYPE_ARCH_DEFINED) {
 					if (lookup_add_arch_defined_types(arch_defined_types_list, data_type->id,
-									num_arch_defined_types))
+						num_arch_defined_types))
 						gdb_generate_reg_type_description(target, tdesc, pos, size, data_type,
-										arch_defined_types_list,
-										num_arch_defined_types);
+							arch_defined_types_list,
+							num_arch_defined_types);
 				}
-			}
-
-			/* <struct id="id">
-			 *  <field name="name" type="type"/> ...
-			 * </struct> */
-			xml_printf(&retval, tdesc, pos, size,
-					"<struct id=\"%s\">\n",
-					type->id);
-			while (field != NULL) {
-				xml_printf(&retval, tdesc, pos, size,
-						"<field name=\"%s\" type=\"%s\"/>\n",
-						field->name, field->type->id);
 
 				field = field->next;
 			}
-		}
+			/* <union id="id">
+			*  <field name="name" type="type"/> ...
+			* </union> */
+			xml_printf(&retval, tdesc, pos, size,
+				"<union id=\"%s\">\n",
+				type->id);
 
-		xml_printf(&retval, tdesc, pos, size,
+			field = type->reg_type_union->fields;
+			while (field != NULL) {
+				xml_printf(&retval, tdesc, pos, size,
+					"<field name=\"%s\" type=\"%s\"/>\n",
+					field->name, field->type->id);
+
+				field = field->next;
+			}
+
+			xml_printf(&retval, tdesc, pos, size,
+				"</union>\n");
+
+		}
+		break;
+
+	case REG_TYPE_CLASS_STRUCT:
+		{
+			struct reg_data_type_struct_field *field = type->reg_type_struct->fields;
+
+			if (field->use_bitfields) {
+				/* <struct id="id" size="size">
+				*  <field name="name" start="start" end="end"/> ...
+				* </struct> */
+				xml_printf(&retval, tdesc, pos, size,
+					"<struct id=\"%s\" size=\"%d\">\n",
+					type->id, type->reg_type_struct->size);
+				for (; field; field = field->next) {
+					xml_printf(&retval, tdesc, pos, size,
+						"<field name=\"%s\" start=\"%d\" end=\"%d\" type=\"%s\" />\n",
+						field->name, field->bitfield->start, field->bitfield->end,
+						gdb_get_reg_type_name(field->bitfield->type));
+				}
+			} else {
+				for (struct reg_data_type_struct_field *tmp_field = field; tmp_field != NULL; tmp_field = tmp_field->next) {
+					struct reg_data_type *data_type = tmp_field->type;
+					if (data_type && data_type->type == REG_TYPE_ARCH_DEFINED) {
+						if (lookup_add_arch_defined_types(arch_defined_types_list, data_type->id,
+							num_arch_defined_types))
+							gdb_generate_reg_type_description(target, tdesc, pos, size, data_type,
+								arch_defined_types_list,
+								num_arch_defined_types);
+					}
+				}
+
+				/* <struct id="id">
+				*  <field name="name" type="type"/> ...
+				* </struct> */
+				xml_printf(&retval, tdesc, pos, size,
+					"<struct id=\"%s\">\n",
+					type->id);
+				for (; field; field = field->next) {
+					xml_printf(&retval, tdesc, pos, size,
+						"<field name=\"%s\" type=\"%s\"/>\n",
+						field->name, field->type->id);
+				}
+			}
+
+			xml_printf(&retval, tdesc, pos, size,
 				"</struct>\n");
 
-	} else if (type->type_class == REG_TYPE_CLASS_FLAGS) {
-		/* <flags id="id" size="size">
-		 *  <field name="name" start="start" end="end"/> ...
-		 * </flags> */
-		xml_printf(&retval, tdesc, pos, size,
+		}
+		break;
+
+	case REG_TYPE_CLASS_FLAGS:
+		{
+			/* <flags id="id" size="size">
+			*  <field name="name" start="start" end="end"/> ...
+			* </flags> */
+			xml_printf(&retval, tdesc, pos, size,
 				"<flags id=\"%s\" size=\"%d\">\n",
 				type->id, type->reg_type_flags->size);
 
-		struct reg_data_type_flags_field *field;
-		field = type->reg_type_flags->fields;
-		while (field != NULL) {
-			xml_printf(&retval, tdesc, pos, size,
+			struct reg_data_type_flags_field *field;
+			field = type->reg_type_flags->fields;
+			while (field != NULL) {
+				xml_printf(&retval, tdesc, pos, size,
 					"<field name=\"%s\" start=\"%d\" end=\"%d\" type=\"%s\" />\n",
 					field->name, field->bitfield->start, field->bitfield->end,
 					gdb_get_reg_type_name(field->bitfield->type));
 
-			field = field->next;
-		}
+				field = field->next;
+			}
 
-		xml_printf(&retval, tdesc, pos, size,
+			xml_printf(&retval, tdesc, pos, size,
 				"</flags>\n");
 
+		}
+		break;
+
+	default:
+		return ERROR_FAIL;
+		break;
 	}
 
 	return ERROR_OK;
