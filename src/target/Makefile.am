@@ -5,7 +5,8 @@ OOCD_TRACE_FILES =
 endif
 
 %C%_libtarget_la_LIBADD = %D%/openrisc/libopenrisc.la \
-	%D%/riscv/libriscv.la
+	%D%/riscv/libriscv.la \
+	%D%/sc_riscv32/libsc_riscv32.la
 
 
 STARTUP_TCL_SRCS += %D%/startup.tcl
@@ -234,3 +235,4 @@ ESIRISC_SRC = \
 
 include %D%/openrisc/Makefile.am
 include %D%/riscv/Makefile.am
+include %D%/sc_riscv32/Makefile.am
