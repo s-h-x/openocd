@@ -68,10 +68,6 @@ typedef struct {
 	 * selected. */
 	uint64_t reg_cache_values[RISCV_MAX_REGISTERS];
 
-	/* Single buffer that contains all register names, instead of calling
-	 * malloc for each register. Needs to be freed when reg_list is freed. */
-	char *reg_names;
-
 	/* It's possible that each core has a different supported ISA set. */
 	int xlen[RISCV_MAX_HARTS];
 	riscv_reg_t misa[RISCV_MAX_HARTS];
