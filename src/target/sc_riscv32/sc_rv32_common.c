@@ -577,8 +577,8 @@ enum
 	number_of_regs_GDB = RISCV_rtegnum_CSR_last + 1,
 };
 
-static uint8_t const obj_DAP_opstatus_GOOD = DAP_status_good;
-static uint8_t const obj_DAP_status_MASK = DAP_status_mask;
+static uint8_t obj_DAP_opstatus_GOOD = DAP_status_good;
+static uint8_t obj_DAP_status_MASK = DAP_status_mask;
 static reg_data_type GP_reg_data_type = {.type = REG_TYPE_INT32,};
 
 static reg_feature feature_riscv_cpu = {
@@ -669,7 +669,7 @@ Store first occurred code that is no equal to ERROR_OK into target context.
 @return first not equal ERROR_OK code or else ERROR_OK
 */
 static inline error_code
-sc_error_code__update(target const* const p_target, error_code const a_error_code)
+sc_error_code__update(target *const p_target, error_code const a_error_code)
 {
 	error_code const old_code = sc_error_code__get(p_target);
 
@@ -687,7 +687,7 @@ sc_error_code__update(target const* const p_target, error_code const a_error_cod
 	If passed code is not equal to ERROR_OK - replace it in the target context.
 */
 static inline error_code
-sc_error_code__prepend(target const* const p_target, error_code const older_err_code)
+sc_error_code__prepend(target *const p_target, error_code const older_err_code)
 {
 	if (ERROR_OK == older_err_code) {
 		return sc_error_code__get(p_target);
@@ -834,7 +834,7 @@ sc_RISCV_opcode_D_FMV_D_2X(reg_num_type rd_fp, reg_num_type rs_hi, reg_num_type 
 /** @brief Always perform scan to write instruction register
 */
 static inline void
-IR_select_force(target const* const p_target, TAP_IR_e const new_instr)
+IR_select_force(target *const p_target, TAP_IR_e const new_instr)
 {
 	assert(p_target);
 	assert(p_target->tap);
@@ -853,7 +853,7 @@ IR_select_force(target const* const p_target, TAP_IR_e const new_instr)
 /** @brief Cached version of instruction register selection
 */
 static void
-IR_select(target const* const p_target, TAP_IR_e const new_instr)
+IR_select(target *const p_target, TAP_IR_e const new_instr)
 {
 	assert(p_target);
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
@@ -879,7 +879,7 @@ Method store and update error_code, but ignore previous errors and
 allows to repair error state of debug controller.
 */
 static error_code
-read_only_32_bits_regs(target const* const p_target, TAP_IR_e ir, uint32_t* p_value)
+read_only_32_bits_regs(target *const p_target, TAP_IR_e ir, uint32_t* p_value)
 {
 	/// Low-level method save but ignore previous errors.
 	error_code const old_err_code = sc_error_code__get_and_clear(p_target);
@@ -913,28 +913,28 @@ read_only_32_bits_regs(target const* const p_target, TAP_IR_e ir, uint32_t* p_va
 
 /// @brief IDCODE get accessors
 static inline error_code
-sc_rv32_IDCODE_get(target const* const p_target, uint32_t* p_value)
+sc_rv32_IDCODE_get(target *const p_target, uint32_t* p_value)
 {
 	return read_only_32_bits_regs(p_target, TAP_instruction_IDCODE, p_value);
 }
 
 /// @brief DBG_ID get accessors
 static inline error_code
-sc_rv32_DBG_ID_get(target const* const p_target, uint32_t* p_value)
+sc_rv32_DBG_ID_get(target *const p_target, uint32_t* p_value)
 {
 	return read_only_32_bits_regs(p_target, TAP_instruction_DBG_ID, p_value);
 }
 
 /// @brief BLD_ID get accessors
 static inline error_code
-sc_rv32_BLD_ID_get(target const* const p_target, uint32_t* p_value)
+sc_rv32_BLD_ID_get(target *const p_target, uint32_t* p_value)
 {
 	return read_only_32_bits_regs(p_target, TAP_instruction_BLD_ID, p_value);
 }
 
 /// @brief DBG_STATUS get accessors
 static error_code
-sc_rv32_DBG_STATUS_get(target const* const p_target, uint32_t* p_value)
+sc_rv32_DBG_STATUS_get(target *const p_target, uint32_t* p_value)
 {
 	read_only_32_bits_regs(p_target, TAP_instruction_DBG_STATUS, p_value);
 
@@ -990,7 +990,7 @@ invalidate_DAP_CTR_cache(target const* const p_target)
 /** @brief Forced variant of upper level multiplexer control port DAP_CTRL set method (don't use cache state)
 */
 static inline error_code
-DAP_CTRL_REG_set_force(target const* const p_target, uint8_t const set_dap_unit_group)
+DAP_CTRL_REG_set_force(target *const p_target, uint8_t const set_dap_unit_group)
 {
 	assert(p_target);
 	/// Save but ignore previous error state.
@@ -1006,7 +1006,7 @@ DAP_CTRL_REG_set_force(target const* const p_target, uint8_t const set_dap_unit_
 		static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof status, "Bad size");
 		static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof set_dap_unit_group, "Bad size");
 		/// Prepare DR scan
-		scan_field const field = {
+		scan_field field = {
 			/// for 4 bits
 			.num_bits = TAP_length_of_DAP_CTRL,
 			/// send DAP unit/group
@@ -1053,7 +1053,7 @@ DAP_CTRL_REG_set_force(target const* const p_target, uint8_t const set_dap_unit_
 
 /// @brief Verify unit/group selection.
 static inline error_code
-DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_group)
+DAP_CTRL_REG_verify(target *const p_target, uint8_t set_dap_unit_group)
 {
 	/// First of all invalidate DAP_CTR cache.
 	invalidate_DAP_CTR_cache(p_target);
@@ -1071,7 +1071,7 @@ DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_gro
 	uint8_t get_dap_unit_group = 0;
 	uint8_t set_dap_unit_group_mask = 0x0Fu;
 	static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CTRL) == sizeof get_dap_unit_group, "Bad size");
-	scan_field const field = {
+	scan_field field = {
 		.num_bits = TAP_length_of_DAP_CTRL,
 		.in_value = &get_dap_unit_group,
 		/// with checking for expected value.
@@ -1110,7 +1110,7 @@ DAP_CTRL_REG_verify(target const* const p_target, uint8_t const set_dap_unit_gro
 @param[out] p_result pointer to place for input payload
 */
 static error_code
-sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT, uint32_t* p_result)
+sc_rv32_DAP_CMD_scan(target *const p_target, uint8_t const DAP_OPCODE, uint32_t const DAP_OPCODE_EXT, uint32_t* p_result)
 {
 	/// Ignore but save previous error state.
 	error_code const old_err_code = sc_error_code__get_and_clear(p_target);
@@ -1134,7 +1134,7 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 	/// Prepare operation status buffer.
 	uint8_t DAP_OPSTATUS = 0;
 	static_assert(NUM_BYTES_FOR_BITS(TAP_length_of_DAP_CMD_OPCODE) == sizeof DAP_OPSTATUS, "Bad size");
-	scan_field const fields[2] = {
+	scan_field fields[2] = {
 		{.num_bits = TAP_length_of_DAP_CMD_OPCODE_EXT,.out_value = dap_opcode_ext,.in_value = dbg_data},
 		/// Pass DAP_OPCODE bits. Check receiving DAP_OPSTATUS good/error bits.
 		{.num_bits = TAP_length_of_DAP_CMD_OPCODE,.out_value = &DAP_OPCODE,.in_value = &DAP_OPSTATUS,.check_value = &obj_DAP_opstatus_GOOD,.check_mask = &obj_DAP_status_MASK,},
@@ -1173,7 +1173,7 @@ sc_rv32_DAP_CMD_scan(target const* const p_target, uint8_t const DAP_OPCODE, uin
 @warning Clear previous error_code and set ERROR_TARGET_FAILURE if unlock was unsuccessful
 */
 static inline error_code
-sc_rv32_DC__unlock(target const* const p_target, uint32_t* p_lock_context)
+sc_rv32_DC__unlock(target *const p_target, uint32_t* p_lock_context)
 {
 	LOG_WARNING("========= Try to unlock target %s ==============",
 		target_name(p_target));
@@ -1285,7 +1285,7 @@ REGTRANS_scan_type(bool const write, uint8_t const index)
 @todo Describe details
 */
 static error_code
-sc_rv32_DAP_CTRL_REG_set(target const* const p_target, type_dbgc_unit_id_e const dap_unit, uint8_t const dap_group)
+sc_rv32_DAP_CTRL_REG_set(target *const p_target, type_dbgc_unit_id_e const dap_unit, uint8_t const dap_group)
 {
 	assert(p_target);
 	bool const match_HART_0 = DBGC_unit_id_HART_0 == dap_unit && 0 == p_target->coreid;
@@ -1345,7 +1345,7 @@ sc_rv32_DAP_CTRL_REG_set(target const* const p_target, type_dbgc_unit_id_e const
 @param[in] index REGTRANS register index in func_unit/func_group
 */
 static error_code
-REGTRANS_write(target const* const p_target, type_dbgc_unit_id_e func_unit, uint8_t const func_group, uint8_t const index, uint32_t const data)
+REGTRANS_write(target *const p_target, type_dbgc_unit_id_e func_unit, uint8_t const func_group, uint8_t const index, uint32_t const data)
 {
 	/// Set upper level multiplexer to access unit/group.
 	if (ERROR_OK != sc_rv32_DAP_CTRL_REG_set(p_target, func_unit, func_group)) {
@@ -1368,7 +1368,7 @@ REGTRANS_write(target const* const p_target, type_dbgc_unit_id_e func_unit, uint
 @param[in] index REGTRANS register index in func_unit/func_group
 */
 static error_code
-REGTRANS_read(target const* const p_target, type_dbgc_unit_id_e const func_unit, uint8_t const func_group, uint8_t const index, uint32_t* p_value)
+REGTRANS_read(target *const p_target, type_dbgc_unit_id_e const func_unit, uint8_t const func_group, uint8_t const index, uint32_t* p_value)
 {
 	/// Set upper level multiplexer to access unit/group.
 	if (ERROR_OK != sc_rv32_DAP_CTRL_REG_set(p_target, func_unit, func_group)) {
@@ -1396,7 +1396,7 @@ REGTRANS_read(target const* const p_target, type_dbgc_unit_id_e const func_unit,
 @param[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
 */
 static inline error_code
-sc_rv32_HART_REGTRANS_read(target const* const p_target, HART_REGTRANS_indexes const index, uint32_t* p_value)
+sc_rv32_HART_REGTRANS_read(target *const p_target, HART_REGTRANS_indexes const index, uint32_t* p_value)
 {
 	/// @todo remove unused DBGC_unit_id_HART_1
 	type_dbgc_unit_id_e const unit = p_target->coreid == 0 ? DBGC_unit_id_HART_0 : DBGC_unit_id_HART_1;
@@ -1409,7 +1409,7 @@ sc_rv32_HART_REGTRANS_read(target const* const p_target, HART_REGTRANS_indexes c
 @param[in] index REGTRANS register index in DBGC_unit_id_HART_0/HART_REGTRANS
 */
 static inline error_code
-sc_rv32_HART_CSR_CAP_read(target const* const p_target, HART_CSR_CAP_indexes const index, uint32_t* p_value)
+sc_rv32_HART_CSR_CAP_read(target *const p_target, HART_CSR_CAP_indexes const index, uint32_t* p_value)
 {
 	/// @todo remove unused DBGC_unit_id_HART_1
 	type_dbgc_unit_id_e const unit = p_target->coreid == 0 ? DBGC_unit_id_HART_0 : DBGC_unit_id_HART_1;
@@ -1435,7 +1435,7 @@ get_ISA(target* const p_target, uint32_t* p_value)
 @param[in] set_value 32-bits data
 */
 static inline error_code
-HART_REGTRANS_write(target const* const p_target, HART_REGTRANS_indexes const index, uint32_t const set_value)
+HART_REGTRANS_write(target *const p_target, HART_REGTRANS_indexes const index, uint32_t const set_value)
 {
 	assert(p_target);
 	type_dbgc_unit_id_e const unit = p_target->coreid == 0 ? DBGC_unit_id_HART_0 : DBGC_unit_id_HART_1;
@@ -1449,7 +1449,7 @@ HART_REGTRANS_write(target const* const p_target, HART_REGTRANS_indexes const in
 @param[in] set_value 32-bits data
 */
 static error_code
-sc_rv32_HART_REGTRANS_write_and_check(target const* const p_target, HART_REGTRANS_indexes const index, uint32_t const set_value)
+sc_rv32_HART_REGTRANS_write_and_check(target *const p_target, HART_REGTRANS_indexes const index, uint32_t const set_value)
 {
 	if (ERROR_OK == HART_REGTRANS_write(p_target, index, set_value)) {
 		sc_riscv32__Arch const* const p_arch = p_target->arch_info;
@@ -1482,7 +1482,7 @@ sc_rv32_HART_REGTRANS_write_and_check(target const* const p_target, HART_REGTRAN
 @param[in] index REGTRANS register index in CORE/CORE_REGTRANS
 */
 static inline error_code
-sc_rv32_core_REGTRANS_read(target const* const p_target, CORE_REGTRANS_indexes const index, uint32_t* p_value)
+sc_rv32_core_REGTRANS_read(target *const p_target, CORE_REGTRANS_indexes const index, uint32_t* p_value)
 {
 	return REGTRANS_read(p_target, DBGC_unit_id_CORE, DBGC_functional_group_CORE_REGTRANS, index, p_value);
 }
@@ -1494,7 +1494,7 @@ sc_rv32_core_REGTRANS_read(target const* const p_target, CORE_REGTRANS_indexes c
 @param[in] set_value 32-bits data
 */
 static inline error_code
-sc_rv32_CORE_REGTRANS_write(target const* const p_target, CORE_REGTRANS_indexes const index, uint32_t const data)
+sc_rv32_CORE_REGTRANS_write(target *const p_target, CORE_REGTRANS_indexes const index, uint32_t const data)
 {
 	REGTRANS_write(p_target, DBGC_unit_id_CORE, DBGC_functional_group_CORE_REGTRANS, index, data);
 	return sc_error_code__get(p_target);
@@ -1505,7 +1505,7 @@ sc_rv32_CORE_REGTRANS_write(target const* const p_target, CORE_REGTRANS_indexes 
 @param[inout] p_target pointer to this target
 */
 static inline error_code
-sc_rv32_EXEC__setup(target const* const p_target)
+sc_rv32_EXEC__setup(target *const p_target)
 {
 	if (ERROR_OK == sc_error_code__get(p_target)) {
 		/// @note Skipped if error detected
@@ -1519,7 +1519,7 @@ sc_rv32_EXEC__setup(target const* const p_target)
 /** @brief Push 32-bits data through keyhole from debug controller to core special SC Debug CSR.
 */
 static inline error_code
-sc_rv32_EXEC__push_data_to_CSR(target const* const p_target, uint32_t const csr_data)
+sc_rv32_EXEC__push_data_to_CSR(target *const p_target, uint32_t const csr_data)
 {
 	if (ERROR_OK == sc_error_code__get(p_target)) {
 		/// @note Skipped if error detected
@@ -1533,7 +1533,7 @@ sc_rv32_EXEC__push_data_to_CSR(target const* const p_target, uint32_t const csr_
 @return SC Debug CSR data
 */
 static inline error_code
-sc_rv32_EXEC__step(target const* const p_target, uint32_t instruction, uint32_t* p_value)
+sc_rv32_EXEC__step(target *const p_target, uint32_t instruction, uint32_t* p_value)
 {
 	if (ERROR_OK == sc_error_code__get(p_target)) {
 		sc_rv32_DAP_CMD_scan(p_target, CORE_EXEC_index, instruction, p_value);
@@ -1545,7 +1545,7 @@ sc_rv32_EXEC__step(target const* const p_target, uint32_t instruction, uint32_t*
 /** @brief Return last sampled PC value
 */
 static error_code
-sc_rv32_get_PC(target const* const p_target, uint32_t* p_pc)
+sc_rv32_get_PC(target *const p_target, uint32_t* p_pc)
 {
 	assert(p_target);
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
@@ -2117,7 +2117,7 @@ reg_x__operation_conditions_check(reg const* const p_reg)
 }
 
 static void
-sc_rv32_check_PC_value(target const* const p_target, uint32_t const previous_pc)
+sc_rv32_check_PC_value(target *const p_target, uint32_t const previous_pc)
 {
 	assert(p_target);
 	sc_riscv32__Arch const* const p_arch = p_target->arch_info;
@@ -2305,7 +2305,7 @@ reg_x0__set(reg* const p_reg, uint8_t* const buf)
 static reg_arch_type const reg_x0_accessors = {.get = reg_x0__get,.set = reg_x0__set,};
 
 static reg*
-prepare_temporary_GP_register(target const* const p_target, uint32_t const after_reg)
+prepare_temporary_GP_register(target *const p_target, uint32_t const after_reg)
 {
 	assert(p_target);
 	assert(p_target->reg_cache);
@@ -4276,8 +4276,8 @@ sc_riscv32__write_phys_memory(target* const p_target,
 				if (p_arch->constants->use_queuing_for_dr_scans) {
 					uint8_t DAP_OPSTATUS = 0;
 					uint8_t const data_wr_opcode[1] = {DBGDATA_WR_index};
-					static uint8_t const DAP_OPSTATUS_GOOD = DAP_status_good;
-					static uint8_t const DAP_STATUS_MASK = DAP_status_mask;
+					static uint8_t DAP_OPSTATUS_GOOD = DAP_status_good;
+					static uint8_t DAP_STATUS_MASK = DAP_status_mask;
 					scan_field const data_scan_opcode_field = {
 						.num_bits = TAP_length_of_DAP_CMD_OPCODE,
 						.out_value = data_wr_opcode,
