@@ -2966,7 +2966,6 @@ riscv_init_registers(struct target *const target)
 			case CSR_INSTRET:
 			case CSR_MARCHID:
 			case CSR_MCAUSE:
-			case CSR_MCOUNTEREN:
 			case CSR_MCYCLE:
 			case CSR_MEPC:
 			case CSR_MHARTID:
@@ -2982,6 +2981,12 @@ riscv_init_registers(struct target *const target)
 			case CSR_MVENDORID:
 			case CSR_TIME:
 				p_reg->exist = true;
+				break;
+
+			case CSR_MCOUNTEREN:
+				p_reg->exist =
+					riscv_supports_extension(target, riscv_current_hartid(target), 'S') ||
+					riscv_supports_extension(target, riscv_current_hartid(target), 'U');
 				break;
 
 			case CSR_FFLAGS:
