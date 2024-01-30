@@ -15,8 +15,8 @@
  *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef OPENOCD_FLASH_MFLASH_H
-#define OPENOCD_FLASH_MFLASH_H
+#ifndef __MFLASH_H__
+#define __MFLASH_H__
 
 struct command_context;
 
@@ -286,4 +286,4 @@ typedef enum _mg_opmode {
 	mg_op_mode_stg = 0	/* Only Storage */
 } mg_opmode;
 
-#endif /* OPENOCD_FLASH_MFLASH_H */
+#endif // __MFLASH_H__

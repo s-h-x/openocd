@@ -1,5 +1,5 @@
-#ifndef TARGET_RISCV_RISCV_H_
-#define TARGET_RISCV_RISCV_H_
+#ifndef __RISCV_H__
+#define __RISCV_H__
 
 #include "encoding.h"
 
@@ -507,4 +507,4 @@ void riscv_semihosting_init(struct target *target);
 int riscv_semihosting(struct target *target, int *p_error_code);
 /**@}*/
 
-#endif  /* TARGET_RISCV_RISCV_H_ */
+#endif // __RISCV_H__
